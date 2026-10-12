@@ -1,4 +1,5 @@
-"""Tests for ekfsoc.ekf: the predict and update steps (Eq. 6 to 11), run_ekf and the synthetic convergence test.
+"""Tests for ekfsoc.ekf: the predict and update steps (Eq. 6 to 11), run_ekf, the synthetic convergence test and
+the divergence test of the SoC limit (docs/decisions.md 1.16).
 
 The hand computations use small made-up tables, so no raw data is needed. The synthetic test draws
 its data from the model itself (results/params.csv at 25 degC) plus voltage noise, so it checks the
@@ -13,7 +14,7 @@ import pytest
 
 from ekfsoc.constants import Q_REF_AH, REPO_DIR
 from ekfsoc.ekf import Ekf, EkfConfig, run_ekf
-from ekfsoc.model import Params
+from ekfsoc.model import Params, simulate_2rc_open_loop
 from ekfsoc.synthetic import SOC_START, SYNTHETIC_CFG, WRONG_INIT_PP, synthetic_data
 
 
@@ -140,6 +141,26 @@ def test_soc_is_clamped_to_zero_and_one_after_the_update(soc0, v_measured, expec
     assert ekf.x[0] == expected
 
 
+@pytest.mark.parametrize(
+    "x_post, expected",
+    [
+        # SoC 1.2: the bound is 1, (SoC - b) / P00 = 0.2 / 0.04 = 5 and P[:, 0] = [0.04, 0.002, -0.004],
+        # so x moves by [0.2, 0.01, -0.02]: V1 falls to 0.04 and V2 rises to 0.12.
+        ([1.2, 0.05, 0.10], [1.0, 0.04, 0.12]),
+        # SoC -0.1: the bound is 0, (SoC - b) / P00 = -0.1 / 0.04 = -2.5, so x moves by [-0.1, -0.005, 0.01].
+        ([-0.1, 0.05, 0.10], [0.0, 0.055, 0.09]),
+        # SoC 0.7 is inside [0, 1]: nothing moves.
+        ([0.7, 0.05, 0.10], [0.7, 0.05, 0.10]),
+    ],
+)
+def test_limit_soc_moves_the_state_onto_the_bound_along_the_first_column_of_p(x_post, expected):
+    P_post = np.array([[0.04, 0.002, -0.004], [0.002, 0.01, 0.0], [-0.004, 0.0, 0.01]])
+    p_before = P_post.copy()
+    limited = scalar_ekf().limit_soc(np.array(x_post), P_post)
+    assert limited.tolist() == pytest.approx(expected, abs=1e-12)
+    assert np.array_equal(P_post, p_before)
+
+
 # --- run_ekf ---------------------------------------------------------------------------------------
 
 
@@ -198,3 +219,57 @@ def test_covariance_stays_symmetric_and_positive_semidefinite(synthetic):
         worst_asymmetry = max(worst_asymmetry, np.abs(ekf.P - ekf.P.T).max())
         lowest_eigenvalue = min(lowest_eigenvalue, np.linalg.eigvalsh(ekf.P).min())
     assert worst_asymmetry < 1e-14 and lowest_eigenvalue > -1e-14
+
+
+# --- the SoC limit under a biased voltage (docs/decisions.md 1.16) ---------------------------------
+
+BIAS_V = 0.030  # added to the voltage the filter measures
+N_BIASED = 6000  # 600 s at 0.1 s
+
+
+class TruncatingEkf(Ekf):
+    """The filter with the SoC limit of the first full run: SoC is cut at the bounds, V1 and V2 are kept."""
+
+    def limit_soc(self, x_post, P_post):
+        x_cut = x_post.copy()
+        x_cut[0] = min(max(x_cut[0], 0.0), 1.0)
+        return x_cut
+
+
+@pytest.fixture(scope="module")
+def biased_discharge(synthetic):
+    """600 s of a 3 A discharge from SoC 1 at 25 degC: the model voltage plus 30 mV, which the filter takes as measured."""
+    dt = np.full(N_BIASED, 0.1)
+    dt[0] = 0.0
+    i = np.full(N_BIASED, 3.0)
+    temp = np.full(N_BIASED, 25.0)
+    soc_true = 1.0 - np.concatenate(([0.0], np.cumsum(i[:-1] * dt[1:]))) / (3600.0 * Q_REF_AH)
+    v_model = simulate_2rc_open_loop(synthetic["params"], i, temp, soc_true, dt)
+    return {"params": synthetic["params"], "i": i, "v": v_model + BIAS_V, "temp": temp, "dt": dt, "soc_true": soc_true}
+
+
+def run_biased(ekf_class, data):
+    """Run ekf_class over the biased discharge, started at the true SoC 1; return the SoC error (pp) and V2 (V) per sample."""
+    ekf = ekf_class(data["params"], SYNTHETIC_CFG, soc0=1.0)
+    soc_error_pp = np.zeros(N_BIASED)
+    v2 = np.zeros(N_BIASED)
+    for k in range(N_BIASED):
+        ekf.step(data["i"][k], data["v"][k], data["temp"][k], data["dt"][k])
+        soc_error_pp[k] = (ekf.x[0] - data["soc_true"][k]) * 100.0
+        v2[k] = ekf.x[2]
+    return soc_error_pp, v2
+
+
+def test_projection_keeps_v2_bounded_under_a_voltage_bias(biased_discharge):
+    soc_error_pp, v2 = run_biased(Ekf, biased_discharge)
+    # A 30 mV bias costs a filter 30 mV / (OCV slope) of SoC, which no tuning removes. The 25 degC slope falls to
+    # 0.32 V per unit SoC near 90 %, which the discharge crosses at about 300 s: up to 9.4 pp. So the SoC error
+    # cannot stay under 3 pp for the 600 s (the run passes it at 110 s); it peaks at 7.8 pp at 515 s.
+    assert np.abs(soc_error_pp).max() < 10.0
+    assert np.abs(v2).max() < 0.3
+
+
+def test_plain_truncation_lets_v2_run_away_under_the_same_bias(biased_discharge):
+    soc_error_pp, v2 = run_biased(TruncatingEkf, biased_discharge)
+    assert np.abs(v2).max() > 1.0  # it grows without bound (3.6e16 V here), and the SoC stays pinned at 100 %
+    assert np.abs(soc_error_pp).max() > 10.0

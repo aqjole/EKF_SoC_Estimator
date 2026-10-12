@@ -7,11 +7,12 @@ two public steps the C port repeats function for function, with the same operati
 - Eq. 7   covariance prediction P- = F P F^T + Q               (predict)
 - Eq. 8   predicted voltage y_hat and the Jacobian H           (update)
 - Eq. 9   innovation variance S and gain K                     (update)
-- Eq. 10  state update, then the SoC clamp to [0, 1]           (update)
+- Eq. 10  state update, then SoC projected into [0, 1] along P (update)
 - Eq. 11  covariance update in Joseph form                     (update)
 
 Eq. 3 is the SoC row of Eq. 6, and the table lookups are Eq. 4 (model.interp2). Every 3 x 3 product
-is a numpy matrix product, written as its own named step.
+is a numpy matrix product, written as its own named step. The projection of Eq. 10 (limit_soc) uses the
+posterior P of Eq. 11, so update() forms Eq. 11 first.
 """
 
 import json
@@ -100,6 +101,21 @@ class Ekf:
         self.x = x_prior
         self.P = P_prior
 
+    def limit_soc(self, x_post, P_post):
+        """Return x_post with its SoC limited to [0, 1] (Eq. 10, docs/decisions.md 1.16); P_post is not changed.
+
+        A SoC inside [0, 1] is left alone. Otherwise the whole state moves onto the nearer bound along
+        the posterior covariance, x_c = x - P[:, 0] * (SoC - bound) / P[0][0], so V1 and V2 move with
+        SoC by their correlation with it. Cutting SoC alone would keep the V2 part of the innovation.
+        """
+        soc_bound = min(max(x_post[0], 0.0), 1.0)
+        if x_post[0] == soc_bound:
+            return x_post
+        shift = P_post[:, 0] * (x_post[0] - soc_bound) / P_post[0, 0]
+        x_limited = x_post - shift
+        x_limited[0] = soc_bound  # exactly on the bound, whatever the rounding of the line above
+        return x_limited
+
     def update(self, i_a, v_v, t_degC):
         """Correct x and P with the measured voltage v_v taken at current i_a (Eq. 8 to Eq. 11).
 
@@ -119,12 +135,13 @@ class Ekf:
 
         innovation = v_v - y_hat
         x_post = self.x + K * innovation  # Eq. 10
-        x_post[0] = min(max(x_post[0], 0.0), 1.0)  # Eq. 10, the SoC clamp
 
         I_KH = np.eye(3) - np.outer(K, H)
         I_KH_P = I_KH @ self.P
         K_R_Kt = self.cfg.r * np.outer(K, K)
         P_post = I_KH_P @ I_KH.T + K_R_Kt  # Eq. 11
+
+        x_post = self.limit_soc(x_post, P_post)  # Eq. 10, the SoC limit
 
         self.x = x_post
         self.P = P_post

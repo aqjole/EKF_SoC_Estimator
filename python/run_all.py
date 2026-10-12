@@ -346,7 +346,7 @@ def summary_text(results, cfg, data, estimates):
         "- Error = estimate - reference; the reference follows the cycler's Ah counter (docs/model.md C4).",
         f"- Evaluation window: from the filter start to the last sample where the reference SoC is at least {PP * SOC_MIN:.0f} % "
         "(docs/model.md C14). Every metric is over this window. Times are in s since the filter start.",
-        "- `*` marks the tuning cycle (Mix 1 at 25 degC), on which the noise settings were tuned for experiment 2. "
+        "- `*` marks the tuning cycle (Mix 1 at 25 degC), on which the noise settings were tuned for experiments 2 and 4 (the mean of their SoC RMSE, docs/decisions.md 1.16). "
         "`n/a`: no run exists. `not reached`: the error is outside the band at the end of the window, or the run is still apart "
         "from the run with the correct init; it is not an average.",
         "- `mean` rows average the evaluation runs of the column (tuning cycle excluded); `mean of reached` leaves out the runs "

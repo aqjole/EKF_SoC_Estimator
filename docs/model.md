@@ -280,10 +280,13 @@ K    = P- · H^T / S                                                  3 x 1
 
 ```
 x      = x- + K · (V(k) - y_hat)
-SoC    = min(max(SoC, 0), 1)
+b      = min(max(SoC, 0), 1)                                         SoC of the x above
+x      = x - P[:, 0] · (SoC - b) / P[0][0]                           P from Eq. 11, SoC and x as above
 ```
 
-- V1 and V2 are not limited. The limit changes the SoC entry only; P is not adjusted for it.
+- The third line acts only when the updated SoC is outside [0, 1] (otherwise SoC = b and it changes nothing, and the code skips it). The whole state then moves onto the nearer bound b along the first column of the posterior P, so V1 and V2 move with SoC by their correlation with it and SoC equals b afterwards.
+- P is the posterior of Eq. 11, which the code forms before this step, and the projection leaves it unchanged.
+- Reason: truncating SoC alone keeps the V2 part of an innovation that pushed SoC past a bound, which grew the next innovation and ran V2 away to thousands of volts (docs/decisions.md 1.16).
 
 ### Eq. 11. Covariance update, Joseph form
 
