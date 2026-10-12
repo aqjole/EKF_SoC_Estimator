@@ -1,6 +1,6 @@
 # Model: conventions and equations
 
-The 2RC equivalent-circuit model and the EKF, as used by every stage: loader, OCV and 2RC fit, EKF, metrics and the C port. The conventions below were fixed in S0 and checked against the raw data. The equations follow in S2. Decisions that affect results are recorded in `docs/decisions.md`.
+The 2RC equivalent-circuit model and the EKF, as used by every stage: loader, OCV and 2RC fit, EKF, metrics and the C port. The conventions below were fixed in S0 and checked against the raw data. The equations for S1 (2RC model, SoC update, table lookup, OCV slope) follow them; the EKF equations are written in S2. Decisions that affect results are recorded in `docs/decisions.md`.
 
 Data: LG 18650HG2 Li-ion Battery Data, Kollmeyer et al., McMaster University, Mendeley Data v2, DOI 10.17632/b5mj79w5w9.2, CC BY 4.0. There are 206 `.mat` files in `data/raw/` [inv].
 
@@ -152,6 +152,77 @@ Each convention gives the rule in bold, then the reason, then the evidence.
 | R | measurement noise variance | V² | > 0 |
 | P0 | initial state covariance diag(0.2², 0.05², 0.05²) | 1, V², V² on the diagonal | > 0 (positive definite) |
 
-## Equations (S2)
+## Equations
 
-Written in S2: state, process and measurement equations, numbered for citation in the Python and C code.
+The equations of S1, numbered for citation in the Python and C code (a comment reads "docs/model.md Eq. 1"). Symbols are those of the table above. Index k counts the rows a run keeps after the loader rules, `dt(k) = t(k) - t(k-1)` (C8, C9), and I is the loader-sign current, positive on discharge (C2). R0, R1, R2, tau1, tau2 and OCV are not constants: each is a table over (T, SoC) read with Eq. 4. Python (`python/ekfsoc/model.py`) and the C port repeat these equations with the same operation order.
+
+### Eq. 1. The two RC branches, exact zero-order hold
+
+```
+a_i(k)  = exp(-dt(k) / tau_i)                                        i = 1, 2
+V_i(k)  = a_i(k) · V_i(k-1) + R_i · (1 - a_i(k)) · I(k-1)
+```
+
+- R_i and tau_i are read with Eq. 4 at the start of the step, at (T(k-1), SoC(k-1)). The current held over the step is the previous kept sample's current, I(k-1) (C11).
+- Where it comes from: branch i is a resistor R_i in parallel with a capacitor C_i = tau_i / R_i, so dV_i/dt = -V_i / tau_i + R_i · I / tau_i. With I constant over the step, the solution over dt is Eq. 1 exactly. It is not an Euler step, so it holds for any dt, from the 0.1 s logging step to the 1.147 to 2.143 s steps at cycle boundaries (C11).
+- Limits: dt = 0 gives a_i = 1 and leaves V_i unchanged. A long step gives a_i -> 0 and V_i -> R_i · I(k-1), the steady value of a constant current.
+- Start: V1(0) = V2(0) = 0. The open-loop check starts the branches relaxed; C13 lists the runs that open under load.
+- Sign: V_i > 0 after a discharge, V_i < 0 after regen (Symbols).
+
+### Eq. 2. Terminal voltage
+
+```
+V_model(k) = OCV(SoC(k), T(k)) - V1(k) - V2(k) - R0(SoC(k), T(k)) · I(k)
+```
+
+- OCV and R0 are read with Eq. 4 at the sample itself, (T(k), SoC(k)). The sample's own current drops across R0 at once, while it enters V1 and V2 only from the next row on (Eq. 1).
+- V_model is compared with the measured terminal voltage V.
+- In S1's open-loop check SoC(k) is the reference SoC of C13, so only the voltage model is under test. In S2 the filter's SoC state takes its place.
+
+### Eq. 3. Coulomb counting
+
+```
+SoC(k) = SoC(k-1) - η · I(k-1) · dt(k) / (3600 · Q_ref)             η = 1 (C5)
+```
+
+- The factor 3600 converts A·s to Ah (C1). The previous kept sample's current is held over dt(k) (C11), as in Eq. 1.
+- This is the SoC process model of the filter (S2) and of the plain coulomb-counting baseline. The reference SoC is the same sum taken on the cycler's Ah counter, `SoC_ref(k) = SoC0 - Ah_removed(k) / Q_ref` (C3, C4, C13); the two can differ by up to 0.30 pp over a run (C13).
+
+### Eq. 4. Table lookup: bilinear interpolation with clamping
+
+Every parameter table F has one row per temperature node T_j (j = 0 to n_T - 1, stored in the order 40, 25, 10, 0, -10, -20 degC, so descending) and one column per SoC node S_m (m = 0 to n_S - 1, ascending, C15). The value at (T, S) is computed in this order:
+
+```
+1. clamp:    T_c = min(max(T, T_lo), T_hi)         T_lo, T_hi = smaller, larger of the two end nodes
+             S_c = min(max(S, S_lo), S_hi)         (a query beyond an axis end takes the end value)
+2. cell:     j = the largest index in 0 .. n_T - 2 with  d_T · (T_c - T_j) >= 0
+             m = the largest index in 0 .. n_S - 2 with  d_S · (S_c - S_m) >= 0
+             d = +1 for an ascending axis, -1 for a descending one
+3. weights:  w_T = (T_c - T_j) / (T_{j+1} - T_j)
+             w_S = (S_c - S_m) / (S_{m+1} - S_m)                      both in [0, 1]
+4. along S:  F_a = (1 - w_S) · F[j][m]   + w_S · F[j][m+1]
+             F_b = (1 - w_S) · F[j+1][m] + w_S · F[j+1][m+1]
+5. along T:  F(T, S) = (1 - w_T) · F_a + w_T · F_b
+```
+
+- The weights are written (1 - w) · x + w · y and not x + w · (y - x), so a query exactly on a node returns that node's value with no rounding. At the last node of an axis the cell is the last one (index n - 2) and w = 1.
+- The same rule serves all seven tables: OCV, dOCV/dSoC, R0, R1, tau1, R2, tau2. No table is extrapolated.
+- Clamping matters in use: the measured cell temperature can lie beyond the 40 and -20 degC nodes [inv: summary per folder, drive-cycle cell T min / max] and an estimated SoC can leave 0 to 1.
+
+### Eq. 5. dOCV/dSoC by central differences
+
+On the SoC grid S_0 .. S_{n-1}, for each temperature node:
+
+```
+dOCV/dSoC(S_m) = (OCV(S_{m+1}) - OCV(S_{m-1})) / (S_{m+1} - S_{m-1})        0 < m < n - 1
+dOCV/dSoC(S_0) = (OCV(S_1) - OCV(S_0)) / (S_1 - S_0)                         one-sided at the low end
+dOCV/dSoC(S_{n-1}) = (OCV(S_{n-1}) - OCV(S_{n-2})) / (S_{n-1} - S_{n-2})     one-sided at the high end
+```
+
+- Computed once in Python from the OCV table and stored as its own table. Python and C both read it with Eq. 4 and never differentiate at runtime, so the Jacobians of the two are identical.
+- Below the lowest SoC the C/20 discharge reached, the OCV table is held constant (decisions 1.1), so the differences are 0 over that held region. At the two nodes next to its edge they mix held and measured values. The valid SoC range per temperature is in `results/params.md`.
+- Unit: V per unit SoC (Symbols). It is not negative where OCV is monotone in SoC.
+
+### EKF equations (S2)
+
+Written in S2: the filter's state, process and measurement equations and their Jacobians, numbered after Eq. 5.
