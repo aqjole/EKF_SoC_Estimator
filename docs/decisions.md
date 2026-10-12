@@ -180,6 +180,23 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
 - Reason: the -20 degC runs end at a reference SoC of 42.90 to 44.75 %, so a 50 % start leaves only 5.25 to 7.10 pp of travel inside the evaluation window, too little to see a recovery from a 20 pp error. A 70 % start leaves 25.25 to 27.10 pp at -20 degC.
 - Evidence [chk 7]: SoC_ref at the end of the evaluation runs, min to max: 6.85 to 8.00 / 9.17 to 14.57 / 10.83 to 15.10 / 15.49 to 16.30 / 22.67 to 24.17 / 42.90 to 44.75 % at 25 / 40 / 10 / 0 / -10 / -20 degC. Travel after a 70 % start is at least 45.83 pp at -10 degC and 25.25 pp at -20 degC; after a 50 % start it is 25.83 pp at -10 degC and 5.25 pp at -20 degC.
 
+### 1.14 Plots: fixed list and locations
+
+- **Every plot is written by a repo script into `results/plots/<stage>/`, with the file names below. Nothing is saved by hand, and per-run traces that would number in the hundreds go to the gitignored `results/runs/` instead of the committed plot folder.**
+- Reason: the spec asks for a fixed list of plots per stage and for every README figure to trace to a script. A stage folder and fixed names make the list checkable and keep the committed set small.
+- `results/plots/s1/` (written by `python/fit_all.py`, `make fit`):
+  - `ocv.png`: the six OCV(SoC) curves from the C/20 discharge half, one colour per temperature, with the HPPC 1 h rest voltages of the same temperature overlaid as points (cross-check only, 1.1).
+  - `docv.png`: dOCV/dSoC on the 101-point grid per temperature.
+  - `params.png`: R0, R1, tau1, R2, tau2 against SoC, one panel each, one line per temperature, at the HPPC points with the resampled grid curve.
+  - `model_fit_<T>degC.png` (six files, T in 40, 25, 10, 0, n10, n20): US06 open-loop validation, measured and model voltage over time, with the error in mV below (1.4).
+- `results/plots/s2/` (written by `python/run_all.py`, `make ekf`):
+  - `summary_rmse.png`, `summary_convergence.png`: per experiment, SoC RMSE and convergence time against temperature, one point per run, the tuning cycle marked.
+  - `trace_<experiment>_<cycle>_<T>degC.png`: estimated and reference SoC over time with the error band, for a fixed set of example runs: US06 and Mixed 1 at 25 degC and at n20 degC, for experiments 1 to 4 (16 files).
+  - `synthetic.png`: the synthetic-data convergence test.
+  - Every other run's trace goes to `results/runs/plots/` (gitignored) when `run_all.py` is run locally.
+- `results/plots/s3/` (written by `python/compare_c.py`, `make equiv`): `equivalence_<T>degC.png`, Python minus C SoC in pp over time for the float and double builds, one file per temperature.
+- Plot files are PNG, matplotlib Agg backend, metadata stripped so a regeneration is byte-identical where matplotlib allows it. The README of `results/plots/` repeats this list.
+
 ## 2. Dataset facts confirmed in S0
 
 | claim (readme, or the spec's S0 checks) | verdict | evidence |
