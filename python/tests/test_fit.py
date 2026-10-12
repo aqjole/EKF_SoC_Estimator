@@ -29,7 +29,7 @@ def synthetic_tables():
     params = Params(T_GRID_DEGC, SOC_GRID, ocv, flat_table(0.8), flat_table(R0), flat_table(R1),
                     flat_table(TAU1), flat_table(R2), flat_table(TAU2))
     n_t = len(T_GRID_DEGC)
-    ocv_table = OcvTable(SOC_GRID, np.array(T_GRID_DEGC, dtype=float), ocv, flat_table(0.8),
+    ocv_table = OcvTable(SOC_GRID, np.array(T_GRID_DEGC, dtype=float), ocv, flat_table(0.8), ocv, flat_table(0.0),
                          np.zeros(n_t), np.ones(n_t), np.ones(n_t, dtype=bool), False)
     return params, ocv_table
 

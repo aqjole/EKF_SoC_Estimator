@@ -13,8 +13,8 @@ What each test type is used for (file counts from [chk 2]):
 | test type | files | used for |
 |---|---|---|
 | drive cycles: UDDS, HWFET, LA92, US06, Mixed1 to 8 | 70 | the EKF runs: evaluation (62 runs), tuning (`25degC/551_Mixed1`) and the S1 open-loop check (US06 at each temperature) |
-| HPPC | 6 | the 2RC fit (R0, R1, tau1, R2, tau2); the rest voltages are an OCV cross-check |
-| C20DisCh | 6 | OCV (the C/20 discharge half) and Q_ref (the 25 degC file); the charge half is shown for comparison only |
+| HPPC | 6 | the 2RC fit (R0, R1, tau1, R2, tau2); the 1 h rest voltages correct the OCV table (decisions 1.1) |
+| C20DisCh | 6 | OCV (the C/20 discharge half, corrected onto the HPPC rest voltages) and Q_ref (the 25 degC file); the charge half is shown for comparison only |
 | Cap_1C, Dis_0p5C, Dis_2C | 10, 6, 6 | the capacity tables in [cap] only; nothing is fitted on them |
 | Charge | 96 | nothing is fitted; they show what a full charge looks like (C13) |
 | PausCycl | 6 | not used: the readme does not list them as drive cycles and they are not in the evaluation set [inv: summary, *readme tests missing*] |

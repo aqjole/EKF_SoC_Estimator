@@ -220,3 +220,18 @@ def segment_hppc(run):
         is_last = k == len(groups)
         levels.append(make_level(run, segments, soc, k, pulse_indices, move_index, is_last))
     return levels
+
+
+def rest_points(run, levels):
+    """Return the rest voltages of an HPPC Run as [(soc, v)], SoC falling (decisions 1.1).
+
+    The first point is the last row before the first discharge pulse of level 1, at the level-1 pulse
+    SoC. Then comes one point per level that has a 1 h rest after its move: the last row of that rest, at
+    the SoC where the move ended. The last level has no such rest and gives no point.
+    """
+    first_pulse_row = levels[0].pulses[0].rows.start
+    points = [(levels[0].soc_pulses, float(run.v[first_pulse_row - 1]))]
+    for level in levels:
+        if level.rest_after_move is not None:
+            points.append((level.soc_after_move, float(run.v[level.rest_after_move.stop - 1])))
+    return points

@@ -57,6 +57,11 @@ TAU2_BOUNDS_S = (30.0, 3600.0)
 SLOW_STEP_MIN_S = 1.0                  # fit (b) uses rows at least this far from the row before them
 
 
+# The five fitted tables of fit_hppc_run: (Params field, key of the SoC the value belongs to, key of the value).
+FITTED_TABLES = (("r0", "soc_pulses", "R0_ohm"), ("r1", "soc_pulses", "R1_ohm"), ("tau1", "soc_pulses", "tau1_s"),
+                 ("r2", "soc_rest", "R2_ohm"), ("tau2", "soc_rest", "tau2_s"))
+
+
 def rc_voltage(current, dt, r, tau):
     """Voltage of one RC branch over a stretch of rows by Eq. 1, starting at 0 on the first row.
 

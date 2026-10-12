@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from ekfsoc.constants import FOLDER_TEMP, Q_REF_AH, RAW_DIR, SOC_GRID, T_GRID_DEGC
+from ekfsoc.hppc import rest_points, segment_hppc
 from ekfsoc.loader import Run, find_runs, load_run
 from ekfsoc.ocv import (
     DISCHARGE_MIN_A,
@@ -18,7 +19,9 @@ from ekfsoc.ocv import (
     average_equal_x,
     build_ocv,
     central_differences,
+    discharge_curve,
     find_discharge_half,
+    rest_offsets,
 )
 
 DATA_CHECKS_MD = Path(__file__).resolve().parents[2] / "results" / "data_checks.md"
@@ -268,6 +271,43 @@ def test_docv_is_zero_on_held_points_and_half_a_slope_at_the_kink():
     assert np.all(table.docv >= 0.0)
 
 
+def test_rest_point_correction_adds_the_offsets_at_the_rest_socs_and_holds_flat_outside():
+    """A made-up C/20 line plus known rest offsets: curve + offset at the rest SoCs, flat beyond the first and last."""
+    curves = same_curve_at_every_temperature(linear_curve)
+    runs = make_runs(curves)
+    plain = build_ocv(runs, SOC_GRID, T_GRID_DEGC)
+
+    # Rest points as hppc.rest_points returns them: SoC falling, the offset growing towards low SoC.
+    rest_rows = [80, 50, 20]
+    offsets_v = np.array([0.010, 0.030, 0.060])
+    rest_socs = SOC_GRID[rest_rows]
+    points = {temp: list(zip(rest_socs, curves[temp](rest_socs) + offsets_v)) for temp in T_GRID_DEGC}
+    table = build_ocv(runs, SOC_GRID, T_GRID_DEGC, points)
+
+    # Without rest points there is no correction.
+    assert np.all(plain.delta_v == 0.0)
+    assert np.array_equal(plain.ocv, plain.ocv_c20)
+
+    # With them the uncorrected curve is the plain table, and ocv = curve + correction.
+    assert np.array_equal(table.ocv_c20, plain.ocv)
+    assert table.ocv == pytest.approx(table.ocv_c20 + table.delta_v, abs=1e-15)
+    assert table.monotone.all() and not table.fallback_used
+    for row in range(6):
+        assert table.delta_v[row, rest_rows] == pytest.approx(offsets_v, abs=1e-12)
+        assert table.ocv[row, rest_rows] == pytest.approx(plain.ocv[row, rest_rows] + offsets_v, abs=1e-12)
+        assert table.delta_v[row, :20] == pytest.approx(np.full(20, 0.060), abs=1e-12)
+        assert table.delta_v[row, 81:] == pytest.approx(np.full(20, 0.010), abs=1e-12)
+
+
+def test_rest_offsets_are_taken_from_the_uncorrected_curve_held_beyond_its_range():
+    """A rest point below the end of the discharge is compared with the held end value of the C/20 curve."""
+    run = make_c20_run(linear_curve, soc_end=0.2)
+    soc_curve, v_curve = discharge_curve(run)
+    v_c20, delta = rest_offsets(soc_curve, v_curve, np.array([0.5, 0.1]), np.array([3.7, 3.4]))
+    assert v_c20 == pytest.approx([linear_curve(0.5), linear_curve(0.2)], abs=1e-9)
+    assert delta == pytest.approx([3.7 - linear_curve(0.5), 3.4 - linear_curve(0.2)], abs=1e-9)
+
+
 def test_central_differences_on_a_nonuniform_axis():
     x = np.array([0.0, 1.0, 3.0, 4.0])
     values = x * x
@@ -395,3 +435,36 @@ def test_real_table_is_physically_plausible(real_table):
         assert np.all(np.diff(real_table.ocv[row, valid]) > 0.0)
         assert real_table.ocv[row, 100] > real_table.ocv[row, 50] > real_table.ocv[row, 0]
         assert real_table.soc_max[row] > 0.99  # the file opens one log interval into the discharge
+
+
+@pytest.fixture(scope="module")
+def real_rest_points():
+    """The HPPC rest points of the six folders, keyed by nominal temperature in degC."""
+    points = {}
+    for path in find_runs(RAW_DIR, test_type="hppc"):
+        run = load_run(path)
+        points[run.meta["nominal_temp_degc"]] = rest_points(run, segment_hppc(run))
+    return points
+
+
+@pytest.fixture(scope="module")
+def corrected_table(real_c20_runs, real_rest_points):
+    return build_ocv(real_c20_runs, SOC_GRID, T_GRID_DEGC, real_rest_points)
+
+
+@pytest.mark.needs_data
+def test_real_correction_at_25_degc_is_positive_and_the_corrected_table_is_monotone(
+    corrected_table, real_c20_runs, real_rest_points
+):
+    """The relaxed rest voltage lies above the C/20 discharge curve at every rest point (decisions 1.1)."""
+    soc_curve, v_curve = discharge_curve(real_c20_runs[25])
+    soc_rest, v_rest = np.array(real_rest_points[25]).T
+    _, delta = rest_offsets(soc_curve, v_curve, soc_rest, v_rest)
+    assert len(delta) == 12
+    assert np.all(delta > 0.0)
+
+    row = T_GRID_DEGC.index(25)
+    assert np.all(corrected_table.delta_v[row] > 0.0)
+    assert corrected_table.ocv[row] == pytest.approx(corrected_table.ocv_c20[row] + corrected_table.delta_v[row], abs=1e-15)
+    assert corrected_table.monotone.tolist() == [True] * 6
+    assert corrected_table.fallback_used is False

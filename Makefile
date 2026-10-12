@@ -20,6 +20,6 @@ checks:
 	$(PYTHON) python/data_checks.py
 
 # S1: OCV and 2RC tables from the C/20 and HPPC files, then the US06 open-loop check.
-# Writes results/params.csv, fit_levels.csv, params.md, model_fit.md, plots/s1/ and the C tables in c/.
+# Writes results/params.csv, fit_levels.csv, ocv_correction.csv, params.md, model_fit.md, plots/s1/ and the C tables in c/.
 fit:
 	$(PYTHON) python/fit_all.py

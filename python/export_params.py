@@ -1,12 +1,13 @@
 """Export the model tables: results/params.md and the generated C source and header.
 
 Single source of truth (the spec, S1): results/params.csv holds the axes and the seven tables
-(OCV, dOCV/dSoC, R0, R1, tau1, R2, tau2) on the 101-point SoC grid, and results/fit_levels.csv holds
-the HPPC level fits they were resampled from. Both are written by python/fit_all.py. This script
-turns them into
+(OCV, dOCV/dSoC, R0, R1, tau1, R2, tau2) on the 101-point SoC grid, results/fit_levels.csv holds
+the HPPC level fits they were resampled from, and results/ocv_correction.csv holds the correction of the
+OCV at each HPPC rest point. All three are written by python/fit_all.py. This script turns them into
 
   results/params.md       tables for the reader: the fit at each HPPC level, C = tau / R,
-                          the fit RMSE, the OCV valid SoC range and the OCV fallback flag
+                          the fit RMSE, the OCV valid SoC range, the OCV fallback flag and the
+                          OCV correction at the rest points
   c/include/ekf_params.h  extern declarations of the nine arrays and the two size defines
   c/src/ekf_params.c      the arrays as const float, one row per temperature
 
@@ -14,7 +15,7 @@ so Python and C look up the same numbers. Nothing is typed by hand and the outpu
 running it twice on the same input gives byte-identical files.
 
 Run from the repo root:  .venv/bin/python python/export_params.py
-(fit_all.py calls export_params() after it has written the two CSV files.)
+(fit_all.py calls export_params() after it has written the three CSV files.)
 """
 
 from pathlib import Path
@@ -28,6 +29,7 @@ from ekfsoc.model import Params
 
 PARAMS_CSV = REPO_DIR / "results" / "params.csv"
 LEVELS_CSV = REPO_DIR / "results" / "fit_levels.csv"
+OCV_CORRECTION_CSV = REPO_DIR / "results" / "ocv_correction.csv"
 PARAMS_MD = REPO_DIR / "results" / "params.md"
 C_SOURCE = REPO_DIR / "c" / "src" / "ekf_params.c"
 C_HEADER = REPO_DIR / "c" / "include" / "ekf_params.h"
@@ -203,14 +205,34 @@ def ocv_valid_first_index(ocv_row):
     return None
 
 
-def params_md_text(params_df, levels_df):
+def ocv_correction_lines(correction_df):
+    """Return the lines of the section on the OCV correction: the rule, then one table row per rest point."""
+    rows = [
+        [f"{row.T_degC:g}", fmt(100.0 * row.soc), fmt(row.v_rest_V, 5), fmt(row.v_c20_V, 5), fmt(row.delta_mV)]
+        for row in correction_df.itertuples()
+    ]
+    lines = [
+        "",
+        "## OCV correction from the HPPC rest voltages",
+        "",
+        "At each rest point (the last row of every 1 h rest after a move, and the last row before the first "
+        "discharge pulse of level 1) delta = V rest - V C/20 at the same SoC, and a PCHIP through the deltas, "
+        "held flat beyond the first and last point, is added to the C/20 curve (docs/decisions.md 1.1).",
+        "",
+    ]
+    return lines + md_table(["T (degC)", "SoC (%)", "V rest (V)", "V C/20 (V)", "delta (mV)"], rows)
+
+
+def params_md_text(params_df, levels_df, correction_df):
     """Return the text of results/params.md.
 
-    params_df  results/params.csv as a DataFrame (606 rows, one per temperature and grid SoC)
-    levels_df  results/fit_levels.csv as a DataFrame (one row per HPPC level; columns that are not
-               listed below, such as convergence flags, are ignored)
+    params_df      results/params.csv as a DataFrame (606 rows, one per temperature and grid SoC)
+    levels_df      results/fit_levels.csv as a DataFrame (one row per HPPC level; columns that are not
+                   listed below, such as convergence flags, are ignored)
+    correction_df  results/ocv_correction.csv as a DataFrame (one row per HPPC rest point)
 
     Contents: the OCV valid SoC range per temperature and the OCV fallback flag (from params_df),
+    the OCV correction at the rest points (from correction_df),
     then per temperature two tables of the HPPC level fits: the fast branch (R0, R1, tau1,
     C1 = tau1 / R1 at the SoC of the level's pulses, with the RMSE and the number of pulses used)
     and the slow branch (R2, tau2, C2 = tau2 / R2 at the SoC where the move ended, with the RMSE).
@@ -234,9 +256,9 @@ def params_md_text(params_df, levels_df):
         "",
         "## OCV",
         "",
-        "OCV comes from the C/20 discharge half (docs/decisions.md 1.1). Below the lowest SoC a discharge "
-        "reached, the table holds its last value, so the OCV is measured from the first grid SoC where "
-        "it changes from the node before it (from 0 when nothing is held).",
+        "OCV comes from the C/20 discharge half, corrected onto the HPPC rest voltages (docs/decisions.md 1.1). "
+        "Below the lowest SoC a discharge reached, the table holds its last value, so the OCV is measured from "
+        "the first grid SoC where it changes from the node before it (from 0 when nothing is held).",
         "",
         f"OCV fallback (the 25 degC curve used at every temperature): {'yes' if fallback_used else 'no'}.",
         "",
@@ -251,6 +273,7 @@ def params_md_text(params_df, levels_df):
         else:
             ocv_table_rows.append([f"{temp:g}", f"{100.0 * soc_row[first]:.1f}", str(first)])
     lines += md_table(ocv_header, ocv_table_rows)
+    lines += ocv_correction_lines(correction_df)
 
     lines += [
         "",
@@ -315,19 +338,25 @@ def params_md_text(params_df, levels_df):
 
 
 def export_params(
-    params_csv=PARAMS_CSV, levels_csv=LEVELS_CSV, md_path=PARAMS_MD, c_path=C_SOURCE, h_path=C_HEADER
+    params_csv=PARAMS_CSV,
+    levels_csv=LEVELS_CSV,
+    correction_csv=OCV_CORRECTION_CSV,
+    md_path=PARAMS_MD,
+    c_path=C_SOURCE,
+    h_path=C_HEADER,
 ):
-    """Read params.csv and fit_levels.csv and write params.md, the C source and the C header."""
+    """Read params.csv, fit_levels.csv and ocv_correction.csv and write params.md, the C source and the C header."""
     params = Params.from_csv(params_csv)
     params_df = pd.read_csv(params_csv)
     levels_df = pd.read_csv(levels_csv)
+    correction_df = pd.read_csv(correction_csv)
 
     write_c_files(params, c_path, h_path)
 
     md_path = Path(md_path)
     md_path.parent.mkdir(parents=True, exist_ok=True)
     with open(md_path, "w", newline="\n") as handle:
-        handle.write(params_md_text(params_df, levels_df))
+        handle.write(params_md_text(params_df, levels_df, correction_df))
 
 
 def main():

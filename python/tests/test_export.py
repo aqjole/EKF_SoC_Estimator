@@ -1,7 +1,7 @@
 """Tests for export_params: the generated C files and results/params.md.
 
 No raw data and no real fit is needed. Each test builds a small synthetic params.csv (606 rows, the
-header of the contract) and fit_levels.csv in tmp_path, runs the export on them and checks
+header of the contract), fit_levels.csv and ocv_correction.csv in tmp_path, runs the export on them and checks
 the output: the C source compiles under strict flags, the header has the defines and the nine
 declarations, every literal is a float, the values round-trip to the CSV, and two runs give the
 same bytes.
@@ -26,6 +26,10 @@ LEVELS_HEADER = (
     "T_degC,level,soc_pulses,R0_ohm,R1_ohm,tau1_s,rmse_fast_mV,n_pulses_used,"
     "soc_rest,R2_ohm,tau2_s,rmse_slow_mV,fast_ok,slow_ok"
 )
+CORRECTION_HEADER = "T_degC,soc,v_rest_V,v_c20_V,delta_mV"
+
+# One rest point, for the tests that call params_md_text on DataFrames.
+CORRECTION_DF = pd.DataFrame({"T_degC": [25.0], "soc": [1.0], "v_rest_V": [4.18], "v_c20_V": [4.17], "delta_mV": [10.0]})
 
 # Lowest SoC the C/20 discharge reaches at 40, 25, 10, 0, -10, -20 degC (results/data_checks.md section 11).
 SOC_MIN = [0.0327, 0.0, 0.0474, 0.0655, 0.0781, 0.1028]
@@ -63,13 +67,14 @@ def six(value):
 
 
 def write_synthetic(directory, fallback=False):
-    """Write a synthetic params.csv and fit_levels.csv into `directory` and return their paths.
+    """Write a synthetic params.csv, fit_levels.csv and ocv_correction.csv into `directory` and return their paths.
 
     The OCV rises with SoC and is held at the SoC_MIN value below SoC_MIN of each temperature (the
     same hold rule as build_ocv). `fallback=True` copies the 25 degC OCV row to every temperature.
     """
     params_path = directory / "params.csv"
     levels_path = directory / "fit_levels.csv"
+    correction_path = directory / "ocv_correction.csv"
 
     ocv_by_t = []
     for j, temp in enumerate(T_GRID_DEGC):
@@ -130,16 +135,25 @@ def write_synthetic(directory, fallback=False):
                     "" if last else True,
                 ]
                 writer.writerow(row)
-    return params_path, levels_path
+
+    # Three rest points per temperature, SoC falling; the delta is 10 mV at 100 % and grows towards low SoC.
+    with open(correction_path, "w", newline="") as handle:
+        handle.write(CORRECTION_HEADER + "\n")
+        writer = csv.writer(handle, lineterminator="\n")
+        for temp in T_GRID_DEGC:
+            for soc, delta_mv in ((1.0, 10.0), (0.5, 20.0), (0.1, 60.0)):
+                v_c20 = 3.5 + 0.7 * soc
+                writer.writerow([temp, six(soc), six(v_c20 + delta_mv / 1000.0), six(v_c20), six(delta_mv)])
+    return params_path, levels_path, correction_path
 
 
 def run_export(directory, fallback=False):
     """Write the synthetic inputs and run export_params into `directory`; return the three output paths."""
-    params_path, levels_path = write_synthetic(directory, fallback=fallback)
+    params_path, levels_path, correction_path = write_synthetic(directory, fallback=fallback)
     md_path = directory / "out" / "params.md"
     c_path = directory / "out" / "src" / "ekf_params.c"
     h_path = directory / "out" / "include" / "ekf_params.h"
-    export_params.export_params(params_path, levels_path, md_path, c_path, h_path)
+    export_params.export_params(params_path, levels_path, correction_path, md_path, c_path, h_path)
     return md_path, c_path, h_path
 
 
@@ -284,12 +298,12 @@ def test_c_float_literals():
 
 
 def test_axes_that_are_not_the_project_grids_are_refused(tmp_path):
-    params_path, levels_path = write_synthetic(tmp_path)
+    params_path, levels_path, correction_path = write_synthetic(tmp_path)
     text = params_path.read_text().replace("\n-20,", "\n-21,")
     params_path.write_text(text)
     with pytest.raises(ValueError, match="project grids"):
         export_params.export_params(
-            params_path, levels_path, tmp_path / "p.md", tmp_path / "c" / "a.c", tmp_path / "c" / "a.h"
+            params_path, levels_path, correction_path, tmp_path / "p.md", tmp_path / "c" / "a.c", tmp_path / "c" / "a.h"
         )
 
 
@@ -327,6 +341,21 @@ def test_md_flags_the_ocv_fallback(tmp_path):
     assert "OCV fallback (the 25 degC curve used at every temperature): yes." in text
     # With the 25 degC curve everywhere, every temperature is valid from 0.
     assert set(md_ocv_rows(text).values()) == {("0.0", "0")}
+
+
+def test_md_has_the_ocv_correction_table_with_one_row_per_rest_point(tmp_path):
+    md_path, _, _ = run_export(tmp_path)
+    text = md_path.read_text()
+
+    assert "## OCV correction from the HPPC rest voltages" in text
+    section = text.split("## OCV correction from the HPPC rest voltages")[1].split("\n## ")[0]
+    assert "delta = V rest - V C/20" in section and "held flat" in section
+    rows = [[cell.strip() for cell in line.strip("|").split("|")] for line in section.split("\n") if re.match(r"\| -?\d", line)]
+    assert len(rows) == 3 * len(T_GRID_DEGC)
+    assert rows[0] == ["40", "100", "4.21", "4.2", "10"]
+    assert rows[1] == ["40", "50", "3.87", "3.85", "20"]
+    assert rows[2] == ["40", "10", "3.63", "3.57", "60"]
+    assert [row[0] for row in rows[-3:]] == ["-20"] * 3
 
 
 def test_md_has_one_pair_of_tables_per_temperature_with_c_equal_tau_over_r(tmp_path):
@@ -395,7 +424,7 @@ def test_md_text_takes_dataframes_and_is_plain_text():
             "rmse_slow_mV": [0.5, np.nan],
         }
     )
-    text = export_params.params_md_text(params_df, levels_df)
+    text = export_params.params_md_text(params_df, levels_df, CORRECTION_DF)
     # Levels are listed in level order, not input order.
     assert text.index("| 1 | 100 |") < text.index("| 2 | 80 |")
 
@@ -424,7 +453,7 @@ def test_md_prints_n_a_for_c_when_a_resistance_is_zero_or_missing():
             "rmse_slow_mV": [0.5],
         }
     )
-    text = export_params.params_md_text(params_df, levels_df)
+    text = export_params.params_md_text(params_df, levels_df, CORRECTION_DF)
     assert "| 1 | 100 | 20 | 0 | 3 | n/a | 1 | 4 |" in text
     assert "| 1 | 90 | 0 | 300 | n/a | 0.5 |" in text
 

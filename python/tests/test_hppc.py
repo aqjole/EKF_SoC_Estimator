@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from ekfsoc.constants import FOLDER_TEMP, Q_REF_AH, RAW_DIR
-from ekfsoc.hppc import segment_hppc
+from ekfsoc.hppc import rest_points, segment_hppc
 from ekfsoc.loader import build_run, find_runs, load_run, soc_ref
 
 DATA_CHECKS_MD = Path(__file__).resolve().parents[2] / "results" / "data_checks.md"
@@ -161,6 +161,14 @@ def test_synthetic_pulse_shorter_than_9_s_is_cut(synthetic):
     assert not pulse.usable
 
 
+def test_synthetic_rest_points_are_the_level_1_rest_and_the_rest_after_each_move_with_a_rest(synthetic):
+    """Two levels: the point before D1 of level 1, then the rest after level 1's move. Level 2 has no rest after its move."""
+    run, levels = synthetic
+    points = rest_points(run, levels)
+    assert points == [(levels[0].soc_pulses, V_REST), (levels[0].soc_after_move, V_REST)]
+    assert points[0][0] > points[1][0]
+
+
 def test_a_level_without_its_last_charge_pulse_is_refused():
     blocks = [(0.0, 5.0)] + level_blocks()[:-2] + MOVE + HOUR_REST
     with pytest.raises(ValueError, match="level 1"):
@@ -281,3 +289,17 @@ def test_25degc_levels_sit_at_the_counter_values_where_the_moves_end(hppc_levels
     counters_ah = [0.0, 0.15, 0.30, 0.60, 0.90, 1.20, 1.50, 1.80, 2.10, 2.40, 2.55, 2.70]
     expected = [1.0 - counter / Q_REF_AH for counter in counters_ah]
     assert [level.soc_pulses for level in levels] == pytest.approx(expected, abs=2e-4)
+
+
+@pytest.mark.needs_data
+def test_25degc_rest_points_are_the_level_1_point_and_the_eleven_rests_with_soc_falling(hppc_levels):
+    run, levels = hppc_levels("25degC")
+    points = rest_points(run, levels)
+    socs = [soc for soc, _ in points]
+    assert len(points) == 12
+    assert all(later < earlier for earlier, later in zip(socs, socs[1:]))
+    # The first point is the row before D1 of level 1; the others are the last rows of the 1 h rests.
+    assert points[0] == (levels[0].soc_pulses, run.v[levels[0].pulses[0].rows.start - 1])
+    for point, level in zip(points[1:], levels[:-1]):
+        assert point == (level.soc_after_move, run.v[level.rest_after_move.stop - 1])
+    assert all(3.0 < voltage < 4.2 for _, voltage in points)

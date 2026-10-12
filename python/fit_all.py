@@ -2,36 +2,36 @@
 
 Run from the repo root:  .venv/bin/python python/fit_all.py   (or: make fit)
 
-  1. OCV(SoC, T) and dOCV/dSoC from the six C/20 discharge halves (ocv.py).
+  1. OCV(SoC, T) and dOCV/dSoC from the six C/20 discharge halves, corrected onto the voltages at the
+     end of the HPPC rests (ocv.py, hppc.py; docs/decisions.md 1.1). The correction at every rest point
+     is written to results/ocv_correction.csv.
   2. The six HPPC files are segmented and fitted level by level (hppc.py, fit.py; rules in
-     docs/decisions.md 1.12).
+     docs/decisions.md 1.12), on the corrected OCV.
   3. Each level fit is resampled onto the 101-point SoC grid: linear in SoC, the first and last level
      value held beyond the measured range. R0, R1, tau1 sit at the SoC of the level's pulses,
      R2, tau2 at the SoC where the move ended.
   4. results/params.csv and results/fit_levels.csv are written, then export_params.py makes
-     results/params.md and the C source and header from them.
+     results/params.md (with the correction table) and the C source and header from them.
   5. The tables are read back from params.csv, so the validation uses the same 6-digit numbers as the
      C file, and the 2RC model runs open-loop on US06 at each temperature (decisions 1.4): measured
      current and temperature, reference SoC. results/model_fit.md and results/plots/s1/model_fit_<folder>.png
      report the voltage error.
+  6. results/plots/s1/ocv.png, docv.png and params.png draw the three tables (plots.py; decisions 1.14).
 
 Nothing is tuned: the validation files are not used in any fit.
 """
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 from ekfsoc.constants import FOLDER_TEMP, RAW_DIR, REPO_DIR, SOC_GRID, T_GRID_DEGC
-from ekfsoc.fit import fit_hppc_run
-from ekfsoc.hppc import segment_hppc
+from ekfsoc.fit import FITTED_TABLES, fit_hppc_run
+from ekfsoc.hppc import rest_points, segment_hppc
 from ekfsoc.loader import find_runs, load_run, soc_ref
 from ekfsoc.model import Params, simulate_2rc_open_loop
-from ekfsoc.ocv import build_ocv
-from export_params import LEVELS_CSV, PARAMS_CSV, export_params, md_table
+from ekfsoc.ocv import build_ocv, discharge_curve, rest_offsets
+from ekfsoc.plots import plot_docv, plot_model_fit, plot_ocv, plot_params
+from export_params import LEVELS_CSV, OCV_CORRECTION_CSV, PARAMS_CSV, export_params, md_table
 
 
 MODEL_FIT_MD = REPO_DIR / "results" / "model_fit.md"
@@ -43,18 +43,12 @@ FOLDER_OF = {temp: folder for folder, temp in FOLDER_TEMP.items()}
 GATE_TEMP_DEGC = 25
 GATE_RMSE_MV = 30.0
 
+# The evaluation window of the EKF experiments (docs/model.md C14): rows up to the last one with reference SoC at or above this.
+WINDOW_MIN_SOC = 0.10
+
 # Columns of results/fit_levels.csv, the keys of fit_hppc_run in this order.
 LEVEL_COLUMNS = ("T_degC", "level", "soc_pulses", "R0_ohm", "R1_ohm", "tau1_s", "rmse_fast_mV", "n_pulses_used",
                  "soc_rest", "R2_ohm", "tau2_s", "rmse_slow_mV", "fast_ok", "slow_ok")
-
-# The five fitted tables: (Params field, SoC the value was measured at, column of a level row).
-FITTED_TABLES = (("r0", "soc_pulses", "R0_ohm"), ("r1", "soc_pulses", "R1_ohm"), ("tau1", "soc_pulses", "tau1_s"),
-                 ("r2", "soc_rest", "R2_ohm"), ("tau2", "soc_rest", "tau2_s"))
-
-# Plot colours: slots 1 and 2 of the dataviz reference palette on a light surface.
-MEASURED_COLOR = "#2a78d6"
-MODEL_COLOR = "#eb6834"
-INK_COLOR = "#52514e"
 
 
 # --- fit and resample ----------------------------------------------------------------------------
@@ -116,55 +110,47 @@ def write_levels_csv(level_rows):
     table.to_csv(LEVELS_CSV, index=False, float_format="%.6g", lineterminator="\n")
 
 
+def write_ocv_correction_csv(c20_runs, rest_points_by_temp):
+    """Write results/ocv_correction.csv: one row per HPPC rest point, SoC falling within a temperature (decisions 1.1)."""
+    frames = []
+    for temp in T_GRID_DEGC:
+        soc_curve, v_curve = discharge_curve(c20_runs[temp])
+        soc_rest, v_rest = np.array(rest_points_by_temp[temp]).T
+        v_c20, delta = rest_offsets(soc_curve, v_curve, soc_rest, v_rest)
+        frames.append(pd.DataFrame({"T_degC": temp, "soc": soc_rest, "v_rest_V": v_rest, "v_c20_V": v_c20,
+                                    "delta_mV": 1000.0 * delta}))
+    pd.concat(frames).to_csv(OCV_CORRECTION_CSV, index=False, float_format="%.6g", lineterminator="\n")
+
+
 # --- open-loop validation ------------------------------------------------------------------------
+
+
+def rms(values):
+    """Root mean square of an array."""
+    return float(np.sqrt(np.mean(values**2)))
 
 
 def validate_us06(params, temp):
     """Run the model open-loop on the US06 file of one temperature (docs/model.md Eq. 1, 2).
 
     Inputs: measured current and cell temperature, reference SoC from the cycler's counter (Eq. 3).
-    Returns a result dict; "error_mv" is model minus measured voltage per row.
+    Returns a result dict; "error_mv" is model minus measured voltage per row, and "rmse_window_mv" is
+    the RMSE over the evaluation window of C14 (information only; the gate uses "rmse_mv").
     """
     run = load_test(FOLDER_OF[temp], "us06")
-    v_model = simulate_2rc_open_loop(params, run.i, run.temp, soc_ref(run), run.dt)
+    reference_soc = soc_ref(run)
+    v_model = simulate_2rc_open_loop(params, run.i, run.temp, reference_soc, run.dt)
     error_mv = 1000.0 * (v_model - run.v)
+    n_window = np.flatnonzero(reference_soc >= WINDOW_MIN_SOC)[-1] + 1
     return {
         "temp": temp,
         "run": run,
         "v_model": v_model,
         "error_mv": error_mv,
-        "rmse_mv": float(np.sqrt(np.mean(error_mv**2))),
+        "rmse_mv": rms(error_mv),
+        "rmse_window_mv": rms(error_mv[:n_window]),
         "max_abs_mv": float(np.max(np.abs(error_mv))),
     }
-
-
-def plot_model_fit(result, path):
-    """Plot measured and model voltage over time, with the error in mV below. No timestamp in the file."""
-    run = result["run"]
-    minutes = (run.t - run.t[0]) / 60.0
-
-    fig, (top, bottom) = plt.subplots(2, 1, sharex=True, figsize=(10, 6), gridspec_kw={"height_ratios": [3, 1.5]})
-    top.plot(minutes, run.v, color=MEASURED_COLOR, linewidth=0.8, label="measured")
-    top.plot(minutes, result["v_model"], color=MODEL_COLOR, linewidth=0.8, label="model (open loop)")
-    top.set_ylabel("terminal voltage (V)")
-    top.legend(loc="lower left", frameon=False)
-    top.set_title(
-        f"US06 at {result['temp']} degC: RMSE {result['rmse_mv']:.1f} mV, max |error| {result['max_abs_mv']:.1f} mV",
-        color=INK_COLOR,
-    )
-
-    bottom.axhline(0.0, color=INK_COLOR, linewidth=0.5)
-    bottom.plot(minutes, result["error_mv"], color=MODEL_COLOR, linewidth=0.8)
-    bottom.set_ylabel("model - measured (mV)")
-    bottom.set_xlabel("time (min)")
-
-    for axis in (top, bottom):
-        axis.grid(color="#e1e0d9", linewidth=0.5)
-        axis.spines[["top", "right"]].set_visible(False)
-    fig.tight_layout()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=120, metadata={"Software": None})
-    plt.close(fig)
 
 
 # --- results/model_fit.md ------------------------------------------------------------------------
@@ -181,6 +167,7 @@ def model_fit_text(results, counts, level_rows, ocv_table):
         validation_rows.append([
             f"{result['temp']}", f"`{run.meta['folder']}/{run.meta['file']}`", f"{run.meta['n_rows_used']}",
             f"{run.t[-1] - run.t[0]:.1f}", f"{result['rmse_mv']:.2f}", f"{result['max_abs_mv']:.2f}",
+            f"{result['rmse_window_mv']:.2f}",
         ])
 
     pulse_rows = []
@@ -214,10 +201,13 @@ def model_fit_text(results, counts, level_rows, ocv_table):
         "- V1 = V2 = 0 at the first row: the model starts relaxed.",
         "",
         "Error = model voltage minus measured voltage. RMSE and max |error| run over all rows used after the loader rules, "
-        "not over the SoC >= 10 % window of the EKF experiments. Duration is the last Time minus the first Time of those rows.",
+        "and the gate uses this RMSE (docs/decisions.md 1.1). The last column is the RMSE over the rows up to the last one with "
+        "reference SoC >= 10 % (the evaluation window of the EKF experiments, docs/model.md C14), for information only: "
+        "no window is chosen to pass the gate. Duration is the last Time minus the first Time of the rows used.",
         "",
     ]
-    lines += md_table(["T (degC)", "file", "rows used", "duration (s)", "RMSE (mV)", "max abs error (mV)"], validation_rows)
+    lines += md_table(["T (degC)", "file", "rows used", "duration (s)", "RMSE (mV)", "max abs error (mV)",
+                       "RMSE over SoC_ref >= 10 % (mV)"], validation_rows)
     lines += [
         "",
         f"Gate: the open-loop RMSE at {GATE_TEMP_DEGC} degC is {gate['rmse_mv']:.2f} mV against the sanity limit of "
@@ -241,11 +231,19 @@ def model_fit_text(results, counts, level_rows, ocv_table):
     )
     lines += [
         "",
+        "Plot: `results/plots/s1/params.png`, R0, R1, tau1, R2 and tau2 against SoC, the HPPC level fits (dots) and the "
+        "table on the SoC grid (dashed), one colour per temperature.",
+        "",
         "## OCV",
         "",
+        "The OCV table is the C/20 discharge curve plus a correction onto the HPPC rest voltages "
+        "(docs/decisions.md 1.1; the correction at every rest point is in `results/ocv_correction.csv`). "
         f"OCV fallback (the 25 degC curve used at every temperature): {'yes' if ocv_table.fallback_used else 'no'}. "
         f"Monotone on the measured range at {int(np.sum(ocv_table.monotone))} of {len(ocv_table.monotone)} temperatures. "
         "The valid SoC range per temperature is in `results/params.md`.",
+        "",
+        "Plots: `results/plots/s1/ocv.png`, the C/20 curve (dashed), the corrected OCV (solid) and the HPPC rest voltages "
+        "(dots) with the correction in mV below; `results/plots/s1/docv.png`, dOCV/dSoC on the SoC grid.",
     ]
     return "\n".join(lines) + "\n"
 
@@ -255,20 +253,23 @@ def model_fit_text(results, counts, level_rows, ocv_table):
 
 def main():
     c20_runs = {temp: load_test(FOLDER_OF[temp], "c20") for temp in T_GRID_DEGC}
-    ocv_table = build_ocv(c20_runs, SOC_GRID, T_GRID_DEGC)
+    hppc_runs = {temp: load_test(FOLDER_OF[temp], "hppc") for temp in T_GRID_DEGC}
+    rest_points_by_temp = {temp: rest_points(run, segment_hppc(run)) for temp, run in hppc_runs.items()}
+    ocv_table = build_ocv(c20_runs, SOC_GRID, T_GRID_DEGC, rest_points_by_temp)
 
-    level_rows = {}
-    counts = {}
-    for temp in T_GRID_DEGC:
-        hppc_run = load_test(FOLDER_OF[temp], "hppc")
-        level_rows[temp] = fit_hppc_run(hppc_run, ocv_table)
-        counts[temp] = count_pulses(hppc_run)
+    level_rows = {temp: fit_hppc_run(hppc_runs[temp], ocv_table) for temp in T_GRID_DEGC}
+    counts = {temp: count_pulses(hppc_runs[temp]) for temp in T_GRID_DEGC}
 
     build_params(ocv_table, level_rows).to_csv(PARAMS_CSV)
     write_levels_csv(level_rows)
+    write_ocv_correction_csv(c20_runs, rest_points_by_temp)
     export_params()
 
     params = Params.from_csv(PARAMS_CSV)
+    plot_ocv(ocv_table, pd.read_csv(OCV_CORRECTION_CSV), PLOTS_DIR / "ocv.png")
+    plot_docv(params, PLOTS_DIR / "docv.png")
+    plot_params(pd.read_csv(LEVELS_CSV), params, PLOTS_DIR / "params.png")
+
     results = [validate_us06(params, temp) for temp in T_GRID_DEGC]
     for result in results:
         plot_model_fit(result, PLOTS_DIR / f"model_fit_{FOLDER_OF[result['temp']]}.png")

@@ -11,9 +11,14 @@ Rule (docs/decisions.md 1.1; docs/model.md C3, C4, C15):
   temperatures, and its first row is a little below SoC 1), the table holds the value at the nearest
   end of the measured range. The measured range is kept per temperature (soc_min, soc_max) so that
   the report can state where the table is measured and where it is held.
+- Correction (decisions 1.1, refinement after the S1 open-loop validation): the C/20 discharge curve sits
+  below the relaxed open-circuit voltage by the overpotential at the C/20 current. When the HPPC rest
+  voltages are given, delta_k = V_rest,k - V_C20(SoC_k) at every rest point, a PCHIP through the deltas
+  (held flat beyond the first and last rest point) is added to the C/20 curve, and the sum is the table.
+  The uncorrected curve and the correction stay available as their own tables.
 - Check: V must rise strictly from each grid point to the next, over the grid points inside the
-  measured range. If any temperature fails, the 25 degC row is copied to every temperature
-  (the spec's fallback, decisions 1.1).
+  measured range, on the corrected curve. If any temperature fails, the 25 degC row is copied to every
+  temperature (the spec's fallback, decisions 1.1).
 - dOCV/dSoC: central differences on the grid, one-sided at the two ends. It is computed once here and
   stored as its own table. Python and C interpolate it and never differentiate at run time, so their
   Jacobians are identical. It is exactly 0 on held grid points.
@@ -41,8 +46,11 @@ class OcvTable:
 
     soc_grid      SoC axis, fractions, shape (n_soc,)
     t_grid        temperature axis in degC, shape (n_t,), float64
-    ocv           open-circuit voltage in V, shape (n_t, n_soc); row = temperature, column = SoC
+    ocv           open-circuit voltage in V, shape (n_t, n_soc); row = temperature, column = SoC;
+                  ocv = ocv_c20 + delta_v
     docv          slope of ocv over SoC in V per unit SoC, same shape; central differences on the grid
+    ocv_c20       the C/20 discharge curve before the correction, same shape as ocv
+    delta_v       the correction to the HPPC rest voltages in V, same shape; 0 when no rest points are given
     soc_min       lowest SoC the discharge reached, per temperature, shape (n_t,); the table holds
                   its value at that SoC for the grid points below it
     soc_max       highest SoC the discharge reached (a little below 1), per temperature; the table
@@ -50,7 +58,7 @@ class OcvTable:
     monotone      per temperature, True when the curve of that temperature's own discharge passed the
                   strict-rise check on the grid points inside [soc_min, soc_max]
     fallback_used True when some temperature failed the check and the 25 degC row was copied to every
-                  temperature; then ocv and docv are the same in every row, and soc_min and soc_max
+                  temperature; then ocv, docv, ocv_c20 and delta_v are the same in every row, and soc_min and soc_max
                   are those of the 25 degC curve (the range where the table is measured), while
                   monotone still shows each temperature's own result
     """
@@ -59,6 +67,8 @@ class OcvTable:
     t_grid: np.ndarray
     ocv: np.ndarray
     docv: np.ndarray
+    ocv_c20: np.ndarray
+    delta_v: np.ndarray
     soc_min: np.ndarray
     soc_max: np.ndarray
     monotone: np.ndarray
@@ -130,11 +140,12 @@ def discharge_curve(run, q_ref=Q_REF_AH):
 
 
 def ocv_row_on_grid(soc_curve, v_curve, soc_grid):
-    """Evaluate one temperature's PCHIP on the SoC grid, holding the end values outside the measured range.
+    """Evaluate one PCHIP through (soc_curve, v_curve) at the SoC values soc_grid, holding the end values outside the curve.
 
-    soc_curve must be strictly increasing (see average_equal_x). A grid point below soc_curve[0] gets
+    soc_curve must be strictly increasing (see average_equal_x). A point below soc_curve[0] gets
     the value at soc_curve[0]; one above soc_curve[-1] gets the value at soc_curve[-1]. The PCHIP is
     never evaluated outside the measured range, so it does not extrapolate.
+    Serves the C/20 curve on the SoC grid, the C/20 curve at the rest SoCs and the correction on the grid.
     Returns (ocv_row, soc_min, soc_max).
     """
     soc_min = float(soc_curve[0])
@@ -165,6 +176,16 @@ def rises_strictly_in_range(ocv_row, soc_grid, soc_min, soc_max):
     return True
 
 
+def rest_offsets(soc_curve, v_curve, soc_rest, v_rest):
+    """Return (v_c20, delta) at the HPPC rest points: the C/20 curve at each rest SoC, and delta = v_rest - v_c20, in V.
+
+    The C/20 curve is the uncorrected PCHIP of the discharge half, held at its end values beyond the
+    measured range (decisions 1.1). Both results follow the order of soc_rest.
+    """
+    v_c20, _, _ = ocv_row_on_grid(soc_curve, v_curve, soc_rest)
+    return v_c20, v_rest - v_c20
+
+
 def central_differences(values, x):
     """Return d(values)/d(x) at every point of a sorted axis: central differences inside, one-sided at the ends.
 
@@ -180,12 +201,15 @@ def central_differences(values, x):
     return slope
 
 
-def build_ocv(c20_runs, soc_grid, t_grid):
+def build_ocv(c20_runs, soc_grid, t_grid, rest_points=None):
     """Build the OCV and dOCV/dSoC tables from the C20DisCh runs, one run per grid temperature.
 
-    c20_runs  dict: nominal temperature in degC -> loader Run of that folder's C20DisCh file
-    soc_grid  SoC axis, fractions, ascending
-    t_grid    temperature axis in degC; the table rows follow this order
+    c20_runs     dict: nominal temperature in degC -> loader Run of that folder's C20DisCh file
+    soc_grid     SoC axis, fractions, ascending
+    t_grid       temperature axis in degC; the table rows follow this order
+    rest_points  None, or dict: nominal temperature in degC -> [(soc, v)] HPPC rest voltages of that
+                 folder (hppc.rest_points). Then the table is the C/20 curve plus the correction onto
+                 those points (module docstring); without them it is the C/20 curve alone.
     Raises ValueError if a grid temperature has no run, if a run has no discharge, or if the fallback
     is needed but the 25 degC curve itself fails the check (then there is nothing valid to copy).
     """
@@ -199,6 +223,8 @@ def build_ocv(c20_runs, soc_grid, t_grid):
     if missing:
         raise ValueError(f"no C20DisCh run for temperature(s) {missing} degC")
 
+    ocv_c20 = np.zeros((n_t, n_soc), dtype=np.float64)
+    delta_v = np.zeros((n_t, n_soc), dtype=np.float64)
     ocv = np.zeros((n_t, n_soc), dtype=np.float64)
     soc_min = np.zeros(n_t, dtype=np.float64)
     soc_max = np.zeros(n_t, dtype=np.float64)
@@ -208,7 +234,12 @@ def build_ocv(c20_runs, soc_grid, t_grid):
         temp_degc = int(t_grid[row])
         run = c20_runs[temp_degc]
         soc_curve, v_curve = discharge_curve(run)
-        ocv[row, :], soc_min[row], soc_max[row] = ocv_row_on_grid(soc_curve, v_curve, soc_grid)
+        ocv_c20[row, :], soc_min[row], soc_max[row] = ocv_row_on_grid(soc_curve, v_curve, soc_grid)
+        if rest_points is not None:
+            soc_rest, v_rest = np.array(sorted(rest_points[temp_degc]), dtype=np.float64).T
+            _, delta_rest = rest_offsets(soc_curve, v_curve, soc_rest, v_rest)
+            delta_v[row, :], _, _ = ocv_row_on_grid(soc_rest, delta_rest, soc_grid)
+        ocv[row, :] = ocv_c20[row, :] + delta_v[row, :]
         monotone[row] = rises_strictly_in_range(ocv[row, :], soc_grid, soc_min[row], soc_max[row])
 
     # Fallback: one failing temperature puts the 25 degC curve at every temperature (decisions 1.1).
@@ -222,10 +253,8 @@ def build_ocv(c20_runs, soc_grid, t_grid):
             raise ValueError(
                 f"the {FALLBACK_TEMP_DEGC} degC curve fails the monotonicity check, so it cannot be the fallback"
             )
-        for row in range(n_t):
-            ocv[row, :] = ocv[fallback_row, :]
-            soc_min[row] = soc_min[fallback_row]
-            soc_max[row] = soc_max[fallback_row]
+        for table in (ocv, ocv_c20, delta_v, soc_min, soc_max):
+            table[:] = table[fallback_row]
 
     docv = np.zeros((n_t, n_soc), dtype=np.float64)
     for row in range(n_t):
@@ -236,6 +265,8 @@ def build_ocv(c20_runs, soc_grid, t_grid):
         t_grid=t_grid,
         ocv=ocv,
         docv=docv,
+        ocv_c20=ocv_c20,
+        delta_v=delta_v,
         soc_min=soc_min,
         soc_max=soc_max,
         monotone=monotone,

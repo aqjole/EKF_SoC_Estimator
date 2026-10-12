@@ -192,7 +192,7 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
 - **Every plot is written by a repo script into `results/plots/<stage>/`, with the file names below. Nothing is saved by hand, and per-run traces that would number in the hundreds go to the gitignored `results/runs/` instead of the committed plot folder.**
 - Reason: the spec asks for a fixed list of plots per stage and for every README figure to trace to a script. A stage folder and fixed names make the list checkable and keep the committed set small.
 - `results/plots/s1/` (written by `python/fit_all.py`, `make fit`):
-  - `ocv.png`: the six OCV(SoC) curves from the C/20 discharge half, one colour per temperature, with the HPPC 1 h rest voltages of the same temperature overlaid as points (cross-check only, 1.1).
+  - `ocv.png`: per temperature the C/20 discharge curve (dashed), the corrected OCV (solid) and the HPPC 1 h rest voltages it passes through (markers), with the correction in mV in a lower panel (1.1).
   - `docv.png`: dOCV/dSoC on the 101-point grid per temperature.
   - `params.png`: R0, R1, tau1, R2, tau2 against SoC, one panel each, one line per temperature, at the HPPC points with the resampled grid curve.
   - `model_fit_<T>degC.png` (six files, T in 40, 25, 10, 0, n10, n20): US06 open-loop validation, measured and model voltage over time, with the error in mV below (1.4).
