@@ -1,6 +1,6 @@
 # Model: conventions and equations
 
-The 2RC equivalent-circuit model and the EKF, as used by every stage: loader, OCV and 2RC fit, EKF, metrics and the C port. The conventions below were fixed in S0 and checked against the raw data. The equations for S1 (2RC model, SoC update, table lookup, OCV slope) follow them; the EKF equations are written in S2. Decisions that affect results are recorded in `docs/decisions.md`.
+The 2RC equivalent-circuit model and the EKF, as used by every stage: loader, OCV and 2RC fit, EKF, metrics and the C port. The conventions below were fixed in S0 and checked against the raw data. The equations for S1 (2RC model, SoC update, table lookup, OCV slope) follow them; the EKF equations of S2 (Eq. 6 to 11) come after those. Decisions that affect results are recorded in `docs/decisions.md`.
 
 Data: LG 18650HG2 Li-ion Battery Data, Kollmeyer et al., McMaster University, Mendeley Data v2, DOI 10.17632/b5mj79w5w9.2, CC BY 4.0. There are 206 `.mat` files in `data/raw/` [inv].
 
@@ -223,6 +223,73 @@ dOCV/dSoC(S_{n-1}) = (OCV(S_{n-1}) - OCV(S_{n-2})) / (S_{n-1} - S_{n-2})     one
 - Below the lowest SoC the C/20 discharge reached, the OCV table is held constant (decisions 1.1), so the differences are 0 over that held region. At the two nodes next to its edge they mix held and measured values. The valid SoC range per temperature is in `results/params.md`.
 - Unit: V per unit SoC (Symbols). It is not negative where OCV is monotone in SoC.
 
-### EKF equations (S2)
+## EKF equations (S2)
 
-Written in S2: the filter's state, process and measurement equations and their Jacobians, numbered after Eq. 5.
+The filter of S2, numbered after Eq. 5 and cited the same way in the Python (`python/ekfsoc/ekf.py`) and C code, which repeat these equations with the same operation order. State x = [SoC, V1, V2]^T with covariance P (3 x 3), input I, measurement V. One step handles one kept row k and has two parts, `predict` (Eq. 6, Eq. 7) and `update` (Eq. 8 to Eq. 11):
+
+- x(k-1) and P(k-1) are the posterior of the previous row. x- and P- are the prior after predict (SoC-, V1-, V2- are the entries of x-). x and P without a mark are the posterior after update.
+- dt = dt(k) and T = T(k), the measured cell temperature of the row being processed. The held current is I(k-1), the previous kept sample's current (C11). The update uses the row's own V(k) and I(k).
+- Q is the process noise covariance, R the measurement noise variance, P0 the initial covariance (Symbols). The same q_soc, q_v, R and P0 are used for every experiment and temperature, and the filter is never told that an initial SoC is wrong.
+- Start of a run, or of a restart in mid-run: x = [SoC0, 0, 0], P = P0, and the first processed row has its dt taken as 0. Then F is the identity and B and Q are zero, so predict changes nothing and that row gets an update only. V1 = V2 = 0 holds also where a run opens under load or the filter starts mid-test (C13).
+
+### Eq. 6. Process model
+
+```
+a_i  = exp(-dt / tau_i)                                              i = 1, 2
+F    = diag(1, a1, a2)
+B    = [ -dt / (3600 · Q_ref),   R1 · (1 - a1),   R2 · (1 - a2) ]^T
+x-   = F · x(k-1) + B · I(k-1)
+```
+
+- Row by row: `SoC- = SoC(k-1) - I(k-1) · dt / (3600 · Q_ref)` is Eq. 3 with η = 1, and `Vi- = a_i · Vi(k-1) + R_i · (1 - a_i) · I(k-1)` is Eq. 1.
+- R1, tau1, R2 and tau2 are read with Eq. 4 at the previous posterior SoC, SoC(k-1), and at T(k). Eq. 1 reads T(k-1); the filter takes one temperature per sample, so predict and update of a step use the same one.
+- The current is held over the whole step, including the cycle-boundary steps of up to 2.143 s, with no special gap code (C11).
+- SoC is not limited in predict. The limit is applied in update (Eq. 10), and a prior outside 0 to 1 is clamped by the lookups of Eq. 4.
+
+### Eq. 7. Covariance prediction
+
+```
+Q    = diag(q_soc, q_v, q_v) · dt                                    q_soc in 1/s, q_v in V²/s
+P-   = F · P(k-1) · F^T + Q
+```
+
+- Process noise grows in proportion to the elapsed time, so a longer step widens the prior by more (C11).
+- F is diagonal, so `P-[i][j] = f_i · f_j · P(k-1)[i][j]` plus `Q[i][i]` on the diagonal, with f = (1, a1, a2). The code writes it as two 3 x 3 products, `F · P` and then `(F · P) · F^T`.
+- F is the Jacobian of Eq. 6 with respect to x in which the dependence of a_i and R_i on SoC is left out, as dR0/dSoC is left out of H in Eq. 8. Both are approximations.
+
+### Eq. 8. Predicted voltage and measurement Jacobian
+
+```
+y_hat = OCV(SoC-, T) - V1- - V2- - R0(SoC-, T) · I(k)
+H     = [ dOCV/dSoC(SoC-, T),   -1,   -1 ]
+```
+
+- OCV, dOCV/dSoC and R0 are read with Eq. 4 at the prior SoC, SoC-, and at T(k). I(k) is the row's own current (Eq. 2). y_hat is Eq. 2 with the prior state in place of the true one, and is what the voltage diagnostic compares with V(k).
+- H is the gradient of y_hat with respect to x. The slope is the table of Eq. 5 read with Eq. 4, not the derivative of the interpolated OCV. dR0/dSoC is left out of H: the term `-I(k) · dR0/dSoC` is missing from its first entry. This approximation is noted in the spec.
+
+### Eq. 9. Innovation variance and gain
+
+```
+S    = H · P- · H^T + R                                              scalar, V²
+K    = P- · H^T / S                                                  3 x 1
+```
+
+- S > 0 because P- is positive semi-definite and R > 0.
+
+### Eq. 10. State update and SoC limit
+
+```
+x      = x- + K · (V(k) - y_hat)
+SoC    = min(max(SoC, 0), 1)
+```
+
+- V1 and V2 are not limited. The limit changes the SoC entry only; P is not adjusted for it.
+
+### Eq. 11. Covariance update, Joseph form
+
+```
+P    = (I - K · H) · P- · (I - K · H)^T + K · R · K^T
+```
+
+- In exact arithmetic this P is symmetric and positive semi-definite for any K, while the short form `(I - K · H) · P-` equals it only for the optimal gain of Eq. 9. The Joseph form keeps P valid when K is rounded, in particular in the float build of the C port.
+- The code forms `(I - K · H)` once, then `(I - K · H) · P-`, then multiplies by `(I - K · H)^T` and adds `R · K · K^T`.

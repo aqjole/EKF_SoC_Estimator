@@ -1,4 +1,4 @@
-"""Tests for the S1 figures in ekfsoc/plots.py: each one is written as a PNG and a rerun gives the same bytes."""
+"""Tests for the figures in ekfsoc/plots.py (S1 and S2): each one is written as a PNG and a rerun gives the same bytes."""
 
 import numpy as np
 import pandas as pd
@@ -6,7 +6,7 @@ import pandas as pd
 from ekfsoc.constants import SOC_GRID, T_GRID_DEGC
 from ekfsoc.model import Params
 from ekfsoc.ocv import OcvTable
-from ekfsoc.plots import plot_docv, plot_ocv, plot_params
+from ekfsoc.plots import plot_docv, plot_ocv, plot_params, plot_summary, plot_synthetic, plot_trace
 
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -43,11 +43,39 @@ def synthetic_levels():
     })
 
 
+def synthetic_trace():
+    """A falling reference over 30 min; the estimates start 10 samples late and begin 20 pp low and 5 pp high."""
+    t = np.arange(0.0, 1800.0, 1.0)
+    soc_ref = np.linspace(1.0, 0.2, len(t))
+    soc_est = soc_ref - 0.20 * np.exp(-t / 300.0)
+    cc = soc_ref + 0.05
+    soc_est[:10] = np.nan
+    cc[:10] = np.nan
+    return t, soc_ref, soc_est, cc
+
+
+def synthetic_results():
+    """Two experiments over the six temperatures, one tuning-cycle run each, and one convergence time not reached."""
+    results = pd.DataFrame({
+        "experiment": ["exp1"] * 12 + ["exp2"] * 12, "T_degC": T_GRID_DEGC * 4,
+        "is_tuning": ([True] + [False] * 5) * 2 + [False] * 6 + [True] + [False] * 5,
+        "rmse_pp": np.linspace(0.5, 3.0, 24), "t_conv_s": np.linspace(60.0, 900.0, 24),
+    })
+    results.loc[results.index[-1], "t_conv_s"] = np.nan
+    return results
+
+
 def test_each_figure_is_a_png_and_a_rerun_is_byte_identical(tmp_path):
+    t, soc_ref, soc_est, cc = synthetic_trace()
+    results = synthetic_results()
     figures = {
         "ocv.png": lambda path: plot_ocv(synthetic_ocv_table(), synthetic_correction(), path),
         "docv.png": lambda path: plot_docv(synthetic_params(), path),
         "params.png": lambda path: plot_params(synthetic_levels(), synthetic_params(), path),
+        "trace.png": lambda path: plot_trace(path, t, soc_ref, soc_est, cc, 2.0, "synthetic run"),
+        "synthetic.png": lambda path: plot_synthetic(path, t, soc_ref, {"EKF, 20 pp low": soc_est}, 1.0, "synthetic data"),
+        "summary_rmse.png": lambda path: plot_summary(path, results, "rmse_pp", "SoC RMSE"),
+        "summary_convergence.png": lambda path: plot_summary(path, results, "t_conv_s", "convergence time"),
     }
     for name, draw in figures.items():
         first, second = tmp_path / "a" / name, tmp_path / "b" / name

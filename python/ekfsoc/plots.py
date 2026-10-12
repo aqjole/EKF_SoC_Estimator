@@ -1,14 +1,19 @@
-"""Stage S1 figures (docs/decisions.md 1.14): OCV and its correction, dOCV/dSoC, the fitted 2RC tables, the open-loop check.
+"""Figures of stages S1 and S2 (docs/decisions.md 1.14).
+
+S1: OCV and its correction, dOCV/dSoC, the fitted 2RC tables, the open-loop check.
+S2: one run's SoC traces with the error band, the summaries over all runs, the synthetic convergence test.
 
 Every figure is a PNG written with the Agg backend and no metadata, so a rerun is byte-identical.
-One colour per temperature in all figures, the same in every one: slots 1 to 6 of the dataviz reference palette
-(adjacent slots pass the colour-blind check; the legend names every temperature).
+The S1 figures use one colour per temperature, the same in every one: slots 1 to 6 of the dataviz reference palette
+(adjacent slots pass the colour-blind check; the legend names every temperature). The S2 figures never colour by
+temperature; their colours stand for the series named in each legend.
 """
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.lines import Line2D
 
 from ekfsoc.constants import T_GRID_DEGC
@@ -18,9 +23,11 @@ from ekfsoc.fit import FITTED_TABLES
 TEMP_COLORS = dict(zip(T_GRID_DEGC, ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300")))
 MEASURED_COLOR = "#2a78d6"
 MODEL_COLOR = "#eb6834"
+ESTIMATE_COLORS = (MODEL_COLOR, "#1baf7a", "#e87ba4", "#eda100")
 INK_COLOR = "#52514e"
 GRID_COLOR = "#e1e0d9"
 DOTS = {"linestyle": "none", "marker": "o", "markersize": 3.5}
+SUMMARY_DOTS = {"linestyle": "none", "markersize": 5, "alpha": 0.7}
 
 
 def save(fig, axes, path):
@@ -133,3 +140,75 @@ def plot_model_fit(result, path):
     bottom.set_ylabel("model - measured (mV)")
     bottom.set_xlabel("time (min)")
     save(fig, (top, bottom), path)
+
+
+def plot_soc_error(path, t, soc_ref, estimates, band_pp, title, reference_label):
+    """SoC traces over time on top, the error of each estimate in pp with a +-band_pp band below.
+
+    `t` is in s, `soc_ref` and the arrays of `estimates` (label -> SoC array, at most four) are fractions of one
+    length; NaN leaves a gap, as before a filter start. The error is estimate - reference.
+    """
+    minutes = (t - t[0]) / 60.0
+
+    fig, top, bottom = stacked_panels(6)
+    top.plot(minutes, 100.0 * soc_ref, color=MEASURED_COLOR, linewidth=1.2, label=reference_label)
+    bottom.axhspan(-band_pp, band_pp, facecolor=INK_COLOR, alpha=0.12, linewidth=0, label=f"+-{band_pp:g} pp band")
+    bottom.axhline(0.0, color=INK_COLOR, linewidth=0.5)
+    for (label, soc), color in zip(estimates.items(), ESTIMATE_COLORS):
+        top.plot(minutes, 100.0 * soc, color=color, linewidth=0.8, label=label)
+        bottom.plot(minutes, 100.0 * (soc - soc_ref), color=color, linewidth=0.8)
+
+    top.set_ylabel("SoC (%)")
+    top.legend(loc="best", frameon=False)
+    top.set_title(title, color=INK_COLOR)
+    bottom.set_ylabel("error (pp)")
+    bottom.set_xlabel("time (min)")
+    bottom.legend(loc="best", frameon=False)
+    save(fig, (top, bottom), path)
+
+
+def plot_trace(path, t, soc_ref, soc_est, cc, band_pp, title):
+    """trace_<experiment>_<cycle>_<T>degC.png: reference, EKF and coulomb-counting SoC of one run, with their errors below."""
+    plot_soc_error(path, t, soc_ref, {"EKF": soc_est, "coulomb counting": cc}, band_pp, title, "reference (cycler Ah counter)")
+
+
+def plot_synthetic(path, t, soc_true, estimates, band_pp, title):
+    """synthetic.png: the SoC the model generated and the EKF estimates from wrong initial SoCs (label -> SoC array)."""
+    plot_soc_error(path, t, soc_true, estimates, band_pp, title, "true SoC (model-generated)")
+
+
+def plot_summary(path, results_df, metric, title):
+    """summary_rmse.png, summary_convergence.png: a column of results/ekf_results.csv against temperature, one panel per experiment.
+
+    One dot per run; the tuning cycle is marked apart. A NaN (convergence not reached) is an x at the top of
+    the panel. The metric is not negative, so the axis starts at 0. The rows of `results_df` are the experiments
+    to show; the panels follow their order of first appearance.
+    """
+    experiments = results_df["experiment"].unique()
+    fig, axes = plt.subplots(1, len(experiments), sharex=True, sharey=True, squeeze=False,
+                             figsize=(2.6 * len(experiments) + 1.0, 4.5))
+    axes = axes[0]
+
+    styles = ((False, MEASURED_COLOR, "o"), (True, MODEL_COLOR, "D"))
+    for axis, experiment in zip(axes, experiments):
+        runs = results_df[results_df["experiment"] == experiment]
+        for is_tuning, color, marker in styles:
+            rows = runs[runs["is_tuning"] == is_tuning]
+            reached = rows[metric].notna()
+            axis.plot(rows["T_degC"][reached], rows[metric][reached], color=color, marker=marker, **SUMMARY_DOTS)
+            missing = rows["T_degC"][~reached]
+            axis.plot(missing, np.full(len(missing), 0.98), color=color, marker="x",
+                      transform=axis.get_xaxis_transform(), **SUMMARY_DOTS)
+        axis.set_title(experiment, color=INK_COLOR)
+        axis.set_xlabel("temperature (degC)")
+
+    axes[0].set_xticks(sorted(T_GRID_DEGC))
+    axes[0].set_ylim(bottom=0.0)
+    axes[0].set_ylabel(metric)
+    keys = [key("evaluation runs", MEASURED_COLOR, linestyle="none", marker="o"),
+            key("tuning cycle", MODEL_COLOR, linestyle="none", marker="D")]
+    if results_df[metric].isna().any():
+        keys.append(key("not reached", linestyle="none", marker="x"))
+    axes[0].legend(handles=keys, loc="best", frameon=False)
+    fig.suptitle(title, color=INK_COLOR)
+    save(fig, axes, path)
