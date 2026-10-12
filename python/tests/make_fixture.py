@@ -26,7 +26,7 @@ from ekfsoc.loader import find_runs  # noqa: E402
 
 SOURCE_MARKER = "551_Cap_1C"
 OUT_PATH = Path(__file__).resolve().parent / "fixtures" / "lghg2_excerpt.mat"
-MAX_BYTES = 1_000_000  # the task: copy the whole file if it is under 1 MB
+MAX_BYTES = 1_000_000  # the fixture is committed, so the whole source file must be small
 
 
 def find_source():
@@ -38,14 +38,13 @@ def find_source():
     return matches[0]
 
 
-def read_stored_fields(path):
-    """Read the struct fields with their stored types (rawio.load_mat would cast everything to float64)."""
-    contents = scipy.io.loadmat(path, squeeze_me=True, struct_as_record=False)
-    struct = contents["meas"]
-    fields = {}
-    for name in struct._fieldnames:
-        fields[name] = np.atleast_1d(getattr(struct, name))
-    return fields
+def read_stored_columns(path):
+    """Read the struct fields with their stored types (rawio.load_mat would cast everything to float64).
+
+    The cycler files store every field as a column (n, 1); that shape is kept.
+    """
+    struct = scipy.io.loadmat(path, squeeze_me=True, struct_as_record=False)["meas"]
+    return {name: np.atleast_1d(getattr(struct, name)).reshape(-1, 1) for name in struct._fieldnames}
 
 
 def main():
@@ -54,12 +53,7 @@ def main():
     if size >= MAX_BYTES:
         raise RuntimeError(f"{source.name} is {size} bytes; the whole file is not under 1 MB, trim it first")
 
-    fields = read_stored_fields(source)
-    # The cycler files store every field as a column (n, 1); keep that shape.
-    columns = {name: values.reshape(-1, 1) for name, values in fields.items()}
-
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    scipy.io.savemat(OUT_PATH, {"meas": columns}, do_compression=True)
+    scipy.io.savemat(OUT_PATH, {"meas": read_stored_columns(source)}, do_compression=True)
 
     # Read both back through the project's own reader and compare every field.
     original = rawio.load_mat(source)

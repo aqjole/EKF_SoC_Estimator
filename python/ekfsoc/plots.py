@@ -20,6 +20,7 @@ MEASURED_COLOR = "#2a78d6"
 MODEL_COLOR = "#eb6834"
 INK_COLOR = "#52514e"
 GRID_COLOR = "#e1e0d9"
+DOTS = {"linestyle": "none", "marker": "o", "markersize": 3.5}
 
 
 def save(fig, axes, path):
@@ -31,6 +32,12 @@ def save(fig, axes, path):
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=120, metadata={"Software": None})
     plt.close(fig)
+
+
+def stacked_panels(height):
+    """A figure with a tall panel over a short one on a shared x axis, 10 in wide; returns fig, top, bottom."""
+    fig, (top, bottom) = plt.subplots(2, 1, sharex=True, figsize=(10, height), gridspec_kw={"height_ratios": [3, 1.5]})
+    return fig, top, bottom
 
 
 def key(label, color=INK_COLOR, **style):
@@ -49,16 +56,16 @@ def plot_ocv(ocv_table, correction, path):
     The panel below shows the correction in mV: the smooth curve added to the C/20 curve, and delta at each rest
     point (decisions 1.1). `correction` is the table of results/ocv_correction.csv.
     """
-    fig, (top, bottom) = plt.subplots(2, 1, sharex=True, figsize=(10, 7), gridspec_kw={"height_ratios": [3, 1.5]})
+    fig, top, bottom = stacked_panels(7)
     soc_percent = 100.0 * ocv_table.soc_grid
-    for row, temp in enumerate(ocv_table.t_grid):
+    for temp, ocv_c20, ocv, delta_v in zip(ocv_table.t_grid, ocv_table.ocv_c20, ocv_table.ocv, ocv_table.delta_v):
         color = TEMP_COLORS[int(temp)]
         rest = correction[correction["T_degC"] == temp]
-        top.plot(soc_percent, ocv_table.ocv_c20[row], color=color, linestyle="--", linewidth=1.0)
-        top.plot(soc_percent, ocv_table.ocv[row], color=color, linewidth=1.2)
-        top.plot(100.0 * rest["soc"], rest["v_rest_V"], color=color, linestyle="none", marker="o", markersize=3.5)
-        bottom.plot(soc_percent, 1000.0 * ocv_table.delta_v[row], color=color, linewidth=1.2)
-        bottom.plot(100.0 * rest["soc"], rest["delta_mV"], color=color, linestyle="none", marker="o", markersize=3.5)
+        top.plot(soc_percent, ocv_c20, color=color, linestyle="--", linewidth=1.0)
+        top.plot(soc_percent, ocv, color=color, linewidth=1.2)
+        top.plot(100.0 * rest["soc"], rest["v_rest_V"], color=color, **DOTS)
+        bottom.plot(soc_percent, 1000.0 * delta_v, color=color, linewidth=1.2)
+        bottom.plot(100.0 * rest["soc"], rest["delta_mV"], color=color, **DOTS)
 
     top.set_ylabel("OCV (V)")
     top.legend(handles=temperature_keys() + [key("C/20 discharge curve", linestyle="--"), key("corrected OCV"),
@@ -72,8 +79,8 @@ def plot_ocv(ocv_table, correction, path):
 def plot_docv(params, path):
     """docv.png: dOCV/dSoC on the SoC grid, one line per temperature."""
     fig, axis = plt.subplots(figsize=(10, 5))
-    for row, temp in enumerate(params.t_grid):
-        axis.plot(100.0 * params.soc_grid, params.docv[row], color=TEMP_COLORS[int(temp)], linewidth=1.2)
+    for temp, docv in zip(params.t_grid, params.docv):
+        axis.plot(100.0 * params.soc_grid, docv, color=TEMP_COLORS[int(temp)], linewidth=1.2)
     axis.set_xlabel("SoC (%)")
     axis.set_ylabel("dOCV/dSoC (V per unit SoC)")
     axis.legend(handles=temperature_keys(), frameon=False)
@@ -90,11 +97,11 @@ def plot_params(levels, params, path):
     fig, grid = plt.subplots(2, 3, figsize=(12, 6.5))
     *panels, legend_panel = grid.flat
     for panel, (field, soc_key, column) in zip(panels, FITTED_TABLES):
-        for row, temp in enumerate(params.t_grid):
+        for temp, table_row in zip(params.t_grid, getattr(params, field)):
             color = TEMP_COLORS[int(temp)]
             fits = levels[levels["T_degC"] == temp]
             panel.plot(100.0 * fits[soc_key], fits[column], color=color, linewidth=0.8, marker="o", markersize=3)
-            panel.plot(100.0 * params.soc_grid, getattr(params, field)[row], color=color, linestyle="--", linewidth=1.0)
+            panel.plot(100.0 * params.soc_grid, table_row, color=color, linestyle="--", linewidth=1.0)
         name, unit = column.split("_")
         panel.set_xlabel("SoC (%)")
         panel.set_ylabel(f"{name} ({unit})")
@@ -107,11 +114,11 @@ def plot_params(levels, params, path):
 
 
 def plot_model_fit(result, path):
-    """Plot measured and model voltage over time, with the error in mV below. `result` is validate_us06's dict."""
+    """model_fit_<folder>.png: measured and model voltage over time, with the error in mV below. `result` is validate_us06's dict."""
     run = result["run"]
     minutes = (run.t - run.t[0]) / 60.0
 
-    fig, (top, bottom) = plt.subplots(2, 1, sharex=True, figsize=(10, 6), gridspec_kw={"height_ratios": [3, 1.5]})
+    fig, top, bottom = stacked_panels(6)
     top.plot(minutes, run.v, color=MEASURED_COLOR, linewidth=0.8, label="measured")
     top.plot(minutes, result["v_model"], color=MODEL_COLOR, linewidth=0.8, label="model (open loop)")
     top.set_ylabel("terminal voltage (V)")

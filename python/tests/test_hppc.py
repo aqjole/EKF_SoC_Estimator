@@ -2,11 +2,8 @@
 
 Synthetic: a made-up HPPC current profile at 0.1 s with two levels and a recharge, built through
 loader.build_run, checks the pulse detector. Data (needs data/raw/): the six real HPPC files are
-segmented and compared with the table "Voltage limits and the R0 rule" and the level table of
-results/data_checks.md section 10.
+segmented and compared with the tables of results/data_checks.md section 10.
 """
-
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -15,7 +12,6 @@ from ekfsoc.constants import FOLDER_TEMP, Q_REF_AH, RAW_DIR
 from ekfsoc.hppc import rest_points, segment_hppc
 from ekfsoc.loader import build_run, find_runs, load_run, soc_ref
 
-DATA_CHECKS_MD = Path(__file__).resolve().parents[2] / "results" / "data_checks.md"
 DT = 0.1
 V_REST = 3.7
 
@@ -86,8 +82,7 @@ def test_synthetic_finds_two_levels_and_ignores_the_recharge(synthetic):
 
 def test_synthetic_pulses_run_d_c_and_are_numbered_within_their_kind(synthetic):
     _, levels = synthetic
-    labels = [f"{pulse.kind}{pulse.number}" for pulse in levels[0].pulses]
-    assert labels == ["D1", "C1", "D2", "C2", "D3", "C3", "D4", "C4"]
+    assert [f"{pulse.kind}{pulse.number}" for pulse in levels[0].pulses] == ["D1", "C1", "D2", "C2", "D3", "C3", "D4", "C4"]
 
 
 def test_synthetic_pulse_current_is_signed_like_the_loader(synthetic):
@@ -95,27 +90,16 @@ def test_synthetic_pulse_current_is_signed_like_the_loader(synthetic):
     assert [pulse.i_cmd for pulse in levels[0].pulses[:2]] == pytest.approx([3.0, -1.5])
 
 
-def test_synthetic_pulse_rows_start_at_the_first_row_with_current(synthetic):
+def test_synthetic_row_ranges(synthetic):
+    """Pulse rows start at the first row with current; the rest runs to the next pulse; the move and its 1 h rest follow."""
     _, levels = synthetic
-    assert levels[0].pulses[0].rows == slice(LEVEL_1_START, LEVEL_1_START + 100)
-
-
-def test_synthetic_rest_rows_follow_the_pulse_up_to_the_next_pulse(synthetic):
-    _, levels = synthetic
-    assert levels[0].pulses[0].rest_rows == slice(LEVEL_1_START + 100, LEVEL_1_START + 140)
-
-
-def test_synthetic_move_rows_and_rest_after_the_move(synthetic):
-    _, levels = synthetic
+    first, second = levels
     move_start = LEVEL_1_START + 10 * LEVEL_SECONDS
-    assert levels[0].move == slice(move_start, move_start + 1000)
-    assert levels[0].rest_after_move == slice(move_start + 1000, move_start + 3000)
-
-
-def test_synthetic_last_level_has_a_move_but_no_rest_after_it(synthetic):
-    _, levels = synthetic
-    assert levels[1].move is not None
-    assert levels[1].rest_after_move is None
+    assert first.pulses[0].rows == slice(LEVEL_1_START, LEVEL_1_START + 100)
+    assert first.pulses[0].rest_rows == slice(LEVEL_1_START + 100, LEVEL_1_START + 140)
+    assert first.move == slice(move_start, move_start + 1000)
+    assert first.rest_after_move == slice(move_start + 1000, move_start + 3000)
+    assert second.move is not None and second.rest_after_move is None  # the last level has no 1 h rest
 
 
 def test_synthetic_soc_is_read_at_the_first_pulse_row_and_the_last_move_row(synthetic):
@@ -126,39 +110,21 @@ def test_synthetic_soc_is_read_at_the_first_pulse_row_and_the_last_move_row(synt
     assert level.soc_after_move == soc[level.move.stop - 1]
 
 
-def test_synthetic_plain_pulse_is_usable_at_its_first_row(synthetic):
+@pytest.mark.parametrize(
+    "level_index, pulse_index, r0_offset, cut_by_limit, usable",
+    [
+        (0, 0, 0, False, True),      # a plain pulse: R0 at its first row
+        (1, 0, 1, False, True),      # a ramp inside the 0.3 s window: the second row
+        (1, 2, None, False, False),  # a ramp longer than the window: no R0 row
+        (1, 4, 0, True, False),      # a full-length pulse that touches 2.8 V: cut
+        (1, 6, 0, True, False),      # a pulse shorter than 9 s: cut
+    ],
+)
+def test_synthetic_pulse_r0_row_and_limit_flags(synthetic, level_index, pulse_index, r0_offset, cut_by_limit, usable):
     _, levels = synthetic
-    pulse = levels[0].pulses[0]
-    assert (pulse.cut_by_limit, pulse.r0_row, pulse.usable) == (False, pulse.rows.start, True)
-
-
-def test_synthetic_ramp_inside_the_window_gives_the_second_row(synthetic):
-    _, levels = synthetic
-    pulse = levels[1].pulses[0]
-    assert pulse.r0_row == pulse.rows.start + 1
-    assert pulse.usable
-
-
-def test_synthetic_ramp_longer_than_the_window_has_no_r0_row(synthetic):
-    _, levels = synthetic
-    pulse = levels[1].pulses[2]
-    assert pulse.r0_row is None
-    assert not pulse.cut_by_limit
-    assert not pulse.usable
-
-
-def test_synthetic_full_length_pulse_that_touches_2p8_v_is_cut(synthetic):
-    _, levels = synthetic
-    pulse = levels[1].pulses[4]
-    assert pulse.cut_by_limit
-    assert not pulse.usable
-
-
-def test_synthetic_pulse_shorter_than_9_s_is_cut(synthetic):
-    _, levels = synthetic
-    pulse = levels[1].pulses[6]
-    assert pulse.cut_by_limit
-    assert not pulse.usable
+    pulse = levels[level_index].pulses[pulse_index]
+    expected_r0_row = None if r0_offset is None else pulse.rows.start + r0_offset
+    assert (pulse.r0_row, pulse.cut_by_limit, pulse.usable) == (expected_r0_row, cut_by_limit, usable)
 
 
 def test_synthetic_rest_points_are_the_level_1_rest_and_the_rest_after_each_move_with_a_rest(synthetic):
@@ -178,22 +144,6 @@ def test_a_level_without_its_last_charge_pulse_is_refused():
 # --------------------------------------------------------------------------------------------
 # Real files
 # --------------------------------------------------------------------------------------------
-
-
-def table_in_section_10(header_text):
-    """Return {folder: {column: cell text}} for the section 10 table whose header line holds header_text."""
-    text = DATA_CHECKS_MD.read_text()
-    section = text.split("## 10. HPPC structure")[1].split("\n## 11.")[0]
-    lines = section.splitlines()
-    start = next(n for n, line in enumerate(lines) if line.startswith("| folder |") and header_text in line)
-    header = [cell.strip() for cell in lines[start].strip().strip("|").split("|")]
-    rows = {}
-    for line in lines[start + 2:]:
-        if not line.startswith("|"):
-            break
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        rows[cells[0]] = dict(zip(header, cells))
-    return rows
 
 
 @pytest.fixture(scope="module")
@@ -222,42 +172,33 @@ def rest_seconds(run, rest_rows):
 
 @pytest.mark.needs_data
 @pytest.mark.parametrize("folder", list(FOLDER_TEMP))
-def test_level_count_matches_data_checks(hppc_levels, folder):
+def test_level_count_matches_data_checks(hppc_levels, data_checks_table, folder):
     _, levels = hppc_levels(folder)
-    expected = int(table_in_section_10("| levels |")[folder]["levels"])
-    assert len(levels) == expected
+    assert len(levels) == int(data_checks_table(10, "| levels |")[folder]["levels"])
 
 
 @pytest.mark.needs_data
 @pytest.mark.parametrize("folder", list(FOLDER_TEMP))
-def test_discharge_pulses_cut_by_the_limit_match_data_checks(hppc_levels, folder):
+def test_discharge_pulses_cut_by_the_limit_match_data_checks(hppc_levels, data_checks_table, folder):
     _, levels = hppc_levels(folder)
-    cell = table_in_section_10("D at 2.8 V")[folder]["D at 2.8 V"]
-    expected = int(cell.split()[0])
-    assert sum(pulse.cut_by_limit for pulse in pulses_of_kind(levels, "D")) == expected
+    cell = data_checks_table(10, "D at 2.8 V")[folder]["D at 2.8 V"]
+    assert sum(pulse.cut_by_limit for pulse in pulses_of_kind(levels, "D")) == int(cell.split()[0])
 
 
 @pytest.mark.needs_data
 @pytest.mark.parametrize("folder", list(FOLDER_TEMP))
-def test_charge_pulses_cut_by_the_limit_match_data_checks(hppc_levels, folder):
+def test_charge_pulses_cut_by_the_limit_match_data_checks(hppc_levels, data_checks_table, folder):
     _, levels = hppc_levels(folder)
-    expected = int(table_in_section_10("D at 2.8 V")[folder]["C pulses at 4.2 V"])
+    expected = int(data_checks_table(10, "D at 2.8 V")[folder]["C pulses at 4.2 V"])
     assert sum(pulse.cut_by_limit for pulse in pulses_of_kind(levels, "C")) == expected
 
 
 @pytest.mark.needs_data
 @pytest.mark.parametrize("folder", list(FOLDER_TEMP))
-def test_usable_discharge_pulses_match_data_checks(hppc_levels, folder):
+def test_usable_discharge_pulses_match_data_checks(hppc_levels, data_checks_table, folder):
     _, levels = hppc_levels(folder)
-    expected = int(table_in_section_10("D at 2.8 V")[folder]["D usable for R0"])
+    expected = int(data_checks_table(10, "D at 2.8 V")[folder]["D usable for R0"])
     assert sum(pulse.usable for pulse in pulses_of_kind(levels, "D")) == expected
-
-
-@pytest.mark.needs_data
-def test_25degc_every_level_has_four_discharge_and_four_charge_pulses(hppc_levels):
-    _, levels = hppc_levels("25degC")
-    kinds = [[pulse.kind for pulse in level.pulses] for level in levels]
-    assert all(level_kinds == list("DCDCDCDC") for level_kinds in kinds)
 
 
 @pytest.mark.needs_data

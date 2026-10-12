@@ -2,9 +2,9 @@
 
 Equation numbers ("Eq. n") are those of the Equations section of docs/model.md:
 
-- Eq. 1  2RC state update with an exact zero-order hold (simulate_2rc_open_loop)
+- Eq. 1  2RC state update with an exact zero-order hold (rc_step, used by simulate_2rc_open_loop)
 - Eq. 2  terminal voltage (simulate_2rc_open_loop)
-- Eq. 3  coulomb-counting SoC update (the reference SoC enters here instead, see below)
+- Eq. 3  coulomb-counting SoC update (not run here: the simulation takes the reference SoC as input)
 - Eq. 4  bilinear table lookup with clamping (find_cell, interp2)
 - Eq. 5  dOCV/dSoC by central differences (computed in ocv.py, stored as the table `docv`)
 
@@ -21,15 +21,11 @@ from dataclasses import dataclass
 import numpy as np
 
 
-# Column order of results/params.csv. After the two axis columns the table columns follow
-# in the order of TABLE_NAMES.
-CSV_COLUMNS = ("T_degC", "soc", "ocv_V", "docv_V_per_soc", "R0_ohm", "R1_ohm", "tau1_s", "R2_ohm", "tau2_s")
-
 # The seven tables of Params, in CSV column order (after T_degC and soc).
 TABLE_NAMES = ("ocv", "docv", "r0", "r1", "tau1", "r2", "tau2")
 
-# Significant digits written to results/params.csv.
-CSV_DIGITS = 6
+# Column order of results/params.csv: the two axes, then the tables in the order of TABLE_NAMES.
+CSV_COLUMNS = ("T_degC", "soc", "ocv_V", "docv_V_per_soc", "R0_ohm", "R1_ohm", "tau1_s", "R2_ohm", "tau2_s")
 
 
 def find_cell(axis, x):
@@ -126,7 +122,7 @@ class Params:
     tau2: np.ndarray
 
     def __post_init__(self):
-        """Convert to float64 arrays and check the axes and table shapes, so a bad table fails here."""
+        """Convert to float64 arrays and check the axes and table shapes, so a bad table fails at once."""
         self.t_grid = np.array(self.t_grid, dtype=np.float64)
         self.soc_grid = np.array(self.soc_grid, dtype=np.float64)
         for axis_name in ("t_grid", "soc_grid"):
@@ -148,9 +144,9 @@ class Params:
     def from_csv(cls, path):
         """Read results/params.csv: one row per (T, soc), T-major (all SoC of the first T, then the next T).
 
-        The axes are rebuilt from the file: t_grid from the T column in order of appearance, and
-        soc_grid from the first T block. Every later block must repeat the same SoC values.
-        A wrong header, a ragged block or an axis value that changes raises ValueError.
+        The axes are rebuilt from the first column (one value per block) and from the SoC column of
+        the first block. A wrong header, a ragged block or an axis value that changes in a later
+        block raises ValueError.
         """
         with open(path, newline="") as handle:
             reader = csv.reader(handle)
@@ -159,53 +155,42 @@ class Params:
                 raise ValueError(f"{path}: header is {header}, expected {list(CSV_COLUMNS)}")
             rows = [[float(cell) for cell in line] for line in reader if line]
 
-        if len(rows) == 0:
-            raise ValueError(f"{path}: no data rows")
-        for row in rows:
-            if len(row) != len(CSV_COLUMNS):
-                raise ValueError(f"{path}: a row has {len(row)} cells, expected {len(CSV_COLUMNS)}")
+        if not rows or any(len(row) != len(CSV_COLUMNS) for row in rows):
+            raise ValueError(f"{path}: expected at least one data row, each of {len(CSV_COLUMNS)} cells")
+        data = np.array(rows)
 
-        # Length of the first T block: rows from the top that share the first T value.
-        first_t = rows[0][0]
-        n_soc = 0
-        while n_soc < len(rows) and rows[n_soc][0] == first_t:
-            n_soc += 1
-        if len(rows) % n_soc != 0:
-            raise ValueError(f"{path}: {len(rows)} rows is not a whole number of blocks of {n_soc}")
-        n_t = len(rows) // n_soc
+        n_soc = int(np.count_nonzero(data[:, 0] == data[0, 0]))  # rows of the first T block
+        if len(data) % n_soc != 0:
+            raise ValueError(f"{path}: {len(data)} rows is not a whole number of blocks of {n_soc}")
+        blocks = data.reshape(-1, n_soc, len(CSV_COLUMNS))  # blocks[j, m] is the row of T j and SoC m
 
-        t_grid = [rows[j * n_soc][0] for j in range(n_t)]
-        soc_grid = [rows[m][1] for m in range(n_soc)]
+        t_grid = blocks[:, 0, 0]
+        soc_grid = blocks[0, :, 1]
+        if not (np.all(blocks[:, :, 0] == t_grid[:, None]) and np.all(blocks[:, :, 1] == soc_grid)):
+            raise ValueError(f"{path}: the T and soc columns do not form the same grid in every block")
 
-        tables = {name: np.zeros((n_t, n_soc)) for name in TABLE_NAMES}
-        for index, row in enumerate(rows):
-            j = index // n_soc
-            m = index % n_soc
-            if row[0] != t_grid[j] or row[1] != soc_grid[m]:
-                raise ValueError(
-                    f"{path}: row {index + 2} is at (T={row[0]}, soc={row[1]}), "
-                    f"expected (T={t_grid[j]}, soc={soc_grid[m]})"
-                )
-            for column, name in enumerate(TABLE_NAMES):
-                tables[name][j, m] = row[2 + column]
-
+        tables = {name: blocks[:, :, 2 + column] for column, name in enumerate(TABLE_NAMES)}
         return cls(t_grid=t_grid, soc_grid=soc_grid, **tables)
 
     def to_csv(self, path):
         """Write the CSV that from_csv reads: header CSV_COLUMNS, then one row per (T, soc), T-major.
 
-        Every number is written with 6 significant digits ('%.6g'), so writing the same Params
-        twice gives the same bytes, and a round trip returns the values to about 1e-6 relative.
+        Every number has 6 significant digits, so writing the same Params twice gives the same
+        bytes, and a round trip returns the values to about 1e-6 relative.
         """
         with open(path, "w", newline="") as handle:
             writer = csv.writer(handle, lineterminator="\n")
             writer.writerow(CSV_COLUMNS)
-            for j in range(len(self.t_grid)):
-                for m in range(len(self.soc_grid)):
-                    cells = [self.t_grid[j], self.soc_grid[m]]
-                    for name in TABLE_NAMES:
-                        cells.append(getattr(self, name)[j, m])
-                    writer.writerow([f"%.{CSV_DIGITS}g" % cell for cell in cells])
+            for j, temp in enumerate(self.t_grid):
+                for m, soc in enumerate(self.soc_grid):
+                    cells = [temp, soc] + [getattr(self, name)[j, m] for name in TABLE_NAMES]
+                    writer.writerow([f"{cell:.6g}" for cell in cells])
+
+
+def rc_step(v, r, tau, current, dt):
+    """Advance one RC branch voltage v over a step of dt s with `current` held over it (Eq. 1)."""
+    a = math.exp(-dt / tau)
+    return a * v + r * (1.0 - a) * current
 
 
 def simulate_2rc_open_loop(params, i, temp, soc, dt):
@@ -218,25 +203,22 @@ def simulate_2rc_open_loop(params, i, temp, soc, dt):
     Plain per-sample loop. V1 = V2 = 0 at k = 0 (the model starts relaxed). For each row k:
       1. Look up ocv, r0, r1, tau1, r2, tau2 at (temp[k], soc[k]) with interp2 (Eq. 4).
       2. Terminal voltage (Eq. 2): v_model[k] = ocv - V1 - V2 - r0 * i[k].
-      3. Move the two RC states on to row k+1 (Eq. 1), with the zero-order hold the loader
-         rules fix (docs/model.md C11): the current of row k is held over the step dt[k+1], and
-         the R_i and tau_i are those at the start of the step, looked up in step 1:
-           a_i = exp(-dt[k+1] / tau_i)
-           V_i = a_i * V_i + R_i * (1 - a_i) * i[k]
+      3. Move the two RC states on to row k+1 with rc_step (Eq. 1), under the zero-order hold the
+         loader rules fix (docs/model.md C11): the current of row k is held over the step dt[k+1],
+         and R_i and tau_i are those at the start of the step, looked up in step 1.
     So row k's own current enters the voltage at once through R0 (Eq. 2) and enters the RC
     states only from row k+1 on.
     """
-    current = np.asarray(i, dtype=np.float64)
-    n = len(current)
+    n = len(i)
     for name, array in (("temp", temp), ("soc", soc), ("dt", dt)):
         if len(array) != n:
             raise ValueError(f"{name} has {len(array)} samples, i has {n}")
 
     # Plain Python lists make the element access in the loop fast; interp2 works on them unchanged.
-    current_list = current.tolist()
-    temp_list = np.asarray(temp, dtype=np.float64).tolist()
-    soc_list = np.asarray(soc, dtype=np.float64).tolist()
-    dt_list = np.asarray(dt, dtype=np.float64).tolist()
+    currents = np.asarray(i, dtype=np.float64).tolist()
+    temps = np.asarray(temp, dtype=np.float64).tolist()
+    socs = np.asarray(soc, dtype=np.float64).tolist()
+    dts = np.asarray(dt, dtype=np.float64).tolist()
     t_grid = params.t_grid.tolist()
     soc_grid = params.soc_grid.tolist()
     ocv_table = params.ocv.tolist()
@@ -250,8 +232,8 @@ def simulate_2rc_open_loop(params, i, temp, soc, dt):
     v1 = 0.0
     v2 = 0.0
     for k in range(n):
-        cell_temp = temp_list[k]
-        cell_soc = soc_list[k]
+        cell_temp = temps[k]
+        cell_soc = socs[k]
         ocv = interp2(ocv_table, t_grid, soc_grid, cell_temp, cell_soc)
         r0 = interp2(r0_table, t_grid, soc_grid, cell_temp, cell_soc)
         r1 = interp2(r1_table, t_grid, soc_grid, cell_temp, cell_soc)
@@ -259,15 +241,11 @@ def simulate_2rc_open_loop(params, i, temp, soc, dt):
         r2 = interp2(r2_table, t_grid, soc_grid, cell_temp, cell_soc)
         tau2 = interp2(tau2_table, t_grid, soc_grid, cell_temp, cell_soc)
 
-        # Eq. 2: terminal voltage.
-        v_model[k] = ocv - v1 - v2 - r0 * current_list[k]
+        v_model[k] = ocv - v1 - v2 - r0 * currents[k]  # Eq. 2
 
-        # Eq. 1: advance both RC branches to row k+1 with the current of row k held over dt[k+1].
-        if k + 1 < n:
-            step = dt_list[k + 1]
-            a1 = math.exp(-step / tau1)
-            a2 = math.exp(-step / tau2)
-            v1 = a1 * v1 + r1 * (1.0 - a1) * current_list[k]
-            v2 = a2 * v2 + r2 * (1.0 - a2) * current_list[k]
+        if k + 1 < n:  # Eq. 1: the current of row k is held over the step to row k+1
+            step = dts[k + 1]
+            v1 = rc_step(v1, r1, tau1, currents[k], step)
+            v2 = rc_step(v2, r2, tau2, currents[k], step)
 
     return v_model

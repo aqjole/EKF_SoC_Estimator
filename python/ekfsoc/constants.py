@@ -1,7 +1,7 @@
 """Project-wide constants: the reference capacity, the two table axes and the data folders.
 
-Every stage imports these instead of retyping them, so the loader, the OCV
-and 2RC fit, the EKF and the C export all use one Q_ref and the same grids.
+Every stage imports these instead of retyping them, so the loader, the OCV and 2RC fit, the EKF
+and the C export all use one Q_ref and the same grids.
 """
 
 from pathlib import Path
@@ -14,7 +14,7 @@ import numpy as np
 REPO_DIR = Path(__file__).resolve().parents[2]
 
 # Raw .mat files, one sub-folder per set temperature (data/raw/<folder>/*.mat).
-# The path is built from the repo root, so it is absolute; it is "data/raw" inside the repo.
+# Absolute, because it is built from the repo root.
 RAW_DIR = REPO_DIR / "data" / "raw"
 
 # Q_ref in Ah: the C/20 discharge capacity at 25 degC, counted from the counter's zero at the
@@ -27,7 +27,7 @@ SOC_GRID = np.linspace(0.0, 1.0, 101)
 # Temperature axis of every table in degC, in table row order (docs/model.md C15).
 T_GRID_DEGC = [40, 25, 10, 0, -10, -20]
 
-# Raw data folder name -> nominal (set) temperature in degC. The values are the T_GRID_DEGC nodes.
+# Raw data folder name -> nominal (set) temperature in degC, the T_GRID_DEGC nodes.
 FOLDER_TEMP = {
     "40degC": 40,
     "25degC": 25,

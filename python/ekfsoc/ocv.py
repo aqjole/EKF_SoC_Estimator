@@ -84,79 +84,52 @@ def find_discharge_half(i):
     """
     flowing = np.asarray(i) > DISCHARGE_MIN_A
 
-    best_first = None
-    best_last = None
-    run_first = None
-    for row in range(len(flowing)):
-        if flowing[row]:
-            if run_first is None:
-                run_first = row
-            run_last = row
-            run_length = run_last - run_first + 1
-            if best_first is None or run_length > best_last - best_first + 1:
-                best_first = run_first
-                best_last = run_last
-        else:
-            run_first = None
+    best_first, best_length = 0, 0
+    run_first = 0
+    for row, flows in enumerate(flowing):
+        if not flows:
+            run_first = row + 1
+            continue
+        run_length = row - run_first + 1
+        if run_length > best_length:
+            best_first, best_length = run_first, run_length
 
-    if best_first is None:
+    if best_length == 0:
         raise ValueError(f"no row has a discharge current above {DISCHARGE_MIN_A} A")
-    return best_first, best_last
+    return best_first, best_first + best_length - 1
 
 
 def average_equal_x(x, y):
     """Sort the points by x ascending and replace points that share one x by their mean.
 
     PCHIP needs strictly increasing x. Two rows can share a SoC when the counter has not moved
-    between them; their voltages are averaged. Returns (x_unique, y_mean) as float64 arrays.
+    between them; their voltages are averaged. Returns (x_unique, y_mean).
     """
-    order = np.argsort(x, kind="stable")
-    x_sorted = np.asarray(x, dtype=np.float64)[order]
-    y_sorted = np.asarray(y, dtype=np.float64)[order]
-
-    x_unique = []
-    y_mean = []
-    group_start = 0
-    for k in range(1, len(x_sorted) + 1):
-        group_ended = k == len(x_sorted) or x_sorted[k] != x_sorted[group_start]
-        if group_ended:
-            x_unique.append(x_sorted[group_start])
-            y_mean.append(float(np.mean(y_sorted[group_start:k])))
-            group_start = k
-    return np.array(x_unique, dtype=np.float64), np.array(y_mean, dtype=np.float64)
+    x_unique, group = np.unique(x, return_inverse=True)
+    y_mean = np.bincount(group, weights=y) / np.bincount(group)
+    return x_unique, y_mean
 
 
-def discharge_curve(run, q_ref=Q_REF_AH):
+def discharge_curve(run):
     """Return (soc, v) of the run's discharge half, sorted by SoC ascending, equal SoC averaged.
 
     SoC = 1 - ah_removed / Q_ref (C4). For a C20DisCh run the loader has counted ah_removed from the
     counter's zero at the step start, so the curve is on the same axis as Q_ref.
     """
     first, last = find_discharge_half(run.i)
-    ah_removed = run.ah_removed[first:last + 1]
-    voltage = run.v[first:last + 1]
-    soc = 1.0 - ah_removed / q_ref
-    return average_equal_x(soc, voltage)
+    soc = 1.0 - run.ah_removed[first:last + 1] / Q_REF_AH
+    return average_equal_x(soc, run.v[first:last + 1])
 
 
-def ocv_row_on_grid(soc_curve, v_curve, soc_grid):
-    """Evaluate one PCHIP through (soc_curve, v_curve) at the SoC values soc_grid, holding the end values outside the curve.
+def pchip_held(soc_curve, v_curve, soc_points):
+    """Evaluate a PCHIP through (soc_curve, v_curve) at soc_points, holding the end values outside the curve.
 
-    soc_curve must be strictly increasing (see average_equal_x). A point below soc_curve[0] gets
-    the value at soc_curve[0]; one above soc_curve[-1] gets the value at soc_curve[-1]. The PCHIP is
-    never evaluated outside the measured range, so it does not extrapolate.
-    Serves the C/20 curve on the SoC grid, the C/20 curve at the rest SoCs and the correction on the grid.
-    Returns (ocv_row, soc_min, soc_max).
+    soc_curve must be strictly increasing (see average_equal_x). A point below soc_curve[0] gets the
+    value at soc_curve[0]; one above soc_curve[-1] gets the value at soc_curve[-1]. The PCHIP is never
+    evaluated outside the measured range, so it does not extrapolate.
     """
-    soc_min = float(soc_curve[0])
-    soc_max = float(soc_curve[-1])
-    pchip = PchipInterpolator(soc_curve, v_curve)
-
-    ocv_row = np.zeros(len(soc_grid), dtype=np.float64)
-    for k in range(len(soc_grid)):
-        soc_held = min(max(float(soc_grid[k]), soc_min), soc_max)
-        ocv_row[k] = pchip(soc_held)
-    return ocv_row, soc_min, soc_max
+    soc_held = np.clip(soc_points, soc_curve[0], soc_curve[-1])
+    return PchipInterpolator(soc_curve, v_curve)(soc_held)
 
 
 def rises_strictly_in_range(ocv_row, soc_grid, soc_min, soc_max):
@@ -165,15 +138,10 @@ def rises_strictly_in_range(ocv_row, soc_grid, soc_min, soc_max):
     Held points (outside the range) are flat by construction and are not checked. Raises ValueError if
     fewer than two grid points lie inside the range, because nothing can then be checked.
     """
-    inside_rows = [k for k in range(len(soc_grid)) if soc_min <= soc_grid[k] <= soc_max]
-    if len(inside_rows) < 2:
+    inside = (soc_grid >= soc_min) & (soc_grid <= soc_max)
+    if np.count_nonzero(inside) < 2:
         raise ValueError(f"fewer than two SoC grid points lie inside the measured range {soc_min} to {soc_max}")
-
-    for k in range(len(inside_rows) - 1):
-        step = ocv_row[inside_rows[k + 1]] - ocv_row[inside_rows[k]]
-        if not step > 0.0:
-            return False
-    return True
+    return bool(np.all(np.diff(ocv_row[inside]) > 0.0))
 
 
 def rest_offsets(soc_curve, v_curve, soc_rest, v_rest):
@@ -182,22 +150,20 @@ def rest_offsets(soc_curve, v_curve, soc_rest, v_rest):
     The C/20 curve is the uncorrected PCHIP of the discharge half, held at its end values beyond the
     measured range (decisions 1.1). Both results follow the order of soc_rest.
     """
-    v_c20, _, _ = ocv_row_on_grid(soc_curve, v_curve, soc_rest)
+    v_c20 = pchip_held(soc_curve, v_curve, soc_rest)
     return v_c20, v_rest - v_c20
 
 
 def central_differences(values, x):
-    """Return d(values)/d(x) at every point of a sorted axis: central differences inside, one-sided at the ends.
+    """Return d(values)/d(x) at every point of a sorted axis: central differences inside, one-sided at the ends (Eq. 5).
 
     Inside:   (values[k+1] - values[k-1]) / (x[k+1] - x[k-1])
     At the ends: (values[1] - values[0]) / (x[1] - x[0]) and the same for the last two points.
     """
-    n_points = len(values)
-    slope = np.zeros(n_points, dtype=np.float64)
+    slope = np.zeros(len(values), dtype=np.float64)
     slope[0] = (values[1] - values[0]) / (x[1] - x[0])
-    for k in range(1, n_points - 1):
-        slope[k] = (values[k + 1] - values[k - 1]) / (x[k + 1] - x[k - 1])
-    slope[n_points - 1] = (values[n_points - 1] - values[n_points - 2]) / (x[n_points - 1] - x[n_points - 2])
+    slope[1:-1] = (values[2:] - values[:-2]) / (x[2:] - x[:-2])
+    slope[-1] = (values[-1] - values[-2]) / (x[-1] - x[-2])
     return slope
 
 
@@ -216,39 +182,33 @@ def build_ocv(c20_runs, soc_grid, t_grid, rest_points=None):
     soc_grid = np.asarray(soc_grid, dtype=np.float64)
     t_grid = np.asarray(t_grid, dtype=np.float64)
     n_t = len(t_grid)
-    n_soc = len(soc_grid)
 
     # Temperatures are whole degrees; a dict key of 25 and one of 25.0 are the same key.
     missing = [float(t) for t in t_grid if int(t) not in c20_runs]
     if missing:
         raise ValueError(f"no C20DisCh run for temperature(s) {missing} degC")
 
-    ocv_c20 = np.zeros((n_t, n_soc), dtype=np.float64)
-    delta_v = np.zeros((n_t, n_soc), dtype=np.float64)
-    ocv = np.zeros((n_t, n_soc), dtype=np.float64)
+    ocv_c20 = np.zeros((n_t, len(soc_grid)), dtype=np.float64)
+    delta_v = np.zeros_like(ocv_c20)
     soc_min = np.zeros(n_t, dtype=np.float64)
     soc_max = np.zeros(n_t, dtype=np.float64)
-    monotone = np.zeros(n_t, dtype=bool)
 
-    for row in range(n_t):
-        temp_degc = int(t_grid[row])
-        run = c20_runs[temp_degc]
-        soc_curve, v_curve = discharge_curve(run)
-        ocv_c20[row, :], soc_min[row], soc_max[row] = ocv_row_on_grid(soc_curve, v_curve, soc_grid)
+    for row, temp in enumerate(t_grid):
+        soc_curve, v_curve = discharge_curve(c20_runs[int(temp)])
+        soc_min[row], soc_max[row] = soc_curve[0], soc_curve[-1]
+        ocv_c20[row] = pchip_held(soc_curve, v_curve, soc_grid)
         if rest_points is not None:
-            soc_rest, v_rest = np.array(sorted(rest_points[temp_degc]), dtype=np.float64).T
+            soc_rest, v_rest = np.array(sorted(rest_points[int(temp)]), dtype=np.float64).T
             _, delta_rest = rest_offsets(soc_curve, v_curve, soc_rest, v_rest)
-            delta_v[row, :], _, _ = ocv_row_on_grid(soc_rest, delta_rest, soc_grid)
-        ocv[row, :] = ocv_c20[row, :] + delta_v[row, :]
-        monotone[row] = rises_strictly_in_range(ocv[row, :], soc_grid, soc_min[row], soc_max[row])
+            delta_v[row] = pchip_held(soc_rest, delta_rest, soc_grid)
+
+    ocv = ocv_c20 + delta_v
+    monotone = np.array([rises_strictly_in_range(ocv[row], soc_grid, soc_min[row], soc_max[row]) for row in range(n_t)])
 
     # Fallback: one failing temperature puts the 25 degC curve at every temperature (decisions 1.1).
-    fallback_used = not bool(np.all(monotone))
+    fallback_used = not monotone.all()
     if fallback_used:
-        fallback_rows = np.flatnonzero(t_grid == FALLBACK_TEMP_DEGC)
-        if len(fallback_rows) != 1:
-            raise ValueError(f"the fallback needs exactly one {FALLBACK_TEMP_DEGC} degC row in t_grid")
-        fallback_row = int(fallback_rows[0])
+        fallback_row = list(t_grid).index(FALLBACK_TEMP_DEGC)
         if not monotone[fallback_row]:
             raise ValueError(
                 f"the {FALLBACK_TEMP_DEGC} degC curve fails the monotonicity check, so it cannot be the fallback"
@@ -256,9 +216,7 @@ def build_ocv(c20_runs, soc_grid, t_grid, rest_points=None):
         for table in (ocv, ocv_c20, delta_v, soc_min, soc_max):
             table[:] = table[fallback_row]
 
-    docv = np.zeros((n_t, n_soc), dtype=np.float64)
-    for row in range(n_t):
-        docv[row, :] = central_differences(ocv[row, :], soc_grid)
+    docv = np.array([central_differences(ocv_row, soc_grid) for ocv_row in ocv])
 
     return OcvTable(
         soc_grid=soc_grid,

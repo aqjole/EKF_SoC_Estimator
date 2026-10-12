@@ -40,7 +40,7 @@ Fit (b), fit_level_slow: R2, tau2 of the 1 h rest after the move that follows th
     Assumed: V2 = 0 at the start of the move (the pulses before it moved V2 little), and I_move is
     the median current over the move rows.
 
-A fit that does not converge, or has no pulse to use, returns None for its values and ok = False.
+A fit that does not converge, or has no pulse to use, returns None for its values and fast_ok / slow_ok = False.
 """
 
 import math
@@ -50,7 +50,7 @@ from scipy.optimize import least_squares
 
 from ekfsoc.hppc import segment_hppc
 from ekfsoc.loader import soc_ref
-from ekfsoc.model import interp2
+from ekfsoc.model import interp2, rc_step
 
 TAU1_BOUNDS_S = (0.5, 30.0)
 TAU2_BOUNDS_S = (30.0, 3600.0)
@@ -73,8 +73,7 @@ def rc_voltage(current, dt, r, tau):
     voltage = np.zeros(len(current))
     v = 0.0
     for k in range(1, len(current)):
-        a = math.exp(-dt[k] / tau)
-        v = a * v + r * (1.0 - a) * current[k - 1]
+        v = rc_step(v, r, tau, current[k - 1], dt[k])
         voltage[k] = v
     return voltage
 
@@ -90,9 +89,9 @@ def solve(residuals, start, lower, upper):
     return result
 
 
-def rmse_mv(result, n_rows):
-    """RMSE in mV of a least_squares result over n_rows residuals (cost = half the sum of squares)."""
-    return 1000.0 * math.sqrt(2.0 * result.cost / n_rows)
+def rmse_mv(result):
+    """RMSE in mV of a least_squares result (its cost is half the sum of squares of the residuals)."""
+    return 1000.0 * math.sqrt(2.0 * result.cost / len(result.fun))
 
 
 def step_r0(run, pulse):
@@ -108,12 +107,12 @@ def ocv_at(ocv_table, temp_degc, soc):
 
 
 def fit_level_fast(run, level, ocv_table):
-    """Fit (a) for one level: returns {R0_ohm, R1_ohm, tau1_s, rmse_mV, n_pulses_used, ok}."""
+    """Fit (a) for one level: returns {R0_ohm, R1_ohm, tau1_s, rmse_fast_mV, n_pulses_used, fast_ok}."""
     pulses = [pulse for pulse in level.pulses if pulse.kind == "D" and pulse.usable]
-    failed = {"R0_ohm": None, "R1_ohm": None, "tau1_s": None, "rmse_mV": None,
-              "n_pulses_used": len(pulses), "ok": False}
+    fit = {"R0_ohm": None, "R1_ohm": None, "tau1_s": None, "rmse_fast_mV": None,
+           "n_pulses_used": len(pulses), "fast_ok": False}
     if not pulses:
-        return failed
+        return fit
 
     r0 = float(np.median([step_r0(run, pulse) for pulse in pulses]))
     temp_degc = run.meta["nominal_temp_degc"]
@@ -136,35 +135,31 @@ def fit_level_fast(run, level, ocv_table):
 
     best = solve(residuals, (0.01, 5.0), (0.0, TAU1_BOUNDS_S[0]), (1.0, TAU1_BOUNDS_S[1]))
     if best is None:
-        return failed
+        return fit
 
-    n_rows = sum(len(z) for _, _, z in windows)
-    return {"R0_ohm": r0, "R1_ohm": float(best.x[0]), "tau1_s": float(best.x[1]),
-            "rmse_mV": rmse_mv(best, n_rows), "n_pulses_used": len(pulses), "ok": True}
+    fit.update(R0_ohm=r0, R1_ohm=float(best.x[0]), tau1_s=float(best.x[1]), rmse_fast_mV=rmse_mv(best), fast_ok=True)
+    return fit
 
 
-def fit_level_slow(run, level, fast_params, ocv_table):
-    """Fit (b) for one level: returns {R2_ohm, tau2_s, rmse_mV, ok}.
+def fit_level_slow(run, level, fast, ocv_table):
+    """Fit (b) for one level: returns {R2_ohm, tau2_s, rmse_slow_mV, slow_ok}.
 
-    fast_params is the dict of fit_level_fast; if its fit failed, this one fails too. ocv_table gives
+    `fast` is the dict of fit_level_fast; if its fit failed, this one fails too. ocv_table gives
     the starting value of the asymptote. Raises ValueError for a level with no rest after its move.
     """
-    if level.rest_after_move is None:
+    move, rest = level.move, level.rest_after_move
+    if rest is None:
         raise ValueError(f"level {level.k} has no rest after its move")
-    failed = {"R2_ohm": None, "tau2_s": None, "rmse_mV": None, "ok": False}
-    if not fast_params["ok"]:
-        return failed
+    fit = {"R2_ohm": None, "tau2_s": None, "rmse_slow_mV": None, "slow_ok": False}
+    if not fast["fast_ok"]:
+        return fit
 
-    # Fast branch over the move and the rest, added back to the measurement.
-    span = slice(level.move.start, level.rest_after_move.stop)
-    v1 = rc_voltage(run.i[span], run.dt[span], fast_params["R1_ohm"], fast_params["tau1_s"])
-    rest = slice(level.rest_after_move.start - span.start, level.rest_after_move.stop - span.start)
-    y = run.v[span] + v1 + fast_params["R0_ohm"] * run.i[span]
-
-    t0 = run.t[level.rest_after_move.start]
-    keep = run.dt[span][rest] > SLOW_STEP_MIN_S
-    seconds = run.t[span][rest][keep] - t0
-    y = y[rest][keep]
+    # Fast branch over the move and the rest, added back to the measurement of the rest.
+    span = slice(move.start, rest.stop)
+    v1 = rc_voltage(run.i[span], run.dt[span], fast["R1_ohm"], fast["tau1_s"])[rest.start - move.start:]
+    keep = run.dt[rest] > SLOW_STEP_MIN_S
+    seconds = (run.t[rest] - run.t[rest.start])[keep]
+    y = (run.v[rest] + v1 + fast["R0_ohm"] * run.i[rest])[keep]
 
     def residuals(x):
         asymptote, amplitude, tau2 = x
@@ -174,13 +169,14 @@ def fit_level_slow(run, level, fast_params, ocv_table):
     best = solve(residuals, (asymptote_start, 0.01, 600.0),
                  (-np.inf, 0.0, TAU2_BOUNDS_S[0]), (np.inf, 1.0, TAU2_BOUNDS_S[1]))
     if best is None:
-        return failed
+        return fit
 
     _, amplitude, tau2 = best.x
-    i_move = float(np.median(run.i[level.move]))
-    t_move = run.t[level.rest_after_move.start] - run.t[level.move.start]
+    i_move = float(np.median(run.i[move]))
+    t_move = run.t[rest.start] - run.t[move.start]
     r2 = amplitude / (i_move * (1.0 - math.exp(-t_move / tau2)))
-    return {"R2_ohm": float(r2), "tau2_s": float(tau2), "rmse_mV": rmse_mv(best, len(y)), "ok": True}
+    fit.update(R2_ohm=float(r2), tau2_s=float(tau2), rmse_slow_mV=rmse_mv(best), slow_ok=True)
+    return fit
 
 
 def fit_hppc_run(run, ocv_table):
@@ -194,13 +190,9 @@ def fit_hppc_run(run, ocv_table):
     rows = []
     for level in segment_hppc(run):
         fast = fit_level_fast(run, level, ocv_table)
-        row = {"T_degC": run.meta["nominal_temp_degc"], "level": level.k, "soc_pulses": level.soc_pulses,
-               "R0_ohm": fast["R0_ohm"], "R1_ohm": fast["R1_ohm"], "tau1_s": fast["tau1_s"],
-               "rmse_fast_mV": fast["rmse_mV"], "n_pulses_used": fast["n_pulses_used"], "fast_ok": fast["ok"],
-               "soc_rest": None, "R2_ohm": None, "tau2_s": None, "rmse_slow_mV": None, "slow_ok": None}
+        slow = {"soc_rest": None, "R2_ohm": None, "tau2_s": None, "rmse_slow_mV": None, "slow_ok": None}
         if level.rest_after_move is not None:
-            slow = fit_level_slow(run, level, fast, ocv_table)
-            row.update({"soc_rest": level.soc_after_move, "R2_ohm": slow["R2_ohm"], "tau2_s": slow["tau2_s"],
-                        "rmse_slow_mV": slow["rmse_mV"], "slow_ok": slow["ok"]})
-        rows.append(row)
+            slow = {"soc_rest": level.soc_after_move, **fit_level_slow(run, level, fast, ocv_table)}
+        rows.append({"T_degC": run.meta["nominal_temp_degc"], "level": level.k, "soc_pulses": level.soc_pulses,
+                     **fast, **slow})
     return rows

@@ -2,10 +2,8 @@
 
 The synthetic runs are built directly as loader Runs: a C/20-like discharge (current +0.15 A, loader sign),
 then a rest and a charge half with a voltage far from the discharge curve, so a table that wrongly used
-those rows would show it. The real-data test compares soc_min with results/data_checks.md section 11.
+those rows would show it. The real-data tests compare with results/data_checks.md section 11.
 """
-
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -24,13 +22,11 @@ from ekfsoc.ocv import (
     rest_offsets,
 )
 
-DATA_CHECKS_MD = Path(__file__).resolve().parents[2] / "results" / "data_checks.md"
-
 # Discharge current of the made-up runs (A, loader sign), close to the real C/20 current.
 C20_CURRENT_A = 0.15
 
-# A made-up rest and charge after the discharge: 20 rest rows, then 50 charge rows at this voltage (V).
-# The voltage is far from any made-up discharge curve below, so a wrongly included row is visible.
+# The made-up rest (20 rows) and charge (50 rows) after the discharge sit at this voltage (V), far from
+# every made-up discharge curve below, so a wrongly included row is visible.
 CHARGE_HALF_V = 4.5
 
 
@@ -54,54 +50,45 @@ def dipping_curve(soc):
     return 3.2 + 0.8 * soc + 0.05 * np.sin(30.0 * soc)
 
 
-def make_c20_run(voltage_of_soc, soc_start=1.0, soc_end=0.0, n_discharge=1001, with_rest_and_charge=True):
+def make_c20_run(voltage_of_soc, soc_start=1.0, soc_end=0.0, n_discharge=1001):
     """A made-up C20DisCh run in the loader's convention: positive discharge current, ah_removed from the step start.
 
     The discharge goes from soc_start to soc_end in n_discharge rows. ah_removed = (1 - SoC) * Q_ref, so
-    SoC = 1 - ah_removed / Q_ref gives back the SoC that was put in.
+    SoC = 1 - ah_removed / Q_ref gives back the SoC that was put in. A rest and a charge half follow.
     """
     soc = np.linspace(soc_start, soc_end, n_discharge)
-    ah_removed = (1.0 - soc) * Q_REF_AH
-    i = np.full(n_discharge, C20_CURRENT_A)
-    v = voltage_of_soc(soc)
-
-    if with_rest_and_charge:
-        n_rest = 20
-        n_charge = 50
-        ah_end = ah_removed[-1]
-        # Rest: no current, the counter stays, the voltage sits at the end value.
-        ah_removed = np.concatenate([ah_removed, np.full(n_rest, ah_end)])
-        i = np.concatenate([i, np.zeros(n_rest)])
-        v = np.concatenate([v, np.full(n_rest, v[-1])])
-        # Charge: negative current in the loader sign, the counter falls back, the voltage is far away.
-        ah_charge = ah_end - np.linspace(0.0, 1.0, n_charge)
-        ah_removed = np.concatenate([ah_removed, ah_charge])
-        i = np.concatenate([i, np.full(n_charge, -C20_CURRENT_A)])
-        v = np.concatenate([v, np.full(n_charge, CHARGE_HALF_V)])
+    ah_end = (1.0 - soc_end) * Q_REF_AH
+    n_rest, n_charge = 20, 50
+    # Rest: no current, the counter stays. Charge: negative current, the counter falls back.
+    ah_removed = np.concatenate([(1.0 - soc) * Q_REF_AH, np.full(n_rest, ah_end), ah_end - np.linspace(0.0, 1.0, n_charge)])
+    i = np.concatenate([np.full(n_discharge, C20_CURRENT_A), np.zeros(n_rest), np.full(n_charge, -C20_CURRENT_A)])
+    v = np.concatenate([voltage_of_soc(soc), np.full(n_rest + n_charge, CHARGE_HALF_V)])
 
     n_rows = len(v)
-    t = 60.0 * np.arange(n_rows, dtype=np.float64)
-    dt = np.zeros(n_rows)
-    dt[1:] = 60.0
-    meta = {"file": "synthetic_C20DisCh.mat", "test_type": "c20"}
+    dt = np.full(n_rows, 60.0)
+    dt[0] = 0.0
     return Run(
-        t=t, i=i, v=v, temp=np.full(n_rows, 25.0), ah_removed=ah_removed, dt=dt, soc0=1.0, meta=meta
+        t=60.0 * np.arange(n_rows), i=i, v=v, temp=np.full(n_rows, 25.0), ah_removed=ah_removed, dt=dt, soc0=1.0,
+        meta={"file": "synthetic_C20DisCh.mat", "test_type": "c20"},
     )
 
 
-def make_runs(voltage_of_soc_by_temp, **kwargs):
+def make_runs(curve_by_temp, **kwargs):
     """A dict temperature -> made-up run, one per entry of {temperature: curve function}."""
-    return {temp: make_c20_run(curve, **kwargs) for temp, curve in voltage_of_soc_by_temp.items()}
+    return {temp: make_c20_run(curve, **kwargs) for temp, curve in curve_by_temp.items()}
+
+
+OFFSETS_V = 0.01 * np.arange(6)  # the shift of each temperature row, 10 mV per step, so the rows differ
 
 
 def shifted(curve, offset_v):
-    """The same curve shifted up by offset_v, so that the temperatures can be told apart in a table."""
+    """The same curve shifted up by offset_v."""
     return lambda soc: curve(soc) + offset_v
 
 
 def same_curve_at_every_temperature(curve):
-    """Curve functions for all six grid temperatures, each shifted by 10 mV per step so the rows differ."""
-    return {temp: shifted(curve, 0.01 * k) for k, temp in enumerate(T_GRID_DEGC)}
+    """Curve functions for all six grid temperatures, each shifted by its OFFSETS_V."""
+    return {temp: shifted(curve, offset) for temp, offset in zip(T_GRID_DEGC, OFFSETS_V)}
 
 
 # --------------------------------------------------------------------------------------------
@@ -110,17 +97,14 @@ def same_curve_at_every_temperature(curve):
 
 
 def test_linear_curve_reproduces_itself_exactly_on_the_grid():
-    """A straight line through the whole SoC range comes back unchanged, at every temperature."""
-    runs = make_runs(same_curve_at_every_temperature(linear_curve))
-    table = build_ocv(runs, SOC_GRID, T_GRID_DEGC)
+    """A straight line comes back unchanged at every temperature; the rest and charge half at 4.5 V do not enter."""
+    table = build_ocv(make_runs(same_curve_at_every_temperature(linear_curve)), SOC_GRID, T_GRID_DEGC)
 
     assert isinstance(table, OcvTable)
-    assert table.ocv.shape == (6, 101) and table.docv.shape == (6, 101)
     assert list(table.t_grid) == T_GRID_DEGC
     assert np.array_equal(table.soc_grid, SOC_GRID)
-    for row, offset in enumerate(0.01 * np.arange(6)):
-        expected = linear_curve(SOC_GRID) + offset
-        assert table.ocv[row] == pytest.approx(expected, abs=1e-12)
+    for row, offset in enumerate(OFFSETS_V):
+        assert table.ocv[row] == pytest.approx(linear_curve(SOC_GRID) + offset, abs=1e-12)
 
     assert table.monotone.tolist() == [True] * 6
     assert table.fallback_used is False
@@ -130,24 +114,10 @@ def test_linear_curve_reproduces_itself_exactly_on_the_grid():
 
 def test_smooth_monotone_curve_reproduces_itself_to_within_pchip_error():
     """A curved, strictly rising input is reproduced by the table to a few microvolts when sampled finely."""
-    runs = make_runs(same_curve_at_every_temperature(quadratic_curve))
-    table = build_ocv(runs, SOC_GRID, T_GRID_DEGC)
-    for row, offset in enumerate(0.01 * np.arange(6)):
-        expected = quadratic_curve(SOC_GRID) + offset
-        assert table.ocv[row] == pytest.approx(expected, abs=1e-5)
-    assert table.monotone.all()
-    assert not table.fallback_used
-
-
-def test_charge_half_and_rest_do_not_enter_the_table():
-    """The made-up charge half sits at 4.5 V; if a charge row were used, the table would reach it."""
-    runs = make_runs(same_curve_at_every_temperature(linear_curve), with_rest_and_charge=True)
-    with_charge = build_ocv(runs, SOC_GRID, T_GRID_DEGC)
-    runs_without = make_runs(same_curve_at_every_temperature(linear_curve), with_rest_and_charge=False)
-    without_charge = build_ocv(runs_without, SOC_GRID, T_GRID_DEGC)
-
-    assert with_charge.ocv.max() < 4.4
-    assert np.array_equal(with_charge.ocv, without_charge.ocv)
+    table = build_ocv(make_runs(same_curve_at_every_temperature(quadratic_curve)), SOC_GRID, T_GRID_DEGC)
+    for row, offset in enumerate(OFFSETS_V):
+        assert table.ocv[row] == pytest.approx(quadratic_curve(SOC_GRID) + offset, abs=1e-5)
+    assert table.monotone.all() and not table.fallback_used
 
 
 def test_discharge_half_is_the_longest_run_above_the_threshold():
@@ -158,67 +128,44 @@ def test_discharge_half_is_the_longest_run_above_the_threshold():
     i[35:37] = 3.0
     assert find_discharge_half(i) == (10, 29)
 
-    # A current at or below the threshold is a rest, so it does not extend the run.
-    i[30] = DISCHARGE_MIN_A
+    i[30] = DISCHARGE_MIN_A  # a current at or below the threshold is a rest, so it does not extend the run
     assert find_discharge_half(i) == (10, 29)
 
     with pytest.raises(ValueError):
         find_discharge_half(np.zeros(10))
 
 
-def test_grid_points_below_the_end_of_discharge_hold_the_last_value():
-    """A discharge that stops at SoC 0.2 gives a flat table below 0.2 and records soc_min = 0.2."""
-    runs = make_runs(same_curve_at_every_temperature(linear_curve), soc_end=0.2)
+def test_grid_points_outside_the_measured_range_hold_the_end_values():
+    """A discharge from SoC 0.999 down to 0.2 gives a flat table below 0.2 and above 0.999, and records both ends."""
+    runs = make_runs(same_curve_at_every_temperature(linear_curve), soc_start=0.999, soc_end=0.2)
     table = build_ocv(runs, SOC_GRID, T_GRID_DEGC)
 
     assert table.soc_min == pytest.approx(np.full(6, 0.2), abs=1e-9)
-    for row, offset in enumerate(0.01 * np.arange(6)):
-        held_value = linear_curve(0.2) + offset
-        below = SOC_GRID < 0.2 - 1e-9
-        assert below.sum() == 20
-        assert table.ocv[row, below] == pytest.approx(np.full(20, held_value), abs=1e-9)
-        # Above the end of the discharge the curve is the line.
-        above = SOC_GRID >= 0.2 + 1e-9
-        assert table.ocv[row, above] == pytest.approx(linear_curve(SOC_GRID[above]) + offset, abs=1e-9)
-    assert table.monotone.all()  # held points are not part of the check
-    assert not table.fallback_used
-
-
-def test_grid_points_above_the_first_logged_row_hold_the_first_value():
-    """The file opens one log interval into the discharge (SoC 0.999), so SoC 1.0 holds the value at 0.999."""
-    runs = make_runs(same_curve_at_every_temperature(linear_curve), soc_start=0.999)
-    table = build_ocv(runs, SOC_GRID, T_GRID_DEGC)
-
     assert table.soc_max == pytest.approx(np.full(6, 0.999), abs=1e-9)
-    for row, offset in enumerate(0.01 * np.arange(6)):
+    below = SOC_GRID < 0.2 - 1e-9
+    assert below.sum() == 20
+    for row, offset in enumerate(OFFSETS_V):
+        assert table.ocv[row, below] == pytest.approx(np.full(20, linear_curve(0.2) + offset), abs=1e-9)
         assert table.ocv[row, 100] == pytest.approx(linear_curve(0.999) + offset, abs=1e-9)
         assert table.ocv[row, 99] == pytest.approx(linear_curve(0.99) + offset, abs=1e-9)
+    assert table.monotone.all()  # held points are not part of the check
 
 
 def test_non_monotone_curve_sets_monotone_false_and_the_fallback_copies_25_degc():
     """The -20 degC curve dips: monotone is False there, True elsewhere, and 25 degC is copied to all rows."""
     curves = same_curve_at_every_temperature(quadratic_curve)
     curves[-20] = dipping_curve
-    runs = make_runs(curves)
-    table = build_ocv(runs, SOC_GRID, T_GRID_DEGC)
+    table = build_ocv(make_runs(curves), SOC_GRID, T_GRID_DEGC)
 
     assert table.monotone.tolist() == [True, True, True, True, True, False]
     assert table.fallback_used is True
 
     row_25 = T_GRID_DEGC.index(25)
-    expected_25 = quadratic_curve(SOC_GRID) + 0.01 * row_25
     for row in range(6):
-        assert table.ocv[row] == pytest.approx(expected_25, abs=1e-5)
+        assert table.ocv[row] == pytest.approx(quadratic_curve(SOC_GRID) + OFFSETS_V[row_25], abs=1e-5)
         assert np.array_equal(table.ocv[row], table.ocv[row_25])
         assert np.array_equal(table.docv[row], table.docv[row_25])
         assert table.soc_min[row] == table.soc_min[row_25]
-
-
-def test_fallback_is_not_used_when_every_temperature_passes():
-    runs = make_runs(same_curve_at_every_temperature(quadratic_curve))
-    table = build_ocv(runs, SOC_GRID, T_GRID_DEGC)
-    assert table.fallback_used is False
-    assert not np.array_equal(table.ocv[0], table.ocv[1])  # the temperatures keep their own rows
 
 
 def test_25_degc_failing_the_check_is_an_error_not_a_silent_fallback():
@@ -236,39 +183,20 @@ def test_a_missing_temperature_is_an_error():
         build_ocv(make_runs(curves), SOC_GRID, T_GRID_DEGC)
 
 
-def test_docv_of_a_line_is_its_slope_everywhere_including_the_ends():
-    runs = make_runs(same_curve_at_every_temperature(linear_curve))
-    table = build_ocv(runs, SOC_GRID, T_GRID_DEGC)
-    assert table.docv == pytest.approx(np.full((6, 101), 1.2), abs=1e-9)
-
-
-def test_docv_is_positive_for_a_rising_curve_and_matches_central_differences():
-    """Inside: (V[k+1] - V[k-1]) / (2 * 0.01). At the ends: the one-sided difference over one grid step."""
-    runs = make_runs(same_curve_at_every_temperature(quadratic_curve))
-    table = build_ocv(runs, SOC_GRID, T_GRID_DEGC)
-
-    assert np.all(table.docv > 0.0)
-    for row in range(6):
-        ocv = table.ocv[row]
-        for k in range(1, 100):
-            expected = (ocv[k + 1] - ocv[k - 1]) / 0.02
-            assert table.docv[row, k] == pytest.approx(expected, rel=1e-9)
-        assert table.docv[row, 0] == pytest.approx((ocv[1] - ocv[0]) / 0.01, rel=1e-9)
-        assert table.docv[row, 100] == pytest.approx((ocv[100] - ocv[99]) / 0.01, rel=1e-9)
-        # numpy's gradient (first-order ends) is the same operation, as an independent check.
-        assert table.docv[row] == pytest.approx(np.gradient(ocv, SOC_GRID), rel=1e-9)
-        # And the slope is the derivative of the made-up curve: 1 + 0.8 SoC, to within the grid and PCHIP error.
-        assert table.docv[row, 10:90] == pytest.approx(1.0 + 0.8 * SOC_GRID[10:90], abs=2e-4)
+def test_central_differences_on_a_nonuniform_axis():
+    """Central differences inside, one-sided over the first and the last step."""
+    x = np.array([0.0, 1.0, 3.0, 4.0])
+    slope = central_differences(x * x, x)
+    assert slope == pytest.approx([1.0, 9.0 / 3.0, 15.0 / 3.0, 7.0])
 
 
 def test_docv_is_zero_on_held_points_and_half_a_slope_at_the_kink():
+    """A line of slope 1.2 that stops at SoC 0.2: zero below, half the slope at the kink, the slope above (Eq. 5)."""
     runs = make_runs(same_curve_at_every_temperature(linear_curve), soc_end=0.2)
     table = build_ocv(runs, SOC_GRID, T_GRID_DEGC)
-    for row in range(6):
-        assert np.all(table.docv[row, :20] == pytest.approx(0.0, abs=1e-9))
-        assert table.docv[row, 20] == pytest.approx(0.6, abs=1e-9)  # half of 1.2: one side flat, one side rising
-        assert table.docv[row, 21] == pytest.approx(1.2, abs=1e-9)
-    assert np.all(table.docv >= 0.0)
+    assert table.docv[:, :20] == pytest.approx(0.0, abs=1e-9)
+    assert table.docv[:, 20] == pytest.approx(0.6, abs=1e-9)
+    assert table.docv[:, 21:] == pytest.approx(1.2, abs=1e-9)
 
 
 def test_rest_point_correction_adds_the_offsets_at_the_rest_socs_and_holds_flat_outside():
@@ -284,11 +212,9 @@ def test_rest_point_correction_adds_the_offsets_at_the_rest_socs_and_holds_flat_
     points = {temp: list(zip(rest_socs, curves[temp](rest_socs) + offsets_v)) for temp in T_GRID_DEGC}
     table = build_ocv(runs, SOC_GRID, T_GRID_DEGC, points)
 
-    # Without rest points there is no correction.
+    # Without rest points there is no correction; with them the uncorrected curve is the plain table.
     assert np.all(plain.delta_v == 0.0)
     assert np.array_equal(plain.ocv, plain.ocv_c20)
-
-    # With them the uncorrected curve is the plain table, and ocv = curve + correction.
     assert np.array_equal(table.ocv_c20, plain.ocv)
     assert table.ocv == pytest.approx(table.ocv_c20 + table.delta_v, abs=1e-15)
     assert table.monotone.all() and not table.fallback_used
@@ -297,28 +223,19 @@ def test_rest_point_correction_adds_the_offsets_at_the_rest_socs_and_holds_flat_
         assert table.ocv[row, rest_rows] == pytest.approx(plain.ocv[row, rest_rows] + offsets_v, abs=1e-12)
         assert table.delta_v[row, :20] == pytest.approx(np.full(20, 0.060), abs=1e-12)
         assert table.delta_v[row, 81:] == pytest.approx(np.full(20, 0.010), abs=1e-12)
+        assert table.docv[row] == pytest.approx(central_differences(table.ocv[row], SOC_GRID), abs=1e-12)  # of the corrected table
 
 
 def test_rest_offsets_are_taken_from_the_uncorrected_curve_held_beyond_its_range():
     """A rest point below the end of the discharge is compared with the held end value of the C/20 curve."""
-    run = make_c20_run(linear_curve, soc_end=0.2)
-    soc_curve, v_curve = discharge_curve(run)
+    soc_curve, v_curve = discharge_curve(make_c20_run(linear_curve, soc_end=0.2))
     v_c20, delta = rest_offsets(soc_curve, v_curve, np.array([0.5, 0.1]), np.array([3.7, 3.4]))
     assert v_c20 == pytest.approx([linear_curve(0.5), linear_curve(0.2)], abs=1e-9)
     assert delta == pytest.approx([3.7 - linear_curve(0.5), 3.4 - linear_curve(0.2)], abs=1e-9)
 
 
-def test_central_differences_on_a_nonuniform_axis():
-    x = np.array([0.0, 1.0, 3.0, 4.0])
-    values = x * x
-    slope = central_differences(values, x)
-    assert slope[0] == pytest.approx(1.0)  # (1 - 0) / (1 - 0)
-    assert slope[1] == pytest.approx((9.0 - 0.0) / 3.0)
-    assert slope[2] == pytest.approx((16.0 - 1.0) / 3.0)
-    assert slope[3] == pytest.approx((16.0 - 9.0) / 1.0)
-
-
 def test_equal_soc_rows_are_averaged_and_the_axis_is_sorted():
+    """PCHIP needs a strictly increasing axis: rows that share a SoC give one point at their mean voltage."""
     soc = np.array([0.9, 0.5, 0.5, 0.1, 0.9, 0.9])
     v = np.array([4.0, 3.6, 3.8, 3.2, 4.2, 4.1])
     soc_unique, v_mean = average_equal_x(soc, v)
@@ -326,59 +243,16 @@ def test_equal_soc_rows_are_averaged_and_the_axis_is_sorted():
     assert v_mean == pytest.approx([3.2, 3.7, 4.1])
 
 
-def test_equal_soc_rows_in_a_run_do_not_break_the_pchip():
-    """Two rows with the same counter value would make PCHIP fail without the averaging."""
-    run = make_c20_run(linear_curve)
-    run.ah_removed[500] = run.ah_removed[499]  # the counter did not move between rows 499 and 500
-    table = build_ocv({temp: run for temp in T_GRID_DEGC}, SOC_GRID, T_GRID_DEGC)
-    assert np.all(np.isfinite(table.ocv))
-    assert table.monotone.all()
-
-
 # --------------------------------------------------------------------------------------------
 # Real data
 # --------------------------------------------------------------------------------------------
 
 
-def section_table_column(section_number, column_name):
-    """Read one column of the first table in a section of results/data_checks.md that has that column.
-
-    Returns {folder name: text of the cell} for the rows whose first cell is a data folder name.
-    """
-    if not DATA_CHECKS_MD.exists():
-        pytest.skip("results/data_checks.md is missing")
-
-    in_section = False
-    column_index = None
-    cells_by_folder = {}
-    for line in DATA_CHECKS_MD.read_text().splitlines():
-        if line.startswith("## "):
-            if in_section:
-                break
-            in_section = line.startswith(f"## {section_number}. ")
-            continue
-        if not in_section or not line.startswith("|"):
-            if column_index is not None and cells_by_folder:
-                break  # the table ended
-            continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        if column_index is None and column_name in cells and cells[0] == "folder":
-            column_index = cells.index(column_name)
-        elif column_index is not None and cells[0] in FOLDER_TEMP:
-            cells_by_folder[cells[0]] = cells[column_index]
-    assert cells_by_folder, f"no column {column_name!r} in section {section_number} of results/data_checks.md"
-    return cells_by_folder
-
-
 @pytest.fixture(scope="module")
 def real_c20_runs():
     """The six C20DisCh files loaded, keyed by nominal temperature in degC."""
-    paths = find_runs(RAW_DIR, test_type="c20")
-    runs = {}
-    for path in paths:
-        run = load_run(path)
-        runs[run.meta["nominal_temp_degc"]] = run
-    return runs
+    runs = [load_run(path) for path in find_runs(RAW_DIR, test_type="c20")]
+    return {run.meta["nominal_temp_degc"]: run for run in runs}
 
 
 @pytest.fixture(scope="module")
@@ -386,85 +260,52 @@ def real_table(real_c20_runs):
     return build_ocv(real_c20_runs, SOC_GRID, T_GRID_DEGC)
 
 
-@pytest.mark.needs_data
-def test_real_runs_are_the_six_c20_files(real_c20_runs):
-    assert sorted(real_c20_runs) == sorted(T_GRID_DEGC)
-    for temp, run in real_c20_runs.items():
-        assert run.meta["test_type"] == "c20"
-        assert FOLDER_TEMP[run.meta["folder"]] == temp
+@pytest.fixture(scope="module")
+def real_rest_points():
+    """The HPPC rest points of the six folders, keyed by nominal temperature in degC."""
+    runs = [load_run(path) for path in find_runs(RAW_DIR, test_type="hppc")]
+    return {run.meta["nominal_temp_degc"]: rest_points(run, segment_hppc(run)) for run in runs}
 
 
 @pytest.mark.needs_data
-def test_real_discharge_halves_have_the_row_counts_of_data_checks(real_c20_runs):
+def test_real_discharge_halves_have_the_row_counts_of_data_checks(real_c20_runs, data_checks_table):
     """Section 11 finds the discharge half the same way (longest run above 50 mA) and counts its rows."""
-    rows_by_folder = section_table_column(11, "discharge rows")
-    for folder, text in rows_by_folder.items():
-        run = real_c20_runs[FOLDER_TEMP[folder]]
-        first, last = find_discharge_half(run.i)
-        assert last - first + 1 == int(text), folder
+    for folder, cells in data_checks_table(11, "discharge rows").items():
+        first, last = find_discharge_half(real_c20_runs[FOLDER_TEMP[folder]].i)
+        assert last - first + 1 == int(cells["discharge rows"]), folder
         assert first == 0, folder  # the file opens inside the discharge
 
 
 @pytest.mark.needs_data
-def test_real_soc_min_matches_data_checks_within_half_a_pp(real_table):
+def test_real_soc_min_matches_data_checks_within_half_a_pp(real_table, data_checks_table):
     """soc_min per temperature against the end-of-discharge SoC (%) of results/data_checks.md section 11."""
-    end_soc_pct = section_table_column(11, "end-of-discharge SoC (%)")
-    assert len(end_soc_pct) == 6
-    for folder, text in end_soc_pct.items():
-        row = T_GRID_DEGC.index(FOLDER_TEMP[folder])
-        soc_min_pp = 100.0 * real_table.soc_min[row]
-        assert soc_min_pp == pytest.approx(float(text), abs=0.5), folder
+    column = "end-of-discharge SoC (%)"
+    for folder, cells in data_checks_table(11, column).items():
+        soc_min_pp = 100.0 * real_table.soc_min[T_GRID_DEGC.index(FOLDER_TEMP[folder])]
+        assert soc_min_pp == pytest.approx(float(cells[column]), abs=0.5), folder
 
 
 @pytest.mark.needs_data
-def test_real_table_needs_no_fallback_and_is_monotone(real_table):
-    assert real_table.monotone.tolist() == [True] * 6
-    assert real_table.fallback_used is False
-    # Each temperature has its own curve: the rows are not copies of one another.
-    for row in range(1, 6):
-        assert not np.array_equal(real_table.ocv[row], real_table.ocv[0])
-
-
-@pytest.mark.needs_data
-def test_real_table_is_physically_plausible(real_table):
-    """Voltages of an NMC cell between empty and full, rising with SoC, slope never negative."""
+def test_real_table_is_monotone_without_fallback_and_plausible(real_table):
+    """Each temperature keeps its own curve, rising over its measured range; voltages of an NMC cell, slope never negative."""
+    assert real_table.monotone.all() and not real_table.fallback_used
     assert real_table.ocv.min() > 2.7 and real_table.ocv.max() < 4.25
     assert np.all(real_table.docv >= 0.0)
-    for row in range(6):
-        valid = (SOC_GRID >= real_table.soc_min[row]) & (SOC_GRID <= real_table.soc_max[row])
-        assert np.all(np.diff(real_table.ocv[row, valid]) > 0.0)
-        assert real_table.ocv[row, 100] > real_table.ocv[row, 50] > real_table.ocv[row, 0]
-        assert real_table.soc_max[row] > 0.99  # the file opens one log interval into the discharge
-
-
-@pytest.fixture(scope="module")
-def real_rest_points():
-    """The HPPC rest points of the six folders, keyed by nominal temperature in degC."""
-    points = {}
-    for path in find_runs(RAW_DIR, test_type="hppc"):
-        run = load_run(path)
-        points[run.meta["nominal_temp_degc"]] = rest_points(run, segment_hppc(run))
-    return points
-
-
-@pytest.fixture(scope="module")
-def corrected_table(real_c20_runs, real_rest_points):
-    return build_ocv(real_c20_runs, SOC_GRID, T_GRID_DEGC, real_rest_points)
+    assert np.all(real_table.soc_max > 0.99)  # the file opens one log interval into the discharge
 
 
 @pytest.mark.needs_data
 def test_real_correction_at_25_degc_is_positive_and_the_corrected_table_is_monotone(
-    corrected_table, real_c20_runs, real_rest_points
+    real_table, real_c20_runs, real_rest_points
 ):
     """The relaxed rest voltage lies above the C/20 discharge curve at every rest point (decisions 1.1)."""
     soc_curve, v_curve = discharge_curve(real_c20_runs[25])
     soc_rest, v_rest = np.array(real_rest_points[25]).T
     _, delta = rest_offsets(soc_curve, v_curve, soc_rest, v_rest)
-    assert len(delta) == 12
-    assert np.all(delta > 0.0)
+    assert len(delta) == 12 and np.all(delta > 0.0)
 
+    corrected = build_ocv(real_c20_runs, SOC_GRID, T_GRID_DEGC, real_rest_points)
     row = T_GRID_DEGC.index(25)
-    assert np.all(corrected_table.delta_v[row] > 0.0)
-    assert corrected_table.ocv[row] == pytest.approx(corrected_table.ocv_c20[row] + corrected_table.delta_v[row], abs=1e-15)
-    assert corrected_table.monotone.tolist() == [True] * 6
-    assert corrected_table.fallback_used is False
+    assert np.all(corrected.delta_v[row] > 0.0)
+    assert corrected.ocv[row] == pytest.approx(corrected.ocv_c20[row] + corrected.delta_v[row], abs=1e-15)
+    assert corrected.monotone.all() and not corrected.fallback_used

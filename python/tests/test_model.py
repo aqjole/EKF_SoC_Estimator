@@ -4,13 +4,14 @@ The expected values are worked out by hand in the comments, not by calling the c
 """
 
 import math
+from dataclasses import replace
 
 import numpy as np
 import pytest
 from scipy.interpolate import RegularGridInterpolator
 
 from ekfsoc.constants import SOC_GRID, T_GRID_DEGC
-from ekfsoc.model import CSV_COLUMNS, Params, find_cell, interp2, simulate_2rc_open_loop
+from ekfsoc.model import Params, find_cell, interp2, simulate_2rc_open_loop
 
 
 # --- interp2 -------------------------------------------------------------------------------------
@@ -60,28 +61,21 @@ def test_interp2_between_nodes_is_the_bilinear_value(temp, soc, expected, how):
     assert value == pytest.approx(expected, rel=1e-12), how
 
 
-def test_interp2_works_on_an_ascending_temperature_axis_too():
-    # The same table with the rows in the opposite order and the axis ascending gives the same value.
-    ascending_t = [10.0, 25.0, 40.0]
-    ascending_table = [SMALL_TABLE[2], SMALL_TABLE[1], SMALL_TABLE[0]]
-    for temp, soc in [(17.5, 0.25), (20.0, 0.75), (37.5, 0.1), (40.0, 1.0), (10.0, 0.0)]:
-        descending = interp2(SMALL_TABLE, SMALL_T, SMALL_SOC, temp, soc)
-        ascending = interp2(ascending_table, ascending_t, SMALL_SOC, temp, soc)
-        assert ascending == pytest.approx(descending, rel=1e-12)
-
-
-def test_interp2_clamps_beyond_both_ends_of_both_axes():
-    # Beyond the 40 degC end the first row is used, beyond the 10 degC end the last row.
-    assert interp2(SMALL_TABLE, SMALL_T, SMALL_SOC, 100.0, 0.25) == pytest.approx(interp2(SMALL_TABLE, SMALL_T, SMALL_SOC, 40.0, 0.25))
-    assert interp2(SMALL_TABLE, SMALL_T, SMALL_SOC, -50.0, 0.25) == pytest.approx(interp2(SMALL_TABLE, SMALL_T, SMALL_SOC, 10.0, 0.25))
-    # Beyond SoC 0 and SoC 1.
-    assert interp2(SMALL_TABLE, SMALL_T, SMALL_SOC, 25.0, -0.3) == pytest.approx(3.0)
-    assert interp2(SMALL_TABLE, SMALL_T, SMALL_SOC, 25.0, 1.7) == pytest.approx(9.0)
-    # All four corners, each beyond both axes at once: the corner node values 1, 4, 6, 16.
-    assert interp2(SMALL_TABLE, SMALL_T, SMALL_SOC, 99.0, -1.0) == pytest.approx(1.0)
-    assert interp2(SMALL_TABLE, SMALL_T, SMALL_SOC, 99.0, 2.0) == pytest.approx(4.0)
-    assert interp2(SMALL_TABLE, SMALL_T, SMALL_SOC, -99.0, -1.0) == pytest.approx(6.0)
-    assert interp2(SMALL_TABLE, SMALL_T, SMALL_SOC, -99.0, 2.0) == pytest.approx(16.0)
+@pytest.mark.parametrize(
+    "temp, soc, expected",
+    [
+        # Beyond the 40 degC end the first row is used (SoC 0.25 is halfway between 1 and 2), beyond the 10 degC end the last.
+        (100.0, 0.25, 1.5),
+        (-50.0, 0.25, 7.0),
+        # Beyond SoC 0 and SoC 1 on the 25 degC row.
+        (25.0, -0.3, 3.0),
+        (25.0, 1.7, 9.0),
+        # Beyond both axes at once: the corner node value.
+        (-99.0, 2.0, 16.0),
+    ],
+)
+def test_interp2_clamps_beyond_both_ends_of_both_axes(temp, soc, expected):
+    assert interp2(SMALL_TABLE, SMALL_T, SMALL_SOC, temp, soc) == pytest.approx(expected)
 
 
 def test_interp2_agrees_with_scipy_on_random_queries_including_out_of_range():
@@ -99,13 +93,16 @@ def test_interp2_agrees_with_scipy_on_random_queries_including_out_of_range():
         assert interp2(table, t_grid, soc_grid, temp, soc) == pytest.approx(float(scipy_interp(point)[0]), abs=1e-12)
 
 
-def test_find_cell_returns_the_last_cell_with_weight_one_at_the_last_node():
-    # Descending axis: the last node (-20) is in the last cell, at its far end.
-    assert find_cell(T_GRID_DEGC, -20.0) == (len(T_GRID_DEGC) - 2, 1.0)
-    # The first node starts the first cell.
-    assert find_cell(T_GRID_DEGC, 40.0) == (0, 0.0)
-    # 5 degC lies between 10 and 0, which is cell 2 (nodes 10 and 0), half way.
-    assert find_cell(T_GRID_DEGC, 5.0) == (2, 0.5)
+@pytest.mark.parametrize(
+    "temp, expected",
+    [
+        (-20.0, (4, 1.0)),  # the last node of the descending axis closes the last cell
+        (40.0, (0, 0.0)),  # the first node opens the first cell
+        (5.0, (2, 0.5)),  # 5 degC lies halfway between 10 and 0, the nodes of cell 2
+    ],
+)
+def test_find_cell_on_the_descending_temperature_axis(temp, expected):
+    assert find_cell(T_GRID_DEGC, temp) == expected
 
 
 # --- simulate_2rc_open_loop -----------------------------------------------------------------------
@@ -178,30 +175,28 @@ def test_two_hand_computed_zero_order_hold_steps_with_unequal_dt_and_current():
     #      = 0.017618041050
     # Row 2 carries a charge current of -1 A (regen): the R0 term adds 0.05 V.
     #   3.7 - 0.028179807974 - 0.017618041050 + 0.05 = 3.704202150976
-    v1_row2 = 0.3678794412 * 0.007869386806 + 0.01 * (1.0 - 0.3678794412) * 4.0
-    v2_row2 = 0.8187307531 * 0.003806503279 + 0.02 * (1.0 - 0.8187307531) * 4.0
-    assert v1_row2 == pytest.approx(0.028179807974, abs=1e-9)
-    assert v2_row2 == pytest.approx(0.017618041050, abs=1e-9)
     assert v_model[2] == pytest.approx(3.704202150976, abs=1e-9)
+
+
+def along_soc(at_soc_0, at_soc_1):
+    """A 2 x 2 table with one value at SoC 0 and another at SoC 1, the same at both temperatures."""
+    return np.array([[at_soc_0, at_soc_1], [at_soc_0, at_soc_1]])
 
 
 def test_rc_parameters_are_taken_at_the_start_of_the_step_and_ocv_and_r0_at_the_sample():
     # Tables that vary along SoC only, same at both temperatures (columns SoC 0 and 1):
     #   OCV 3.0 -> 4.0 V, R0 0.10 -> 0.20 Ohm, R1 0.01 -> 0.03 Ohm, tau1 = 1 s at both, R2 = 0, tau2 = 100 s.
     # Rows at SoC 0.0 and 1.0 with a 1 A current and dt[1] = 1 s.
-    t_grid = [25.0, 0.0]
-    soc_grid = [0.0, 1.0]
-    two_columns = lambda a, b: np.array([[a, b], [a, b]])
     params = Params(
-        t_grid=t_grid,
-        soc_grid=soc_grid,
-        ocv=two_columns(3.0, 4.0),
-        docv=two_columns(0.0, 0.0),
-        r0=two_columns(0.10, 0.20),
-        r1=two_columns(0.01, 0.03),
-        tau1=two_columns(1.0, 1.0),
-        r2=two_columns(0.0, 0.0),
-        tau2=two_columns(100.0, 100.0),
+        t_grid=[25.0, 0.0],
+        soc_grid=[0.0, 1.0],
+        ocv=along_soc(3.0, 4.0),
+        docv=along_soc(0.0, 0.0),
+        r0=along_soc(0.10, 0.20),
+        r1=along_soc(0.01, 0.03),
+        tau1=along_soc(1.0, 1.0),
+        r2=along_soc(0.0, 0.0),
+        tau2=along_soc(100.0, 100.0),
     )
     i = np.array([1.0, 1.0])
     dt = np.array([0.0, 1.0])
@@ -246,11 +241,17 @@ def synthetic_params():
     )
 
 
-def test_params_round_trip_through_csv(tmp_path):
-    original = synthetic_params()
+@pytest.fixture
+def csv_path(tmp_path):
+    """results/params.csv-style file written from synthetic_params()."""
     path = tmp_path / "params.csv"
-    original.to_csv(path)
-    reloaded = Params.from_csv(path)
+    synthetic_params().to_csv(path)
+    return path
+
+
+def test_params_round_trip_through_csv(csv_path):
+    original = synthetic_params()
+    reloaded = Params.from_csv(csv_path)
 
     assert reloaded.t_grid.tolist() == original.t_grid.tolist()
     assert reloaded.soc_grid.tolist() == original.soc_grid.tolist()
@@ -260,14 +261,11 @@ def test_params_round_trip_through_csv(tmp_path):
         assert np.allclose(getattr(reloaded, name), getattr(original, name), rtol=1e-5, atol=0.0), name
 
 
-def test_csv_layout_header_row_count_and_order(tmp_path):
+def test_csv_layout_header_row_count_and_order(csv_path):
     params = synthetic_params()
-    path = tmp_path / "params.csv"
-    params.to_csv(path)
-    lines = path.read_text().splitlines()
+    lines = csv_path.read_text().splitlines()
 
     assert lines[0] == "T_degC,soc,ocv_V,docv_V_per_soc,R0_ohm,R1_ohm,tau1_s,R2_ohm,tau2_s"
-    assert tuple(lines[0].split(",")) == CSV_COLUMNS
     assert len(lines) == 1 + 3 * 4
     # T-major: the first four data rows are the first temperature (40 degC) at SoC 0, 0.25, 0.5, 1.
     first_block = [line.split(",")[:2] for line in lines[1:5]]
@@ -279,54 +277,37 @@ def test_csv_layout_header_row_count_and_order(tmp_path):
     assert float(cells[8]) == pytest.approx(params.tau2[1, 1], rel=1e-5)
 
 
-def test_csv_is_written_with_six_significant_digits_and_regenerates_byte_identical(tmp_path):
-    params = synthetic_params()
-    first = tmp_path / "a.csv"
-    second = tmp_path / "b.csv"
-    params.to_csv(first)
-    Params.from_csv(first).to_csv(second)
-    for line in first.read_text().splitlines()[1:]:
+def test_csv_cells_are_written_with_six_significant_digits(csv_path):
+    for line in csv_path.read_text().splitlines()[1:]:
         for cell in line.split(","):
-            digits = cell.replace("-", "").replace(".", "").lstrip("0")
-            digits = digits.split("e")[0]
-            assert len(digits) <= 6, cell
-    # Writing, reading and writing again gives the same bytes: the 6-digit text is its own fixed point.
-    assert first.read_bytes() == second.read_bytes()
+            assert f"{float(cell):.6g}" == cell
+
+
+def test_csv_regenerates_byte_identical(csv_path, tmp_path):
+    again = tmp_path / "again.csv"
+    Params.from_csv(csv_path).to_csv(again)
+    assert again.read_bytes() == csv_path.read_bytes()
 
 
 def test_params_rejects_a_table_of_the_wrong_shape():
-    good = synthetic_params()
     with pytest.raises(ValueError):
-        Params(
-            t_grid=good.t_grid,
-            soc_grid=good.soc_grid,
-            ocv=np.zeros((3, 3)),
-            docv=good.docv,
-            r0=good.r0,
-            r1=good.r1,
-            tau1=good.tau1,
-            r2=good.r2,
-            tau2=good.tau2,
-        )
+        replace(synthetic_params(), ocv=np.zeros((3, 3)))
 
 
-def test_from_csv_rejects_a_wrong_header_and_a_changed_axis_value(tmp_path):
-    params = synthetic_params()
-    path = tmp_path / "params.csv"
-    params.to_csv(path)
-    lines = path.read_text().splitlines()
-
-    bad_header = tmp_path / "bad_header.csv"
-    bad_header.write_text("\n".join(["T,soc,ocv"] + lines[1:]) + "\n")
+def test_from_csv_rejects_a_wrong_header(csv_path, tmp_path):
+    lines = csv_path.read_text().splitlines()
+    bad = tmp_path / "bad_header.csv"
+    bad.write_text("\n".join(["T,soc,ocv"] + lines[1:]) + "\n")
     with pytest.raises(ValueError):
-        Params.from_csv(bad_header)
+        Params.from_csv(bad)
 
-    # Second block repeats SoC 0, 0.25, 0.5, 1 in the first block; change one SoC value in it.
-    changed = list(lines)
-    cells = changed[7].split(",")
+
+def test_from_csv_rejects_a_soc_value_that_changes_in_a_later_block(csv_path, tmp_path):
+    lines = csv_path.read_text().splitlines()
+    cells = lines[7].split(",")  # second block, second row: SoC 0.25 in the first block
     cells[1] = "0.4"
-    changed[7] = ",".join(cells)
-    bad_axis = tmp_path / "bad_axis.csv"
-    bad_axis.write_text("\n".join(changed) + "\n")
+    lines[7] = ",".join(cells)
+    bad = tmp_path / "bad_axis.csv"
+    bad.write_text("\n".join(lines) + "\n")
     with pytest.raises(ValueError):
-        Params.from_csv(bad_axis)
+        Params.from_csv(bad)

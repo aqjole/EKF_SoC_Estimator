@@ -85,26 +85,16 @@ class Level:
     soc_after_move: float | None
 
 
-def current_kind(current):
-    """+1 for discharge, -1 for charge, 0 for rest, from one current value in A (loader sign)."""
-    if current > FLOW_A:
-        return 1
-    if current < -FLOW_A:
-        return -1
-    return 0
-
-
 def split_by_current(run):
     """Cut the run into Segments of equal current kind, from the first row to the last."""
-    n_rows = len(run.i)
+    kinds = np.where(run.i > FLOW_A, 1, np.where(run.i < -FLOW_A, -1, 0))
+    firsts = np.concatenate(([0], np.flatnonzero(np.diff(kinds)) + 1))
+    stops = np.append(firsts[1:], len(kinds))
+
     segments = []
-    first = 0
-    for k in range(1, n_rows + 1):
-        if k < n_rows and current_kind(run.i[k]) == current_kind(run.i[first]):
-            continue
-        end_time = run.t[min(k, n_rows - 1)]
-        segments.append(Segment(current_kind(run.i[first]), first, k, float(end_time - run.t[first])))
-        first = k
+    for first, stop in zip(firsts, stops):
+        end_time = run.t[min(stop, len(kinds) - 1)]
+        segments.append(Segment(int(kinds[first]), int(first), int(stop), float(end_time - run.t[first])))
     return segments
 
 
