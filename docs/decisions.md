@@ -1,0 +1,242 @@
+# Decisions
+
+This file records every decision that affects results, made in S0 before any result exists. Section 1 follows the list in the spec's S0 section, in its order (1.1 to 1.8), then adds the loader rules, the sign and reference conventions and the statement on shared segments that the data and the spec need (1.9 to 1.11), and the S1 and S2 rules that must be fixed before the fits and experiments run (1.12, 1.13). Section 2 checks the dataset readme's claims against the files. Section 3 lists the data anomalies that matter for S1 and S2, with the rule for each. S2 appends the frozen Q and R tuning here, as the spec requires. Conventions and equations are in `docs/model.md`.
+
+**Where this file departs from the spec.** Each departure is labelled again in the entry named.
+
+Deviations, where the spec says something else:
+- 1.1: the OCV comes from the C/20 discharge half only, not from the average of the charge and discharge halves.
+- 1.5: the evaluation set is 62 runs, not "every drive cycle at every temperature". Out: `551_HWFET` (no current), `562_Mixed4` to `Mixed8` (partial runs), `602_Mixed4` (corrupt) and the six PausCycl files. The exclusions also decide the offset (1.7).
+- 1.7: the current offset is 200 mA, not 100 mA.
+- 1.10: the reference SoC follows the cycler's counter and the coulomb-counting baseline integrates the logged current, so the two are not equal by construction. This amends the spec's sentence that they are. Experiment 1 reports "coulomb counting vs reference" as a column.
+- 1.12: two fits per HPPC level (R0, R1, tau1 on the discharge pulses and their 40 s rests; R2, tau2 on the 3600 s rest), not one fit "on the pulse plus its relaxation".
+- 1.13: experiment 3 starts where the reference reaches 70 % with initial SoC 50 % and 90 %, not where it reaches 50 % with 30 % and 70 %.
+
+Refinements, where the spec is silent or loose:
+- 1.1, 1.6 and 1.10: in C20DisCh and Dis_2C files Ah_removed counts from the counter's zero at the step start, not from the first row of the file (the spec: "since the start of the file").
+- 1.5 and 1.10: SoC0 is taken from the counter at the first row used, so it is 0.9948 for `582_LA92` and 0.9964 for `571_Mixed6`, not 1.
+- 1.7: "round" means a multiple of 50 mA.
+- 1.9: dt comes from the Time column (the spec: "from the timestamps"). The gap rule is the spec's exact zero-order hold of the previous kept sample's current over the actual dt, at every step, with no special gap code.
+- 1.12: the R0 rule (98 % of the commanded current, within 0.3 s) and the treatment of pulses cut by a voltage limit.
+
+How to read the evidence:
+- `[inv]` = `results/data_inventory.md` and `[cap]` = `results/capacity.md`, both written by `python/inventory.py` (`make inventory`). `[chk N]` = section N of `results/data_checks.md`, written by `python/data_checks.py` (`make checks`). Every measured number in this file is in one of these three files, and the bracket names the section or table. Facts about the dataset that the readme states are cited as such.
+- Files are named `<folder>/<test>_<descriptor>`; [inv] has the full names. Row numbers count from 0. Current and Ah values quoted from the files are in the cycler's sign (discharge negative) unless a line says otherwise. Differences in SoC are in percentage points (pp).
+
+## 1. Decisions
+
+### 1.1 OCV source
+
+**OCV(SoC, T) comes from the C/20 discharge half of each folder's C20DisCh file only. This deviates from the spec, which takes the average of the C/20 charge and discharge halves.**
+
+- Rule: SoC axis = 1 - Ah_removed / Q_ref, with Ah_removed = -Ah counted from the counter's zero at the start of the discharge step (1.10; this refines the spec's "since the start of the file"). Fit a PCHIP through the discharge half, evaluate it on the 101-point SoC grid (1.8), and check monotonicity. Below the SoC where a temperature's discharge ends, hold the last value and record the valid SoC range per temperature in `results/params.md` (spec, S1). HPPC 1 h rest voltages are plotted over each curve as a cross-check only. The spec's fallback is unchanged: if any cold curve fails the check, use the 25 degC curve at every temperature.
+- Reason: the two halves of a C20DisCh file do not share one Ah axis, so any average depends on an alignment rule the data cannot pick. Hysteresis is out of scope, so one branch is used instead of a midpoint whose position depends on that rule. Cost: the table is a discharge-branch OCV and includes the C/20 discharge overpotential. S1's HPPC rest-voltage cross-check shows how large that offset is, and S4 lists it as a limitation.
+- Evidence:
+  - The charge half puts back more Ah than the discharge half removed, except at -20 degC. Ratio returned / removed, in campaign order: 1.068 (25 degC: 2.9709 Ah against 2.7807 Ah), 1.066 (40), 1.018 (10), 1.034 (0), 1.015 (-10), 0.983 (-20). The cause is unexplained [cap: per-folder table and *Anomalies*; chk 11].
+  - Charge minus discharge voltage at 50 % SoC under four alignments A to D (definitions in [chk 11]). At 25 degC: A 7.9, D 69.1, B 37.2 mV; C equals A (7.9 mV) because the discharge Ah equals Q_ref there. At -20 degC: A 148.6, D 130.5, B 140.1, C 148.1 mV. Under A the 25 degC charge curve lies 23.9 mV *below* the discharge curve at 80 % SoC, which a charge curve should not do [chk 11].
+  - Monotonicity of the raw discharge half (voltage against Ah): no rises at 40, 25, 10, 0 and -10 degC. At -20 degC there are 51 single-sample rises, the largest 0.34 mV, and the voltage rebounds at most 0.51 mV above the running minimum. A PCHIP through each raw discharge half is monotone on the grid points inside the measured range at all six temperatures (smallest step 1.85 mV, at -20 degC), so the fallback is not expected to trigger [chk 11]. The 6.07 mV dip at -20 degC lies in the CC part of the charge half (75 falls), not in the discharge half [chk 11].
+  - On the Q_ref axis the discharge ends at SoC 3.27 / 0.00 / 4.74 / 6.55 / 7.81 / 10.28 % at 40 / 25 / 10 / 0 / -10 / -20 degC [chk 11].
+  - Discharge current: median 0.15325 A, or 0.14814 A at 10 degC (test 575, section 2 of this file), logged at 60 s [chk 11; inv: *median dt*].
+  - Ah reference point: the counter was reset at the start of the discharge step, and the file opens one 60 s interval later at Ah[0] = -0.00245 to -0.00254 Ah [chk 13]. Counting from the reset is the same reference Q_ref uses (1.6), so the 25 degC curve spans SoC 1 to 0 exactly. Counting from Ah[0] instead would shift the axis by 0.091 % of Q_ref [chk 12].
+
+### 1.2 2RC fit source
+
+**The 2RC parameters come from the HPPC test at every temperature. All six HPPC files are usable, so the spec's Mix 8 fallback is not used and no Mix 8 run leaves the evaluation set on its account (`40degC/562_Mixed8` is out as a partial run, 1.5). The fit rules are in 1.12.**
+
+- Files: `40degC/555_HPPC`, `25degC/549_HPPC`, `10degC/575_HPPC`, `0degC/585_HPPC`, `n10degC/593_HPPC`, `n20degC/607_HPPC`.
+- Reason: this is the spec's choice, and every temperature has an HPPC file with a full pulse train, so no fallback is needed.
+- Evidence [chk 10, unless noted]:
+  - Each level has four 10 s discharge pulses D1 to D4, each followed by a 40 s rest, and four 10 s charge pulses C1 to C4, each followed by a 610 s rest (the pulses run in the order D1, C1, D2, C2, ...). Then comes a move at -0.8990 A (-0.8709 A at 10 degC), which ends at a fixed counter value, and a 1 h rest before the next level's pulses. The levels number 11 / 12 / 11 / 10 / 10 / 9 at 40 / 25 / 10 / 0 / -10 / -20 degC. Moves end at counter values of 0.15, 0.30, 0.60, 0.90 ... 2.40, 2.55, 2.70 Ah in turn (0.145, 0.29, 0.58 ... Ah at 10 degC). In every file the last move runs on to 2.7999 V and ends at 2.3134 to 2.7744 Ah. The levels sit at fixed counter values, not fractions of Q_ref. Level 1's pulses start at counter 0, and level k+1's pulses start at the counter value where move k ended, after the 1 h rest that follows it. The SoC of a level's pulses is 1 - Ah_removed / Q_ref from the counter at their start.
+  - Discharge pulse currents D1 to D4: 3 / 6 / 12 / 18 A at 40, 25 and 0 degC; 2.9 / 5.8 / 11.6 / 17.4 A at 10 degC; 1.5 / 3 / 6 / 12 A at -10 degC; 0.75 / 1.5 / 3 / 6 A at -20 degC. Charge pulse currents C1 to C4: 1.5 / 3 / 4.5 / 6 A at 40 and 25 degC; 1.45 / 2.9 / 4.35 / 5.8 A at 10 degC; 0.75 / 1.5 / 2.25 / 3 A at 0 and -10 degC; 0.37 / 0.75 / 1.12 / 1.5 A at -20 degC.
+  - Logging is 0.1 s through every discharge pulse and its 40 s rest (99th-percentile step 0.103 to 0.107 s). The 1 h rests are logged at 10 s, then at 0.1 s for the last 10 s.
+  - In five of the six files the counter resets to 0 during the final 3660 s rest that follows the last move, 1 h before the in-file recharge starts (reset at 17.07 to 20.45 h into the file, recharge at 18.07 to 21.45 h), and resets again on the last row. `549_HPPC` has no recharge and no reset [chk 10, 16]. So Ah_removed is valid over the whole pulse train.
+
+### 1.3 Tuning cycle
+
+**Q and R are tuned only on `25degC/551_Mixed1` (`10-29-18_14.41 551_Mixed1_25degC_LGHG2.mat`). That run is reported and flagged in every results table, and it is not part of the evaluation set.**
+
+- Reason: this is the spec's choice (Mix 1 at 25 degC), and the file is complete.
+- Evidence: 2.15 h, 77,227 rows at 0.100 s median. It opens 1 s after the 4.186 V full-charge rest of `551_Charge6` ends, has regen on 18.4 % of samples up to +6.00 A, and ends with 2.5901 Ah removed [inv].
+
+### 1.4 S1 open-loop validation cycle
+
+**The open-loop check uses US06 at each temperature: `40degC/556_US06`, `25degC/551_US06`, `10degC/567_US06`, `0degC/589_US06`, `n10degC/601_US06`, `n20degC/610_US06`. The check fits nothing, so these files stay in the evaluation set.**
+
+- Reason: this is the spec's choice. No fit or tuning step uses these files (the 2RC parameters come from HPPC, 1.2; Q and R from Mix 1 at 25 degC, 1.3), so the open-loop voltage error is an out-of-sample check of the voltage model.
+- Evidence: durations 1.11 / 1.12 / 1.08 / 0.94 / 0.89 / 0.77 h and peak discharge currents 17.815 / 17.917 / 18.070 / 17.610 / 11.999 / 6.255 A at 40 / 25 / 10 / 0 / -10 / -20 degC [inv]. `567_US06` and `601_US06` have no Charge file just before them (section 3 of this file). They open at the full-charge rest voltage (4.1840 V at -0.0383 A and 4.1858 V at -0.0358 A [chk 8]) and are taken as full.
+
+### 1.5 Evaluation set
+
+**The evaluation set is every UDDS, HWFET, LA92, US06 and Mix 1 to 8 file except the tuning cycle and the files named in the last column: 62 of the 70 drive files (40 degC 7, 25 degC 10, 10 degC 11, 0 degC 11, -10 degC 11, -20 degC 12). This deviates from the spec's "every drive cycle at every temperature" through the exclusions of `551_HWFET`, `562_Mixed4` to `Mixed8` and `602_Mixed4`, and by leaving out the six PausCycl files, which the readme does not list as tests. The tuning cycle is also run and reported (flagged), so 63 runs are reported in all.**
+
+| folder | evaluation files (test: cycles) | n | not in the set, and why |
+|---|---|---|---|
+| 40degC | 556: UDDS, HWFET, LA92, US06, Mixed1, Mixed2; 557: Mixed3 | 7 | `562_Mixed4` to `Mixed8`: partial runs of 0.1897 to 0.1899 Ah removed each [cap: stop-rule table], cell at 22.7 to 25.2 degC [chk 6] |
+| 25degC | 551: UDDS, LA92, US06, Mixed2; 552: Mixed3, Mixed4, Mixed5, Mixed6, Mixed7, Mixed8 | 10 | `551_HWFET`: no current, a 0.17 h rest at 0 A [inv]. `551_Mixed1`: tuning cycle |
+| 10degC | 567: US06, Mixed1, Mixed2; 571: Mixed4, Mixed5, Mixed6 (special), Mixed7, Mixed8; 576: UDDS, HWFET; 582: LA92 (special) | 11 | Mixed3: no file |
+| 0degC | 589: UDDS, HWFET, LA92, US06, Mixed1, Mixed2; 590: Mixed4 (special), Mixed5, Mixed6, Mixed7, Mixed8 | 11 | Mixed3: no file |
+| n10degC | 596: UDDS, HWFET, LA92; 601: US06, Mixed1, Mixed2; 602: Mixed5; 604: Mixed3, Mixed6, Mixed7, Mixed8 | 11 | `602_Mixed4`: corrupt, 4,160 frozen rows and a 415.993 s unlogged interval (1.9) [chk 4c] |
+| n20degC | 610: UDDS, HWFET, LA92, US06, Mixed1, Mixed2; 611: Mixed3, Mixed4, Mixed5, Mixed6, Mixed7, Mixed8 | 12 | none |
+
+- Reason: experiments 2 to 4 need a run that starts from a known full charge and covers a wide SoC range. A file with no current (`551_HWFET`), a partial run of 0.19 Ah (`562_Mixed4` to `Mixed8`), a short PausCycl run or a corrupt log (`602_Mixed4`) cannot give that. These exclusions also decide the offset (1.7).
+- The cycle x temperature tables show "n/a" for 25 degC HWFET, 40 degC Mix 4 to 8, -10 degC Mix 4, and Mix 3 at 10 and 0 degC.
+- The six PausCycl files are excluded: they are not drive cycles listed in the readme and they are short (792.2 to 6310.1 s). Five remove 0.03000 to 0.37278 Ah; `25degC/552_PausCycl` never discharges (Ah at its last row +0.01531 Ah, largest charging current 0.669 A) [chk 7; inv]. [cap] leaves them out of its stop-rule table.
+- `40degC/557_Mixed3` and the five `10degC/571` runs stay in, although their Ah removed is 0.9500 to 0.9501 of the same-test 1C capacity and those 1C tests ran off-temperature (`557_Cap_1C`: cell cooled from 30.7 to 1.3 degC; `571_Cap_1C`: 0.7 to 3.6 degC [cap: stop-rule table, per-folder table and notes]). They start full and end at a higher SoC: `557_Mixed3` at 14.57 %, the 571 runs at 15.09 to 15.10 % [chk 7].
+- `25degC/551_LA92` stays in although it follows a CV-only top-up (`551_Charge4`, peak 0.238 A [chk 9]): it opens at 4.1916 V and -0.0511 A, a full-charge rest voltage [chk 8], and the cell had not been discharged since `551_Charge3`, because `551_HWFET` holds no current [inv].
+
+Special handling (SoC0 is the reference SoC at the first row used; rule details in `docs/model.md`, C12 and C13):
+
+| file | what is wrong | rule | SoC0 |
+|---|---|---|---|
+| `10degC/582_LA92` | A false start dated 25/11 (rows 0 to 1030, Time 0 to 102.935 s; the counter is lowest at row 1009, -0.01453 Ah, and ends at -0.01436 Ah on row 1030, at 4.2345 V and 2.9858 A) is spliced in front of the real run dated 26/11 (89,702 rows, Time 102.937 to 9082.415 s). A pause of 13.17 h between them shows only in TimeStamp. Four backward Time steps (-22.297 s inside rows 0 to 1030; -147.204, -1.402 and -154.998 s at the edges of seven stray 25/11 rows) and the NaN rows [inv: flags; chk 4b] | Use only the rows dated 26/11: row 1031 onward minus the 7 stray 25/11 rows (rows 1488 to 1492, 1943, 1944), which leaves 89,701 rows after the loader rules (1.9) | 1 - 0.01436/Q_ref = 0.9948 (row 1031: 4.1593 V, 0 A, Ah -0.01436) |
+| `10degC/571_Mixed6` | Hidden pause of 37,526 s (10.42 h) between rows 390 and 391: TimeStamp jumps, Time moves 0.003 s. Row 390 is a regen spike to 4.2399 V at +2.86316 A [inv: flags; chk 4a] | Start at row 391 (after the rest: 4.1657 V, 0 A) | 1 - 0.01008/Q_ref = 0.9964 (counter -0.01008 Ah at row 391) |
+| `0degC/590_Mixed4` | Opens under load (4.1494 V, -1.3205 A) with no logged rest. The last earlier sample is a 4.1878 V rest 15,859 s before, in `589_Charge8` [chk 8] | Kept; flagged "start not confirmed" | 1 |
+
+### 1.6 Q_ref
+
+**Q_ref = 2.7807 Ah, the 25 degC C/20 discharge capacity from `data/raw/25degC/10-26-18_09.29 549_C20DisCh_25degC_LGHG2.mat`. One value is used at every temperature, for the reference SoC, the OCV axis and the EKF.**
+
+- Reason: this is the spec's definition. The value is the charge removed from the full-charge state. The counter was reset at the start of the discharge step, and the file opens 60 s into it at Ah = -0.00254 Ah [chk 12], so the counter value includes the unlogged first minute. The alternative that uses logged samples only, -(Ah_end - Ah[0]) = 2.7782 Ah, is not used.
+- Evidence: the counter reads -2.78074 Ah at the last discharge sample (row 1096, Time 65,733.85 s = 18.26 h, 2.79993 V). Median discharge current 0.15325 A, cell at 23.6 to 24.3 degC [chk 12, 11; cap: row 1].
+- Consequences:
+  - 25 degC ran first (section 2 of this file), so Q_ref comes from the freshest cell. The 40 degC C/20 capacity, measured eight days later, is already 2.6899 Ah [cap: rows 1 and 6].
+  - Cold runs end at a higher reference SoC. The lowest end-of-run SoC_ref is 9.17 / 6.85 / 10.83 / 15.49 / 22.67 / 42.90 % at 40 / 25 / 10 / 0 / -10 / -20 degC [chk 7]. So the spec's window (SoC_ref >= 10 %) cuts only runs at 40 and 25 degC.
+
+### 1.7 Current-offset size (experiment 4)
+
+**The offset is +200 mA, added in the project sign (positive = discharge) to the current fed to the EKF and to the plain coulomb counter. This deviates from the spec's default of 100 mA, which fails the spec's own 5 pp guard.**
+
+- Guard (spec): drift_pp = 100 x dI x t / (3600 x Q_ref) at the end of the shortest evaluation run must be at least 5 pp. If not, raise the offset to the smallest round value that passes.
+- Reason: the guard makes the coulomb-counting drift large enough to show against the filter error in every run, including the shortest. The offset is a chosen test value, not a sensor specification. "Round" is taken as a multiple of 50 mA.
+- Shortest run: `n20degC/610_US06`, 2760.4 s. All of it lies inside the evaluation window [chk 7].
+- 100 mA gives 2.757 pp (fails). The threshold is 181.3 mA. 200 mA gives 5.515 pp and is the smallest multiple of 50 mA that passes [chk 7].
+- The size depends on the evaluation set (1.5). Hypothetical: with the six PausCycl files in, the shortest run would be `40degC/562_PausCycl` (792.2 s), with a threshold of 631.8 mA, so 650 mA. With the 562 partial runs instead, it would be `40degC/562_Mixed7` (784.5 s), with a threshold of 638.0 mA, so also 650 mA; with both in, 650 mA [chk 7]. With the 62-run set the offset stays 200 mA.
+
+### 1.8 Grids
+
+**SoC grid: 0 to 1 in 1 % steps (101 points). Temperature grid: the six folder temperatures, 40, 25, 10, 0, -10 and -20 degC. Every table uses these two axes.**
+
+- Reason: this is the spec's choice. The filter's temperature input is the measured cell temperature (no chamber field exists), so lookups fall between nodes; bilinear interpolation clamps at the edges.
+- Measured cell temperature during the evaluation drive cycles: median (5th to 95th percentile) of Battery_Temp_degC pooled over each folder's evaluation runs, rows used [chk 6]. Pooling all drive files of a folder gives the same medians [chk 6].
+
+| folder | grid node (degC) | measured median (degC) | 5th to 95th percentile (degC) | min / max over all drive files (degC) [inv: summary] |
+|---|---|---|---|---|
+| 40degC | 40 | 38.70 | 38.49 to 39.43 | 22.7 / 40.8 (the low end is the excluded 562 runs) |
+| 25degC | 25 | 24.08 | 23.77 to 25.03 | 23.6 / 26.8 |
+| 10degC | 10 | 9.57 | 9.15 to 10.83 | 8.8 / 12.6 |
+| 0degC | 0 | 0.00 | -0.53 to 1.79 | -0.8 / 3.9 |
+| n10degC | -10 | -9.04 | -9.78 to -6.84 | -10.3 / -4.7 |
+| n20degC | -20 | -18.40 | -19.66 to -16.40 | -20.2 / -14.6 |
+
+- Consequence: 40 degC runs look up between the 25 and 40 degC nodes. Self-heating moves -20 degC runs toward the -10 degC node.
+
+### 1.9 Filter rate, dt and gap rules
+
+**The filter runs at the native 0.1 s, with no decimation, and dt comes from Time, never from TimeStamp. Gap rule (refines the spec's "use the actual dt"): the predict step uses the spec's exact zero-order hold, the previous kept sample's current over the actual dt, at every step. There is no special gap code, and nothing is interpolated.**
+
+- Loader rules, in the order of `docs/model.md`: (1) drop rows with Voltage <= 0 and rows with NaN in Time, Voltage, Current, Ah or Battery_Temp_degC (Wh is not used); (2) apply the per-file cuts of 1.5 (`571_Mixed6` from row 391; `582_LA92` only the rows dated 26/11); (3) of consecutive rows that share one Time value, keep the last; (4) dt = Time(k) - Time(k-1) between kept rows. Cutting first keeps the same rows, because every NaN row lies in rows the 582 cut removes [chk 5].
+- Reason: the drive cycles are logged at 0.1 s, and the spec needs that rate to resolve tau1. TimeStamp is reliable only to about 1 s (two formats, unreliable millisecond digits [inv: legend]), so it is used only to order files and to find hidden pauses. Process noise scales with dt (spec, S2) and the zero-order hold is exact for any dt, so a longer step needs no special code. Interpolating or zeroing the current across a step would add an assumption the data supports no better than the hold.
+- Evidence:
+  - Rate: median drive-cycle dt is 0.100 to 0.101 s per folder, with 1st to 99th percentiles of 0.094 to 0.106 s [inv: summary; chk 1]. Of the 4,498,539 steps in the 70 drive files, 99.893 % lie within 0.09 to 0.11 s; 4,212 have dt = 0, 4 are negative, 37 exceed 0.2 s and 36 exceed 1 s [chk 1].
+  - Duplicates: 5,754 rows share their Time with the previous row, in 177 of 206 files [chk 2]. 47 of the 70 drive files end on such a duplicate, with Current = 0 A on both rows; of the 4,212 duplicate rows in drive files, 4,160 are in `602_Mixed4` [chk 2]. HPPC files have 193 to 247 duplicates each. In 9 to 13 per file the two rows differ (67 pairs; 63 of them are the last sample of a current step), by at most 2.56 mA and 0.170 mV. The 68th differing pair in all files is in `610_HWFET`. So keep-last moves no kept sample by more than that [chk 2].
+  - Voltage <= 0: only the last row of `25degC/552_Charge16`, `40degC/557_Charge10` and `0degC/590_Charge16`, an end-of-test sentinel [chk 5; inv: flags].
+  - NaN: only in `10degC/582_LA92`: rows 1491, 1492 and 1944 in Voltage, Current, Ah, Wh, Power and Battery_Temp_degC, and row 1943 in Wh only. All four lie in rows the cut in 1.5 removes [chk 4b, 5].
+  - Gaps: 10 of 70 drive files have steps longer than 1 s [chk 3]. Nine evaluation runs have 32 cycle-boundary steps of 1.147 to 2.143 s (3 UDDS runs and 6 LA92 runs; the trimmed `582_LA92` keeps 5 of them, 1.641 to 2.056 s). The tenth file is `602_Mixed4`, which is excluded [chk 3].
+  - Cost of the hold at the 32 boundary steps. Measured: the held current and the counter's change over the same step differ by at most 0.0024 pp of Q_ref, because the current at these steps is at most 117.5 mA [chk 3]. Theoretical worst case: the longest step, 2.143 s, at the 6.00 A regen cap gives 0.129 pp, and at the largest discharge current in the evaluation runs, 18.10 A, 0.387 pp [chk 3]. The nine runs are accepted with this rule.
+  - Why `602_Mixed4` is excluded and not handled by a rule: rows 3867 to 8026 (4,160 rows) are identical at Time 386.704 s, then comes a 415.993 s step in which the counter moves -0.11582 Ah (4.165 pp). Holding the row before (+1.50948 A) moves SoC by +6.27 pp and the row after (-1.49159 A) by -6.20 pp, against -4.17 pp for the counter, and the held-current coulomb counter ends 10.39 pp from the reference over the run. No hold rule reproduces the counter [chk 4c, 7].
+
+### 1.10 Sign conventions, reference SoC and baseline
+
+**I = -Current (positive = discharge). T = Battery_Temp_degC. Units are SI (A, V, s, degC, Ah). SoC is a fraction internally and in pp in reports, and eta = 1. Ah_removed = -(Ah - Ah_start) on the cycler's counter, positive when charge is removed. Three departures from the spec are labelled below: the Ah_start of C20DisCh and Dis_2C files (refinement), SoC0 below 1 for two runs (refinement, 1.5) and a reference SoC that is not identical to the baseline (deviation).**
+
+- Ah_start (refines the spec's "Ah ... since the start of the file"): it is the counter at the first row used, for every other file. C20DisCh and Dis_2C files open one 60 s interval after a counter reset at the step start; there Ah_start = 0, so Ah_removed = -Ah. This matches Q_ref = 2.7807 Ah (1.6) and makes the 25 degC OCV axis end at exactly SoC 0; counting from Ah[0] would shift the axis by 0.091 % of Q_ref [chk 12, 13]. Ah_removed is only formed inside a stretch with no counter reset: drive, Cap_1C, C20DisCh and PausCycl files have no reset, and the HPPC resets come after the pulse train (1.2). Charge, Dis_0p5C and Dis_2C files do reset [chk 16], but no fit uses them; [cap: *Method*] measures their discharge capacities. Dis_0p5C files continue the C/20 counter [chk 13].
+- Reference and baseline (deviation: this amends the spec's sentence that coulomb counting equals the reference by construction): the reference is SoC_ref = SoC0 - Ah_removed / Q_ref on the counter, with SoC0 = 1 except `582_LA92` (0.9948) and `571_Mixed6` (0.9964) (1.5). The plain coulomb-counting baseline integrates the logged current with the same dt and hold rules (1.9), as a BMS would. The two differ by at most 0.299 pp (0.30 pp) over an evaluation run, in `0degC/589_US06`; the largest per folder is 0.181 to 0.299 pp [chk 7]. Experiment 1 therefore reports "coulomb counting vs reference" as a column.
+- Reason: positive discharge is the spec's convention. The reference uses the counter because it is the cycler's own coulomb count, and the spec defines the reference SoC as coulomb counting. The baseline uses the logged current because that is all a BMS sees, and the filter sees the same current. S4 states that the reference is itself coulomb counting (spec).
+- Evidence: the cycler writes discharge as negative current and a falling counter [inv: *Sign convention*]. In `25degC/551_Cap_1C`, Current goes from 0 to -3.0011 A at Time 60.005 s and Voltage falls from 4.1927 to 4.0928 V; in `25degC/551_Charge2`, Current goes from 0 to +2.9985 A at 3600.005 s and Voltage rises from 3.1220 to 3.4144 V [chk 19]. No Charge file has negative current [inv: *I min / max*]. Drive files open at Ah[0] between -0.00005 and 0 Ah [chk 16]. The integral of Current over Time matches the counter to within 0.01 Ah in every drive file except `602_Mixed4` [inv: flags].
+
+### 1.11 Mixes and standard cycles share segments
+
+**The eight mixes are built from segments of the four standard cycles. The tuning cycle (a mix) and the evaluation cycles therefore share segments, and the separation between tuning and evaluation is weaker than the cycle names suggest. S4 repeats this in the README, as the spec requires.**
+
+- Reason: the spec requires the statement here and in the README, and the dataset readme describes the mixes as random mixes of the four standard cycles (the spec, Dataset). The overlap is disclosed and not removed: the tuning cycle fits only Q and R, on one run at one temperature, and S4 lists that as a limitation.
+- Evidence, one example: the current of the first 765 s of `40degC/556_HWFET` matches two windows of the tuning cycle `25degC/551_Mixed1`, starting at 932.0 s and at 5105.0 s, with correlations 0.9995 and 0.9993 [chk 18].
+
+### 1.12 2RC fit rules (S1)
+
+**Per HPPC level the 2RC parameters come from two fits. (a) R0, R1 and tau1 from one least-squares fit over the four discharge pulses D1 to D4 and their 40 s rests (0.1 s data), with tau1 in [0.5, 30] s. (b) R2 and tau2 from a fit on the 3600 s rest after the move at that level (10 s data), with the tau1 branch taken from (a) and tau2 in [30, 3600] s. R0 is read as dV/dI over the first sample at which the current reaches at least 98 % of the commanded value, counted from the pulse's first row with current and within 0.3 s. Pulses that never reach 98 % within 0.3 s, and pulses cut by the 2.8 V or 4.2 V limit, are left out and counted in `results/model_fit.md`. This deviates from the spec, which fits R1, tau1, R2 and tau2 once "on the pulse plus its relaxation" with tau2 up to t_rest, and it makes the spec's "first sample" R0 rule precise.**
+
+- Reason: a 40 s rest cannot identify tau2; the spec's bound [30, t_rest] would shrink to [30, 40] s. The 1 h rests are the only rests long enough, so t_rest = 3600 s, and their 10 s logging is a third of tau2's lower bound. Fitting each branch on the data that resolves it, and fixing the tau1 branch in (b), keeps the two branches from swapping, which is what the spec's bounds are for. The R0 rule reads the step only once the commanded current is flowing, because the first sample of some cold pulses is still ramping. R0, R1, tau1 (from (a)) come from the pulses of level k, which start at the counter value where move k-1 ended (level 1: counter 0). R2, tau2 (from (b)) come from the 1 h rest after move k, which lies at the counter value where move k ended, where level k+1's pulses start. Each parameter is tabulated at the SoC of the counter value it was measured at, 1 - Ah_removed / Q_ref, and the export resamples each table onto the 101-point grid (spec, S1). The last level has no 1 h rest (1.2).
+- Evidence [chk 10]:
+  - Rests are 40.0 s after discharge pulses, 610.0 s after charge pulses and 3600.105 to 3600.131 s after moves, so t_rest = 3600 s. A 1 h rest follows the move of every level except the last (10 / 11 / 10 / 9 / 9 / 8 rests at 40 / 25 / 10 / 0 / -10 / -20 degC). The last move is followed by a 3660 s final rest, except in `25degC/549_HPPC`, which ends there.
+  - The first row of a discharge pulse reaches 98 % of the command in all pulses at 40, 25, 10 and 0 degC, in 32 of 40 (80.0 %) at -10 degC and in 29 of 36 (80.6 %) at -20 degC. The 15 exceptions (8 at -10 degC, D1 at levels 1 to 8; 7 at -20 degC, D2 at levels 1 to 7), all at about 1.5 A, reach 98 % on the pulse's third row: 0.194 to 0.205 s after the pulse's first row, but 0.303 to 0.310 s after the last row before it. Counted from the first row with current, every cold discharge pulse passes the 0.3 s test.
+  - Discharge pulses that reach 2.8 V (all end before 9.5 s): 3 / 6 / 4 / 5 / 4 / 2 at 40 / 25 / 10 / 0 / -10 / -20 degC. Charge pulses that reach 4.2 V: 5 / 7 / 9 / 6 / 11 / 11. The fit uses discharge pulses only, so the 4.2 V pulses are never in it.
+  - Discharge pulses usable for R0 (within 0.3 s and not at 2.8 V): 41 / 42 / 40 / 35 / 36 / 34 of 44 / 48 / 44 / 40 / 40 / 36.
+  - The 1 h rests have not fully relaxed at the cold end: relaxation over the last 600 s, median / max, is 0.16 / 2.02 mV at 40 degC, 0.17 / 2.70 at 25, 0.25 / 2.19 at 10, 0.34 / 1.86 at 0, 1.01 / 2.69 at -10 and 2.02 / 5.90 mV at -20 degC (section 3 of this file).
+
+### 1.13 Experiment 3 start level (S2)
+
+**Experiment 3 starts the filter where the reference SoC first reaches 70 %, with initial SoC 50 % and 90 % (reference -20 pp and +20 pp), at every temperature. The restart with correct init starts at the same instant with SoC0 = 70 % (the reference there) and V1 = V2 = 0. This deviates from the spec, which starts where the reference first reaches 50 %, with SoC0 = 30 % and 70 %.**
+
+- Reason: the -20 degC runs end at a reference SoC of 42.90 to 44.75 %, so a 50 % start leaves only 5.25 to 7.10 pp of travel inside the evaluation window, too little to see a recovery from a 20 pp error. A 70 % start leaves 25.25 to 27.10 pp at -20 degC.
+- Evidence [chk 7]: SoC_ref at the end of the evaluation runs, min to max: 6.85 to 8.00 / 9.17 to 14.57 / 10.83 to 15.10 / 15.49 to 16.30 / 22.67 to 24.17 / 42.90 to 44.75 % at 25 / 40 / 10 / 0 / -10 / -20 degC. Travel after a 70 % start is at least 45.83 pp at -10 degC and 25.25 pp at -20 degC; after a 50 % start it is 25.83 pp at -10 degC and 5.25 pp at -20 degC.
+
+## 2. Dataset facts confirmed in S0
+
+| claim (readme, or the spec's S0 checks) | verdict | evidence |
+|---|---|---|
+| Temperatures tested in the order 40, 25, 10, 0, -10, -20 degC | **refuted**: the order is 25, 40, 10, 0, -10, -20 degC | First and last TimeStamp per folder: 25degC 2018-10-25 to 10-31, 40degC 11-02 to 11-08, 10degC 11-13 to 11-26, 0degC 11-26 to 12-02, n10degC 12-04 to 12-19, n20degC 12-21 to 12-26. Cycler test numbers rise in the same order: 549-552, 555-562, 567-582, 585-590, 593-604, 607-611 [chk 14; inv: summary] |
+| Before each test: 1C charge to 4.2 V, 50 mA cutoff, battery at 22 degC or more | **partly** | 95 of 96 Charge files carry current (`40degC/557_Charge10` is empty). Each rests 3600 s, charges, holds 4.1998 V (largest sample 4.2000 V) down to a last charging current of 0.0485 A in all 95, then rests 3660 to 3661 s. 78 have a constant-current phase at 2.9985 A (largest sample 3.0011 A): 77 single-charge files plus `25degC/549_Charge`, which holds four charges. 17 have none: ten CV-only top-ups peaking at 0.102 to 0.268 A, `562_Charge11` to `15` at 2.401 to 2.541 A, `562_Charge16` at 0.518 A and `604_Charge17` at 0.756 A. Five drive files follow such a charge: `25degC/551_LA92` (evaluation) and `40degC/562_Mixed5` to `Mixed8` (excluded). Cell at 22.92 to 24.61 degC at the first charging row and 22.92 to 25.45 degC over all charging rows [chk 9; inv: summary]. The C/20 test's own charge half runs at the folder temperature (-22.50 to -14.51 degC at -20 degC) [chk 11] |
+| Drive cycles repeat until 95 % of the 1C capacity at that temperature is discharged | **partly** | In all 42 drive cycles that share a test number with a 1C test, Ah removed / that 1C capacity is 0.9500 to 0.9501, even where that 1C test ran off-temperature (557, 571). Exceptions: 567 removed 97.4 % of 576's 1C capacity, 582 94.8 %, 590 94.1 % of 589's, 601 94.1 % of 596's, 604 93.2 % of 596's. 556 cannot be checked, and 562 stopped at 0.19 Ah [cap: stop-rule table, *Anomalies*] |
+| Below 10 degC the regen limit is reduced, but regen is still present | **confirmed**; discharge current is capped as well | Largest charging current in drive files: 6.00 A at 40, 25 and 10 degC; 3.07 A at 0 degC; 3.08 A at -10 degC; 1.60 A at -20 degC. Largest discharge current: 17.81 / 17.92 / 18.10 / 18.00 A at 40 / 25 / 10 / 0 degC, but 12.13 A at -10 degC and 6.28 A at -20 degC, which the readme does not mention [inv: summary]. S4 lists the caps as a limitation |
+| Drive cycles logged at 0.1 s | **confirmed** | See 1.9. Other tests: Cap_1C at 10 s; C20DisCh, Dis_0p5C, Dis_2C and Charge at 60 s; HPPC at 0.1 s in pulses, up to 60 s elsewhere [inv: *median dt*, *max gap*] |
+| Columns TimeStamp, Voltage, Current, Ah, Wh, Power, Battery_Temp_degC, Time, Chamber_Temp_degC | **partly** | All 206 files hold exactly Time, TimeStamp, Voltage, Current, Ah, Wh, Power and Battery_Temp_degC, and all load with scipy (none is v7.3, so h5py is never used). Wh holds small integers (between 1 and 18, and between 45 and 51): a step counter, not energy, and not used. Current, Ah and Power are stored as all-zero uint8 in `551_HWFET` and `557_Charge10`, so the loader casts every field to float64 (`loadmat(mat_dtype=True)`) [inv: line 5, *Field storage*] |
+| A chamber temperature is recorded | **refuted** | No file has a chamber-temperature field [inv: legend]. The filter uses the measured cell temperature, as the spec already requires (1.8) |
+| Ah is positive for charge removed, counted since the start of the file | **partly** | The cycler's counter falls on discharge and resets inside some files, and C20DisCh and Dis_2C files open after a reset. See 1.10 [chk 13, 16] |
+| The 10 degC tests use the same currents as the other temperatures | **refuted for test 575** | The 10 degC HPPC, C20DisCh, Dis_0p5C and Dis_2C used 2.9 A as 1C (ratio 0.966 to 0.969): pulses -2.9 / -5.8 / -11.6 / -17.4 A, C/20 at 0.148 A, 0.5C at 1.451 A, 2C at 5.800 A. The 10 degC 1C tests ran at the usual 3.0011 A (ratio 1.000) [chk 15; cap: *Anomalies*] |
+| Cold HPPC charge pulses use the same currents as warm ones | **refuted** | Charge pulses C1 to C4 are 1.5 / 3 / 4.5 / 6 A at 40 and 25 degC, 0.967 times that at 10 degC, half of it at 0 and -10 degC and a quarter at -20 degC (1.2) [chk 10, 15] |
+| Two 1C capacity tests at every temperature, one before UDDS and one before Mix 3 | **partly** | 1C tests at the folder temperature: none at 40 degC, 2 at 25, 1 at 10 (576), 1 at 0 (589, named "10degC"), 2 at -10, 2 at -20. `557_Cap_1C` (40degC folder) ran while the cell cooled from 30.7 to 1.3 degC, and `571_Cap_1C` (10degC folder) ran at 0.7 to 3.6 degC [cap: per-folder table]. The cell also ages at constant temperature: the 25 degC 1C capacity is 2.7264 Ah on 2018-10-28 (551) and 2.6928 Ah on 2018-10-30 (552) [cap: rows 4 and 5]. No effect on S1 or S2, because Q_ref is a C/20 value |
+| Each temperature has all the listed tests | **partly** | Missing or empty: Mix 3 at 10 and 0 degC, the HWFET data at 25 degC, one 1C test at 40 and 0 degC [inv: summary, *readme tests missing*]. Extra: one PausCycl file per folder. 40 degC Mix 4 to 8 are partial runs (1.5) |
+| Files are named `<date>_<time> <descriptor>.mat` | **partly** | 15 files in 0degC use DD-MM-YY (01-12-18, 02-12-18). `n20degC/610_Charge5` lacks the underscore, and `n20degC/607_Dis_0p5C` is named one day early [inv: flags; cap: row 25]. Files are ordered by first TimeStamp, not by name |
+| Each test starts from a full charge | **partly** | 57 of the 69 drive files with current open at rest, at 4.1814 to 4.1916 V and -0.0511 to -0.0077 A, so the full-charge rest voltage is 4.181 to 4.192 V, not about 4.2 V. 12 open under load (4.0550 to 4.1781 V, -1.7215 to -1.1034 A); 10 of them start at most 300 s after a Charge file that ends at rest above 4.15 V, and `562_Mixed4` and `590_Mixed4` do not. Three drive files have no Charge file just before them: `567_US06` is the first file of its folder, `601_US06` starts 556,663 s after `596_Charge5`, and the `582_LA92` false start 451,617 s after `576_Charge4`. They open at rest at 4.1840 V, 4.1858 V and 4.1860 V. The real `582_LA92` run that the loader uses opens later, at row 1031, at 4.1593 V and 0 A (1.5) [chk 8; inv: *full charge at start*] |
+| Cycler sign (spec: S0 check) | **confirmed**: discharge current is negative and the Ah counter falls | See 1.10 [chk 19; inv: *Sign convention*] |
+
+## 3. Anomalies and how they are handled
+
+| anomaly | files | affects | handling |
+|---|---|---|---|
+| No current in the 25 degC HWFET | `25degC/551_HWFET` | S2 | Excluded; "n/a" in tables (1.5) [inv: 25degC table; chk 7] |
+| 40 degC Mix 4 to 8 are partial runs (0.19 Ah each) with the cell at 22.7 to 25.2 degC | `40degC/562_Mixed4` to `Mixed8` | S2 | Excluded (1.5) [cap: stop-rule table; chk 6] |
+| Mix 3 missing | 10degC, 0degC | S2 | "n/a" in tables [inv: summary] |
+| Splice of a false start and the real run; 13.17 h hidden pause | `10degC/582_LA92` | S2 | Rows dated 26/11 only; SoC0 from the counter (1.5) [chk 4b] |
+| 10.42 h hidden pause after an over-voltage regen spike | `10degC/571_Mixed6` | S2 | Start at row 391; SoC0 from the counter (1.5) [chk 4a] |
+| Logger stall (4,160 frozen rows) and a 415.993 s unlogged interval in which the counter moved -0.11582 Ah; no hold rule reproduces it | `n10degC/602_Mixed4` | S2 | Excluded as corrupt (1.5, 1.9) [chk 4c, 7] |
+| Run opens under load; full charge not confirmed | `0degC/590_Mixed4` (`40degC/562_Mixed4` is excluded) | S2 | SoC0 = 1; flagged "start not confirmed" [chk 8] |
+| No Charge file just before the run. `567_US06` (4.1840 V) and `601_US06` (4.1858 V) open at rest at the full-charge voltage; the real `582_LA92` run opens at row 1031 at 4.1593 V and 0 A | `10degC/567_US06`, `n10degC/601_US06`, `10degC/582_LA92` | S2 | The first two are taken as full (SoC0 = 1); 582 uses its own rule (1.5) [chk 4b, 8] |
+| Drive files that follow a Charge file with no 1C constant-current phase (a CV-only top-up, or a partial recharge peaking at 2.401 to 2.541 A) | `25degC/551_LA92`, `40degC/562_Mixed5` to `Mixed8` | S2 | 551_LA92 stays in the set (1.5); the 562 runs are excluded. Charge files are not used by any fit [chk 9] |
+| Duplicate Time rows (5,754 in 177 files) | most files | S1, S2 | Keep the last row (1.9) [chk 2] |
+| 0 V sentinel on the last row | `552_Charge16`, `557_Charge10`, `590_Charge16` | loader | Drop rows with Voltage <= 0 [chk 5] |
+| NaN rows | `10degC/582_LA92` | loader | Removed by the cut (1.5, 1.9) [chk 5] |
+| Cycle-boundary steps of 1.147 to 2.143 s at UDDS and LA92 boundaries | 9 evaluation runs, 32 steps | S2 | Zero-order hold of the previous kept current over the actual dt; measured error at most 0.0024 pp (1.9) [chk 3] |
+| Pauses that show only in TimeStamp | `571_Mixed6`, `582_LA92` | S2 | Start-row rules (1.5) [chk 4a, 4b] |
+| All-zero fields stored as uint8; Wh is not energy | `551_HWFET`, `557_Charge10`; Wh in all files | loader | Cast to float64 (`loadmat(mat_dtype=True)`); Wh not used [inv: *Field storage*] |
+| Two TimeStamp formats; millisecond digits unreliable | all files | loader | Time for dt; TimeStamp only for order and pause detection [inv: legend] |
+| Midnight TimeStamps written as the date alone (no time part) in the 25degC folder | `25degC/549_HPPC`, `25degC/552_Mixed6` (an evaluation run) | loader | `ekfsoc.rawio.parse_timestamp` reads a date-only string as 00:00:00. TimeStamp serves only file order and pause detection, and dt comes from Time (1.9), so no result depends on it [inv: legend] |
+| TimeStamp spans overlap between files: `556_Charge1` starts 58.6 min before `555_Dis_2C` ends; four 549 files lie inside the span of `549_Charge` | `40degC`, `25degC/549_*` | none | No wall-clock rest is computed across these pairs [inv: legend; chk 14] |
+| Wrong dates in file names (15 files in 0degC use DD-MM-YY; `607_Dis_0p5C` is one day early); `610_Charge5` lacks the underscore | `0degC` (15 files), `n20degC/607_Dis_0p5C`, `n20degC/610_Charge5` | loader | Identify files by test number and descriptor; order them by first TimeStamp [inv: flags] |
+| C/20 charge and discharge Ah disagree (ratio 0.983 to 1.068), unexplained | six C20DisCh files | S1 | OCV from the discharge half only (1.1) [cap: *Anomalies*; chk 11] |
+| 51 sub-millivolt rises in the -20 degC C/20 discharge half; the 6.07 mV dip is in the CC part of its charge half | `n20degC/607_C20DisCh` | S1 | PCHIP on the 101-point grid is monotone; the fallback stays available (1.1) [chk 11] |
+| C/20 and 2C files open 60 s into the discharge | six C20DisCh and six Dis_2C files | S1 | Ah counted from the counter's zero at the step start (1.1, 1.10) [chk 13] |
+| C/20 discharge ends above SoC 0 on the Q_ref axis (up to 10.28 % at -20 degC) | 40, 10, 0, -10, -20 degC | S1 | Hold the last value below the end; record the valid range in `results/params.md` (spec) [chk 11] |
+| Counter resets inside HPPC after the last move | five HPPC files | S1 | Ah_removed taken before the reset (1.2) [chk 10, 16] |
+| Counter resets inside Charge (28 files), Dis_0p5C (5 of 6) and Dis_2C (5 of 6) files | those files | none | No fit uses them; capacities come from the discharge (1.10) [chk 16; cap: *Method*] |
+| 10 degC test 575 at 0.967 x the nominal currents | `10degC/575_*` | S1 | Only the C-rate labels change; fits use measured current [chk 15; cap: *Anomalies*] |
+| Cold HPPC charge pulses at half (0 and -10 degC) or a quarter (-20 degC) of the warm currents | `585_HPPC`, `593_HPPC`, `607_HPPC` | S1 | Only the labels change; fits use measured current and the discharge pulses (1.12) [chk 10] |
+| HPPC pulses at the voltage limits: 2.8 V on discharge pulses, 4.2 V on charge pulses | six HPPC files | S1 | Rule in 1.12: left out and counted in `results/model_fit.md` |
+| Cold discharge pulses ramp: the first row reaches 98 % of the command in 80.0 % (-10 degC) and 80.6 % (-20 degC) of pulses, against 100 % at the other four temperatures | `593_HPPC`, `607_HPPC` | S1 | Rule in 1.12: R0 read from the first row at 98 % or more, within 0.3 s of the first row with current [chk 10] |
+| 1 h HPPC rests are not fully relaxed at -20 degC: median 2.02 mV, max 5.90 mV over the last 600 s (0.16 to 0.34 mV median at 40 to 0 degC) | `n20degC/607_HPPC` (-10 degC: 1.01 / 2.69 mV) | S1 | tau2 stays bounded at 3600 s (1.12); S1 reports the fit RMSE per level (spec), so a poor cold tau2 shows [chk 10] |
+| Rows at the 2.8 V cutoff (V <= 2.8005 V) late in a run | drive files with such rows: 4 of 11 at 25 degC, 5 of 11 at 10, 8 of 11 at 0, 12 of 12 at -10 and 12 of 12 at -20 degC, none at 40 degC | S2 | Kept; the loader flags these samples [chk 17] |
+| Discharge current capped at 12.13 A (-10 degC) and 6.28 A (-20 degC) | cold drive files | S2, S4 | No handling; a README limitation [inv: summary] |
+| Cell temperature differs from the folder temperature (self-heating, chamber offset) | all files | S1, S2 | Measured cell temperature is the input; the grid stays nominal (1.8) |
+| Capacity falls over the campaign (ageing plus temperature); the 25 degC 1C capacity falls from 2.7264 to 2.6928 Ah between 2018-10-28 and 10-30 | all folders | S2, S4 | Q_ref fixed (1.6); capacities in campaign order in [cap: rows 4, 5 and the per-folder table] |
+| 1C tests that ran off-temperature or are missing: `557_Cap_1C` (cell 30.7 to 1.3 degC) and `571_Cap_1C` (0.7 to 3.6 degC) are not 40 and 10 degC capacities; the first 40 degC and the second 0 degC 1C tests are missing | `40degC`, `10degC`, `0degC` | S4 | No effect on Q_ref (a C/20 value); the capacity table flags them [cap: per-folder table and notes] |
+| PausCycl files: one per folder, not listed in the readme, 792.2 to 6310.1 s long; `25degC/552_PausCycl` never discharges | six files | S2 | Excluded (1.5) [chk 7; inv] |
