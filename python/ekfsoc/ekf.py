@@ -50,11 +50,14 @@ class Ekf:
 
     soc0 is the initial SoC and V1 = V2 = 0. The filter is never told whether soc0 is right: P0 is
     the same diagonal for every run (docs/model.md, Symbols).
+    q_ref_ah is the capacity the filter believes, in Ah; only the capacity sensitivity of S5 changes it
+    (docs/decisions.md 1.18).
     After step() or update(), y_hat is the voltage predicted before the measurement was used (Eq. 8).
     """
 
-    def __init__(self, params, cfg, soc0):
+    def __init__(self, params, cfg, soc0, q_ref_ah=Q_REF_AH):
         self.cfg = cfg
+        self.q_ref_ah = q_ref_ah
         # Plain lists make the lookups in the loop fast; interp2 works on them unchanged.
         self.t_grid = params.t_grid.tolist()
         self.soc_grid = params.soc_grid.tolist()
@@ -83,7 +86,7 @@ class Ekf:
         a1 = math.exp(-dt_s / tau1)
         a2 = math.exp(-dt_s / tau2)
         F = np.diag([1.0, a1, a2])
-        B = np.array([-dt_s / (3600.0 * Q_REF_AH), r1 * (1.0 - a1), r2 * (1.0 - a2)])
+        B = np.array([-dt_s / (3600.0 * self.q_ref_ah), r1 * (1.0 - a1), r2 * (1.0 - a2)])
         Q = np.diag([self.cfg.q_soc, self.cfg.q_v, self.cfg.q_v]) * dt_s
 
         self.x = F @ self.x + B * i_held  # Eq. 6
@@ -147,12 +150,13 @@ class Ekf:
         return float(self.x[0])
 
 
-def run_ekf(params, cfg, i, v, temp, dt, soc0, start=0, current_offset=0.0):
+def run_ekf(params, cfg, i, v, temp, dt, soc0, start=0, current_offset=0.0, q_ref_ah=Q_REF_AH):
     """Run the filter over rows start .. len(i)-1 of a run and return the per-row results as a dict.
 
     i, v, temp, dt are float64 arrays like those of a loader Run (A, V, degC, s; dt[k] = t[k] - t[k-1]);
     soc0 is the initial SoC. V1 = V2 = 0 at row `start`, whose dt is taken as 0: that row gets an
-    update and no predict. current_offset (A) is added to every current the filter sees.
+    update and no predict. current_offset (A) is added to every current the filter sees. q_ref_ah is
+    the capacity of the SoC row of Eq. 6 (Ekf).
     The dict holds, one entry per row and NaN before `start`:
       soc      posterior SoC (fraction)
       v_pred   terminal voltage predicted before the update (Eq. 8), in V
@@ -166,7 +170,7 @@ def run_ekf(params, cfg, i, v, temp, dt, soc0, start=0, current_offset=0.0):
     v_pred = np.full(n, np.nan)
     p_soc = np.full(n, np.nan)
 
-    ekf = Ekf(params, cfg, soc0)
+    ekf = Ekf(params, cfg, soc0, q_ref_ah)
     for k in range(start, n):
         step_dt = 0.0 if k == start else dts[k]
         soc[k] = ekf.step(currents[k], voltages[k], temps[k], step_dt)
