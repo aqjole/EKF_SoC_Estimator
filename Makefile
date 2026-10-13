@@ -1,11 +1,10 @@
 # Reproduce the results from the raw data. Stages and targets are described in the spec.
-# S4 adds the readme target.
 
 PYTHON := .venv/bin/python
 
-.PHONY: all data inventory checks fit tune ekf c equiv arm
+.PHONY: all data inventory checks fit tune ekf c equiv arm readme readme-check
 
-all: data inventory checks fit ekf c equiv arm
+all: data inventory checks fit ekf c equiv arm readme
 
 # Fetch the LG 18650HG2 .mat files into data/raw/ and verify their sha256.
 data:
@@ -52,3 +51,11 @@ equiv:
 # Writes results/c_footprint.md (.text/.data/.bss per library object, sizeof(ekf_t), the symbol check); fails on a helper.
 arm:
 	$(PYTHON) python/arm_footprint.py
+
+# S4: copy the results tables from results/*.md into README.md between its marker comments.
+readme:
+	$(PYTHON) python/update_readme.py
+
+# S4: fail if README.md is out of sync with results/*.md (the check CI runs).
+readme-check:
+	$(PYTHON) python/update_readme.py --check

@@ -22,9 +22,8 @@ jobs:
         run: |
           python python/export_params.py
           git diff --exit-code c/src/ekf_params.c c/include/ekf_params.h
-      # S4: check that the README results tables are in sync with results/*.md.
-      # - name: README in sync
-      #   run: ...
+      - name: README in sync
+        run: python python/update_readme.py --check
 
   c-host:
     runs-on: ubuntu-latest

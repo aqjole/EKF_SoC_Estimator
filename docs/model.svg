@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 240" width="620" height="240" font-family="sans-serif" font-size="15">
+  <title>2RC equivalent-circuit model: OCV source, R0, R1 with C1, R2 with C2, terminal voltage V</title>
+  <rect width="620" height="240" rx="8" fill="#ffffff"/>
+  <g fill="none" stroke="#222222" stroke-width="2">
+    <!-- top wire: source, R0, branch 1, branch 2, + terminal -->
+    <path d="M70 92 V60 H120 M170 60 H210 M210 30 V100 M210 30 H245 M295 30 H330 M210 100 H266 M274 100 H330 M330 30 V100 M330 60 H370"/>
+    <path d="M370 30 V100 M370 30 H405 M455 30 H490 M370 100 H426 M434 100 H490 M490 30 V100 M490 60 H564"/>
+    <!-- bottom wire to the - terminal -->
+    <path d="M70 148 V200 H564"/>
+    <!-- source -->
+    <circle cx="70" cy="120" r="28"/>
+    <!-- resistors R0, R1, R2 -->
+    <rect x="120" y="51" width="50" height="18" fill="#ffffff"/>
+    <rect x="245" y="21" width="50" height="18" fill="#ffffff"/>
+    <rect x="405" y="21" width="50" height="18" fill="#ffffff"/>
+    <!-- capacitors C1, C2 -->
+    <path d="M266 86 V114 M274 86 V114 M426 86 V114 M434 86 V114"/>
+    <!-- terminals -->
+    <circle cx="570" cy="60" r="6" fill="#ffffff"/>
+    <circle cx="570" cy="200" r="6" fill="#ffffff"/>
+  </g>
+  <g fill="#222222">
+    <circle cx="210" cy="60" r="3.5"/>
+    <circle cx="330" cy="60" r="3.5"/>
+    <circle cx="370" cy="60" r="3.5"/>
+    <circle cx="490" cy="60" r="3.5"/>
+    <!-- current arrow, positive on discharge -->
+    <path d="M100 60 l-12 -6 v12 z"/>
+    <text x="70" y="114" text-anchor="middle">+</text>
+    <text x="70" y="136" text-anchor="middle">&#8722;</text>
+    <text x="94" y="48" text-anchor="middle" font-style="italic">I</text>
+    <text x="106" y="128">OCV(SoC, T)</text>
+    <text x="145" y="90" text-anchor="middle">R0</text>
+    <text x="270" y="16" text-anchor="middle">R1</text>
+    <text x="270" y="134" text-anchor="middle">C1</text>
+    <text x="430" y="16" text-anchor="middle">R2</text>
+    <text x="430" y="134" text-anchor="middle">C2</text>
+    <text x="270" y="166" text-anchor="middle" fill="#555555">V1</text>
+    <text x="430" y="166" text-anchor="middle" fill="#555555">V2</text>
+    <text x="582" y="65">+</text>
+    <text x="582" y="205">&#8722;</text>
+    <text x="596" y="137" text-anchor="middle" font-style="italic">V</text>
+  </g>
+  <!-- branch voltage and terminal voltage brackets -->
+  <g fill="none" stroke="#555555" stroke-width="1">
+    <path d="M210 148 V152 H330 V148 M370 148 V152 H490 V148"/>
+    <path d="M590 70 V122 M590 146 V190"/>
+  </g>
+</svg>
