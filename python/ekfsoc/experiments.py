@@ -21,20 +21,18 @@ from ekfsoc.metrics import coulomb_count, expected_drift_pp, window_mask
 # the EKF and of the coulomb counter (docs/decisions.md 1.7).
 OFFSET_A = 0.200
 
-# Experiment 3: the filter starts where the reference SoC first reaches this level (docs/decisions.md 1.13).
-EXP3_START_SOC = 0.70
-
-# Initial SoC error of experiments 2 and 3 (reference -20 pp, and +20 pp in experiment 3).
-# Experiment 3 writes the two starting values out, so the float sum 0.7 + 0.2 is never formed.
+# Experiment 2: the initial SoC error, reference - 20 pp.
 INIT_ERROR_SOC = 0.20
+
+# Experiment 3: the filter starts where the reference SoC first reaches this level (docs/decisions.md 1.13),
+# at 50 % and at 90 %. The two are written out so that the float sum 0.7 + 0.2 is never formed.
+EXP3_START_SOC = 0.70
 EXP3_SOC0_LOW = 0.50
 EXP3_SOC0_HIGH = 0.90
 
-# The drive test types of the dataset, in the order the evaluation list is built (rawio.classify_test).
-# PausCycl runs are never included: they are not drive cycles listed in the dataset readme (decisions 1.5).
-DRIVE_TEST_TYPES = ("udds", "hwfet", "la92", "us06") + tuple(f"mixed{k}" for k in range(1, 9))
-
-# Cycle names of the results tables: UDDS, HWFET, LA92, US06 and Mix 1 to Mix 8.
+# The drive cycles of the evaluation set: test type (rawio.classify_test) -> name in the results tables,
+# in the order the evaluation list is built. PausCycl runs are never included: they are not drive cycles
+# listed in the dataset readme (decisions 1.5).
 CYCLE_NAMES = {
     "udds": "UDDS",
     "hwfet": "HWFET",
@@ -82,15 +80,15 @@ def evaluation_runs(raw_dir):
     """Return the 62 evaluation runs and the tuning cycle (63 RunSpec), folder by folder, in table order.
 
     Folders follow the temperature axis (40, 25, 10, 0, -10, -20 degC) and each folder the order of
-    DRIVE_TEST_TYPES. Every drive file is taken except the ones in EXCLUDED.
+    CYCLE_NAMES. Every drive file is taken except the ones in EXCLUDED.
     """
     specs = []
     for folder, nominal_temp in FOLDER_TEMP.items():
-        for test_type in DRIVE_TEST_TYPES:
+        for test_type, cycle_name in CYCLE_NAMES.items():
             for path in find_runs(raw_dir, test_type, folder):
                 key = (folder, rawio.parse_filename(path.name)["test_number"], test_type)
                 if key not in EXCLUDED:
-                    specs.append(RunSpec(path, folder, nominal_temp, CYCLE_NAMES[test_type], key == TUNING_RUN))
+                    specs.append(RunSpec(path, folder, nominal_temp, cycle_name, key == TUNING_RUN))
     return specs
 
 

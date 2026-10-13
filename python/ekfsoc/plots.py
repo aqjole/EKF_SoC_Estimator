@@ -23,16 +23,16 @@ from ekfsoc.fit import FITTED_TABLES
 TEMP_COLORS = dict(zip(T_GRID_DEGC, ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300")))
 MEASURED_COLOR = "#2a78d6"
 MODEL_COLOR = "#eb6834"
-ESTIMATE_COLORS = (MODEL_COLOR, "#1baf7a", "#e87ba4", "#eda100")
+ESTIMATE_COLORS = (MODEL_COLOR, "#1baf7a")
 INK_COLOR = "#52514e"
 GRID_COLOR = "#e1e0d9"
 DOTS = {"linestyle": "none", "marker": "o", "markersize": 3.5}
 SUMMARY_DOTS = {"linestyle": "none", "markersize": 5, "alpha": 0.7}
 
 
-def save(fig, axes, path):
+def save(fig, path):
     """Light grid, no top and right spines, tight layout, then write the PNG and close the figure."""
-    for axis in axes:
+    for axis in fig.axes:
         axis.grid(color=GRID_COLOR, linewidth=0.5)
         axis.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
@@ -80,7 +80,7 @@ def plot_ocv(ocv_table, correction, path):
                loc="upper left", ncol=3, frameon=False)
     bottom.set_ylabel("correction (mV)")
     bottom.set_xlabel("SoC (%)")
-    save(fig, (top, bottom), path)
+    save(fig, path)
 
 
 def plot_docv(params, path):
@@ -91,7 +91,7 @@ def plot_docv(params, path):
     axis.set_xlabel("SoC (%)")
     axis.set_ylabel("dOCV/dSoC (V per unit SoC)")
     axis.legend(handles=temperature_keys(), frameon=False)
-    save(fig, (axis,), path)
+    save(fig, path)
 
 
 def plot_params(levels, params, path):
@@ -117,7 +117,7 @@ def plot_params(levels, params, path):
     legend_panel.legend(handles=temperature_keys() + [key("HPPC level fit", linestyle="-", marker="o"),
                                                       key("table on the SoC grid", linestyle="--")],
                         loc="center", frameon=False)
-    save(fig, panels, path)
+    save(fig, path)
 
 
 def plot_model_fit(result, path):
@@ -139,13 +139,13 @@ def plot_model_fit(result, path):
     bottom.plot(minutes, result["error_mv"], color=MODEL_COLOR, linewidth=0.8)
     bottom.set_ylabel("model - measured (mV)")
     bottom.set_xlabel("time (min)")
-    save(fig, (top, bottom), path)
+    save(fig, path)
 
 
 def plot_soc_error(path, t, soc_ref, estimates, band_pp, title, reference_label):
     """SoC traces over time on top, the error of each estimate in pp with a +-band_pp band below.
 
-    `t` is in s, `soc_ref` and the arrays of `estimates` (label -> SoC array, at most four) are fractions of one
+    `t` is in s, `soc_ref` and the arrays of `estimates` (label -> SoC array, at most two) are fractions of one
     length; NaN leaves a gap, as before a filter start. The error is estimate - reference.
     """
     minutes = (t - t[0]) / 60.0
@@ -164,7 +164,7 @@ def plot_soc_error(path, t, soc_ref, estimates, band_pp, title, reference_label)
     bottom.set_ylabel("error (pp)")
     bottom.set_xlabel("time (min)")
     bottom.legend(loc="best", frameon=False)
-    save(fig, (top, bottom), path)
+    save(fig, path)
 
 
 def plot_trace(path, t, soc_ref, soc_est, cc, band_pp, title):
@@ -211,4 +211,4 @@ def plot_summary(path, results_df, metric, title):
         keys.append(key("not reached", linestyle="none", marker="x"))
     axes[0].legend(handles=keys, loc="best", frameon=False)
     fig.suptitle(title, color=INK_COLOR)
-    save(fig, axes, path)
+    save(fig, path)

@@ -1,18 +1,10 @@
 """The extended Kalman filter of the 2RC model: state x = [SoC, V1, V2], input I, measurement V.
 
-Equation numbers ("Eq. n") are those of docs/model.md. One step is predict() then update(), the
-two public steps the C port repeats function for function, with the same operation order:
-
-- Eq. 6   process model x- = F x + B I                         (predict)
-- Eq. 7   covariance prediction P- = F P F^T + Q               (predict)
-- Eq. 8   predicted voltage y_hat and the Jacobian H           (update)
-- Eq. 9   innovation variance S and gain K                     (update)
-- Eq. 10  state update, then SoC projected into [0, 1] along P (update)
-- Eq. 11  covariance update in Joseph form                     (update)
-
-Eq. 3 is the SoC row of Eq. 6, and the table lookups are Eq. 4 (model.interp2). Every 3 x 3 product
-is a numpy matrix product, written as its own named step. The projection of Eq. 10 (limit_soc) uses the
-posterior P of Eq. 11, so update() forms Eq. 11 first.
+Equation numbers ("Eq. n") are those of docs/model.md. One step is predict() (Eq. 6, 7) then update()
+(Eq. 8 to 11); the C port repeats both function for function, with the same operation order. Eq. 3 is
+the SoC row of Eq. 6 and the table lookups are Eq. 4 (model.interp2). Every 3 x 3 product is its own
+named step. limit_soc() (the projection of Eq. 10) needs the posterior P of Eq. 11, so update() forms
+Eq. 11 first.
 """
 
 import json
@@ -56,18 +48,18 @@ class EkfConfig:
 class Ekf:
     """The filter state x (numpy, shape (3,)) and covariance P (numpy, shape (3, 3)).
 
-    soc0 is the initial SoC; V1 = V2 = 0 unless given. The filter is never told whether soc0 is
-    right: P0 is the same diagonal for every run (docs/model.md, Symbols).
+    soc0 is the initial SoC and V1 = V2 = 0. The filter is never told whether soc0 is right: P0 is
+    the same diagonal for every run (docs/model.md, Symbols).
     After step() or update(), y_hat is the voltage predicted before the measurement was used (Eq. 8).
     """
 
-    def __init__(self, params, cfg, soc0, v1=0.0, v2=0.0):
+    def __init__(self, params, cfg, soc0):
         self.cfg = cfg
         # Plain lists make the lookups in the loop fast; interp2 works on them unchanged.
         self.t_grid = params.t_grid.tolist()
         self.soc_grid = params.soc_grid.tolist()
         self.tables = {name: getattr(params, name).tolist() for name in TABLE_NAMES}
-        self.x = np.array([soc0, v1, v2], dtype=np.float64)
+        self.x = np.array([soc0, 0.0, 0.0])
         self.P = np.diag([cfg.p0_soc_std**2, cfg.p0_v_std**2, cfg.p0_v_std**2])
         self.i_held = 0.0  # the previous sample's current, held over the next step (docs/model.md C11)
         self.y_hat = math.nan
@@ -94,12 +86,9 @@ class Ekf:
         B = np.array([-dt_s / (3600.0 * Q_REF_AH), r1 * (1.0 - a1), r2 * (1.0 - a2)])
         Q = np.diag([self.cfg.q_soc, self.cfg.q_v, self.cfg.q_v]) * dt_s
 
-        x_prior = F @ self.x + B * i_held  # Eq. 6
+        self.x = F @ self.x + B * i_held  # Eq. 6
         F_P = F @ self.P
-        P_prior = F_P @ F.T + Q  # Eq. 7
-
-        self.x = x_prior
-        self.P = P_prior
+        self.P = F_P @ F.T + Q  # Eq. 7
 
     def limit_soc(self, x_post, P_post):
         """Return x_post with its SoC limited to [0, 1] (Eq. 10, docs/decisions.md 1.16); P_post is not changed.
@@ -161,19 +150,17 @@ class Ekf:
 def run_ekf(params, cfg, i, v, temp, dt, soc0, start=0, current_offset=0.0):
     """Run the filter over rows start .. len(i)-1 of a run and return the per-row results as a dict.
 
-    i, v, temp, dt are the arrays of a loader Run (A, V, degC, s; dt[k] = t[k] - t[k-1]); soc0 is the
-    initial SoC. V1 = V2 = 0 at row `start`, whose dt is taken as 0: that row gets an update and no
-    predict. current_offset (A) is added to every current the filter sees.
+    i, v, temp, dt are float64 arrays like those of a loader Run (A, V, degC, s; dt[k] = t[k] - t[k-1]);
+    soc0 is the initial SoC. V1 = V2 = 0 at row `start`, whose dt is taken as 0: that row gets an
+    update and no predict. current_offset (A) is added to every current the filter sees.
     The dict holds, one entry per row and NaN before `start`:
       soc      posterior SoC (fraction)
       v_pred   terminal voltage predicted before the update (Eq. 8), in V
       p_soc    SoC variance P[0][0] after the update
     """
     n = len(i)
-    currents = (np.asarray(i, dtype=np.float64) + current_offset).tolist()
-    voltages = np.asarray(v, dtype=np.float64).tolist()
-    temps = np.asarray(temp, dtype=np.float64).tolist()
-    dts = np.asarray(dt, dtype=np.float64).tolist()
+    currents = (i + current_offset).tolist()
+    voltages, temps, dts = v.tolist(), temp.tolist(), dt.tolist()
 
     soc = np.full(n, np.nan)
     v_pred = np.full(n, np.nan)

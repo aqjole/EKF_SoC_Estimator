@@ -111,7 +111,8 @@ def test_predict_with_zero_dt_leaves_x_and_p_unchanged():
 def test_predict_moves_the_rc_branches_and_a_full_covariance():
     params = toy_params(r0=0.05, r1=0.02, tau1=10.0, r2=0.03, tau2=100.0)
     cfg = EkfConfig(q_soc=1e-4, q_v=1e-3, r=0.01)
-    ekf = Ekf(params, cfg, soc0=0.5, v1=0.02, v2=0.01)
+    ekf = Ekf(params, cfg, soc0=0.5)
+    ekf.x = np.array([0.5, 0.02, 0.01])
     ekf.P = np.array([[0.04, 0.001, -0.002], [0.001, 0.0025, 0.0003], [-0.002, 0.0003, 0.0025]])
     p_before = ekf.P.copy()
     dt, i_held = 10.0, 2.0

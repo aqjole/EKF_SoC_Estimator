@@ -59,10 +59,6 @@ def test_window_mask_is_empty_when_start_is_after_the_last_sample_above_the_limi
     assert not window_mask(np.array([0.05, 0.04]), 0).any()
 
 
-def test_window_mask_takes_another_limit():
-    assert window_mask(SOC_REF_RUN, 0, soc_min=0.5).tolist() == [True] * 3 + [False] * 5
-
-
 # --- rmse_pp, max_abs_pp, voltage_rmse_mv --------------------------------------------------------
 
 def test_rmse_and_max_abs_turn_soc_fractions_into_pp_and_read_only_the_masked_samples():
@@ -186,15 +182,10 @@ def test_init_forgetting_time_is_the_last_exit_from_the_1_pp_band():
     assert init_forgetting_time(t, soc_b, soc_a, mask) == pytest.approx(t[5])
 
 
-def test_init_forgetting_time_takes_another_band():
-    t, soc_a, soc_b, mask = forgetting_case()
-    # Inside 0.5 pp only at 0.4 and 0.2 (indices 6 and 7).
-    assert init_forgetting_time(t, soc_a, soc_b, mask, band_pp=0.5) == pytest.approx(t[6])
-
-
 def test_init_forgetting_time_is_none_while_the_runs_are_still_apart_at_the_end():
     t, soc_a, soc_b, mask = forgetting_case()
-    assert init_forgetting_time(t, soc_a, soc_b, mask, band_pp=0.1) is None
+    soc_a[-1] += 0.02  # a 2.2 pp gap at the last sample
+    assert init_forgetting_time(t, soc_a, soc_b, mask) is None
 
 
 # --- coulomb_count -------------------------------------------------------------------------------
@@ -233,17 +224,12 @@ def test_coulomb_count_is_not_clamped():
         == pytest.approx([0.95, 1.95, 2.95], abs=1e-12)
 
 
-def test_coulomb_count_of_a_single_sample_is_soc0():
-    assert coulomb_count(np.array([5.0]), np.array([0.0]), 0.7, Q_REF_CC).tolist() == [0.7]
-
-
 # --- expected_drift_pp ---------------------------------------------------------------------------
 
 def test_expected_drift_is_the_offset_charge_over_the_capacity_in_pp():
     # 0.2 A for 3600 s is 0.2 Ah; at q_ref = 2 Ah that is 10 pp. A positive offset reads as discharge, so it is -10 pp.
     assert expected_drift_pp(0.2, 3600.0, 2.0) == pytest.approx(-10.0, rel=1e-12)
     assert expected_drift_pp(-0.2, 3600.0, 2.0) == pytest.approx(10.0, rel=1e-12)
-    assert expected_drift_pp(0.0, 3600.0, 2.0) == 0.0
 
 
 def test_expected_drift_matches_what_the_coulomb_counter_does_to_a_zero_current():

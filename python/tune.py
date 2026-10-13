@@ -23,7 +23,7 @@ EkfConfig) and section 1.15 of docs/decisions.md (replaced if it is already ther
 import itertools
 import re
 import time
-from functools import lru_cache
+from functools import cache
 from multiprocessing import Pool
 
 from ekfsoc.constants import RAW_DIR, REPO_DIR
@@ -59,7 +59,7 @@ OBJECTIVE_EXPERIMENTS = ("exp2", "exp4")
 # --- the objective --------------------------------------------------------------------------------
 
 
-@lru_cache(maxsize=None)
+@cache
 def tuning_problem():
     """Load the tuning cycle once per process: Params, the Run, its reference SoC and its evaluation window."""
     spec = next(spec for spec in evaluation_runs(RAW_DIR) if spec.is_tuning)

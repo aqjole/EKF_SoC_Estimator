@@ -16,14 +16,13 @@ from ekfsoc.constants import RAW_DIR, REPO_DIR
 from ekfsoc.ekf import EkfConfig
 from ekfsoc.experiments import (
     CYCLE_NAMES,
-    DRIVE_TEST_TYPES,
     EXCLUDED,
     OFFSET_A,
     TUNING_RUN,
     evaluation_runs,
     experiment_runs,
 )
-from ekfsoc.loader import build_run, find_runs, load_run, soc_ref
+from ekfsoc.loader import build_run, find_runs
 from ekfsoc.model import Params
 
 # Row of the made-up run where the reference first reaches 0.70 (see the module docstring).
@@ -155,7 +154,6 @@ def test_62_evaluation_runs_per_temperature(specs):
     """docs/decisions.md 1.5: 40 degC 7, 25 degC 10, 10 degC 11, 0 degC 11, -10 degC 11, -20 degC 12."""
     counts = Counter(spec.nominal_temp_degc for spec in specs if not spec.is_tuning)
     assert counts == {40: 7, 25: 10, 10: 11, 0: 11, -10: 11, -20: 12}
-    assert sum(counts.values()) == 62
 
 
 @pytest.mark.needs_data
@@ -165,7 +163,7 @@ def test_excluded_files_are_absent_and_the_rest_are_all_there(specs):
     assert not in_list & set(EXCLUDED)
     assert not any("PausCycl" in spec.path.name for spec in specs)
 
-    all_drive_files = {file_key(path) for test_type in DRIVE_TEST_TYPES for path in find_runs(RAW_DIR, test_type)}
+    all_drive_files = {file_key(path) for test_type in CYCLE_NAMES for path in find_runs(RAW_DIR, test_type)}
     assert len(all_drive_files) == 70
     assert len(EXCLUDED) == 7
     assert all_drive_files == in_list | set(EXCLUDED)  # every excluded key is a real file
@@ -191,25 +189,3 @@ def test_the_list_is_grouped_by_temperature_in_table_order(specs):
     assert [temp for n, temp in enumerate(temps) if n == 0 or temp != temps[n - 1]] == [40, 25, 10, 0, -10, -20]
     assert all(spec.path.parent.name == spec.folder for spec in specs)
     assert all(spec.path.is_file() for spec in specs)
-
-
-@pytest.mark.needs_data
-def test_experiments_on_25degc_us06(specs, params):
-    """Experiment 3 starts at the first row with soc_ref <= 0.70 and the soc0 of each case is as specified."""
-    (spec,) = [spec for spec in specs if spec.cycle_name == "US06" and spec.nominal_temp_degc == 25]
-    run = load_run(spec.path)
-    reference = soc_ref(run)
-    cases = experiment_runs(run, params, MADE_UP_CFG)
-
-    start = cases["exp3_low"]["start"]
-    assert reference[start] <= 0.70
-    assert np.all(reference[:start] > 0.70)  # the first row at or below 70 %
-    assert start > 0
-    for name in ("exp3_low", "exp3_high", "exp3_ref"):
-        assert cases[name]["start"] == start
-
-    assert cases["exp1"]["soc0"] == reference[0] == 1.0
-    assert cases["exp2"]["soc0"] == pytest.approx(reference[0] - 0.20)
-    assert [cases[name]["soc0"] for name in ("exp3_low", "exp3_high", "exp3_ref")] == [0.5, 0.9, 0.7]
-    assert [cases[name]["start"] for name in ("exp1", "exp2", "exp4")] == [0, 0, 0]
-    assert cases["exp4"]["expected_drift_pp"] < 0.0

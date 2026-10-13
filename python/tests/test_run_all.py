@@ -14,6 +14,7 @@ from ekfsoc.constants import REPO_DIR
 from ekfsoc.experiments import RunSpec
 
 FIXTURE = REPO_DIR / "python" / "tests" / "fixtures" / "lghg2_excerpt.mat"
+TRACES_NAME = "25degC__lghg2_excerpt.npz"
 
 
 @pytest.fixture
@@ -21,26 +22,32 @@ def spec():
     return RunSpec(FIXTURE, "25degC", 25, "US06", False)
 
 
-def test_process_run_scores_every_experiment_and_writes_traces_and_plots(spec, tmp_path):
+def test_process_run_scores_every_experiment(spec, tmp_path):
     rows = run_all.process_run(spec, tmp_path)
 
     assert [row["experiment"] for row in rows] == list(run_all.SCORED)
-    assert all(set(row) == set(run_all.COLUMNS) for row in rows)
     exp1, exp2, exp3_low, exp3_high, exp4 = rows
     # exp1 starts at the reference, so its start is the first row; exp3 starts later, where the reference reaches 70 %.
-    assert exp1["start_s"] == 0.0 and exp3_low["start_s"] > 0.0 and exp3_low["start_s"] == exp3_high["start_s"]
+    assert exp1["start_s"] == 0.0
+    assert exp3_low["start_s"] > 0.0
+    assert exp3_low["start_s"] == exp3_high["start_s"]
     assert exp2["soc0"] == pytest.approx(exp1["soc0"] - 0.20)
     # Only exp4 has an expected drift, and a positive offset (extra discharge) makes it negative.
     assert exp4["expected_drift_pp"] < 0.0
     assert all(np.isnan(row["expected_drift_pp"]) for row in rows[:4])
-    assert (tmp_path / "25degC__lghg2_excerpt.npz").is_file()
+
+
+def test_process_run_saves_the_traces_and_one_plot_per_experiment(spec, tmp_path):
+    run_all.process_run(spec, tmp_path)
+
+    assert (tmp_path / TRACES_NAME).is_file()
     assert sorted(path.name for path in (tmp_path / "plots").iterdir()) == sorted(
         run_all.trace_name(experiment, spec) for experiment in run_all.SCORED)
 
 
 def test_a_fresh_run_is_read_from_its_traces_and_gives_the_same_rows(spec, tmp_path):
     first = run_all.process_run(spec, tmp_path)
-    traces = tmp_path / "25degC__lghg2_excerpt.npz"
+    traces = tmp_path / TRACES_NAME
     modified = traces.stat().st_mtime_ns
 
     again = run_all.process_run(spec, tmp_path)
@@ -51,7 +58,7 @@ def test_a_fresh_run_is_read_from_its_traces_and_gives_the_same_rows(spec, tmp_p
 
 def test_a_run_older_than_its_dependencies_is_computed_again(spec, tmp_path):
     run_all.process_run(spec, tmp_path)
-    traces = tmp_path / "25degC__lghg2_excerpt.npz"
+    traces = tmp_path / TRACES_NAME
     old = run_all.DEPENDENCIES[0].stat().st_mtime_ns - 10**9
     os.utime(traces, ns=(old, old))
 

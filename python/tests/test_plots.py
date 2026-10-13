@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from ekfsoc.constants import SOC_GRID, T_GRID_DEGC
 from ekfsoc.model import Params
@@ -65,21 +66,24 @@ def synthetic_results():
     return results
 
 
-def test_each_figure_is_a_png_and_a_rerun_is_byte_identical(tmp_path):
-    t, soc_ref, soc_est, cc = synthetic_trace()
-    results = synthetic_results()
-    figures = {
-        "ocv.png": lambda path: plot_ocv(synthetic_ocv_table(), synthetic_correction(), path),
-        "docv.png": lambda path: plot_docv(synthetic_params(), path),
-        "params.png": lambda path: plot_params(synthetic_levels(), synthetic_params(), path),
-        "trace.png": lambda path: plot_trace(path, t, soc_ref, soc_est, cc, 2.0, "synthetic run"),
-        "synthetic.png": lambda path: plot_synthetic(path, t, soc_ref, {"EKF, 20 pp low": soc_est}, 1.0, "synthetic data"),
-        "summary_rmse.png": lambda path: plot_summary(path, results, "rmse_pp", "SoC RMSE"),
-        "summary_convergence.png": lambda path: plot_summary(path, results, "t_conv_s", "convergence time"),
-    }
-    for name, draw in figures.items():
-        first, second = tmp_path / "a" / name, tmp_path / "b" / name
-        draw(first)
-        draw(second)
-        assert first.read_bytes().startswith(PNG_SIGNATURE)
-        assert first.read_bytes() == second.read_bytes()
+T, SOC_REF, SOC_EST, CC = synthetic_trace()
+RESULTS = synthetic_results()
+
+FIGURES = {
+    "ocv": lambda path: plot_ocv(synthetic_ocv_table(), synthetic_correction(), path),
+    "docv": lambda path: plot_docv(synthetic_params(), path),
+    "params": lambda path: plot_params(synthetic_levels(), synthetic_params(), path),
+    "trace": lambda path: plot_trace(path, T, SOC_REF, SOC_EST, CC, 2.0, "synthetic run"),
+    "synthetic": lambda path: plot_synthetic(path, T, SOC_REF, {"EKF, 20 pp low": SOC_EST}, 1.0, "synthetic data"),
+    "summary_rmse": lambda path: plot_summary(path, RESULTS, "rmse_pp", "SoC RMSE"),
+    "summary_convergence": lambda path: plot_summary(path, RESULTS, "t_conv_s", "convergence time"),
+}
+
+
+@pytest.mark.parametrize("draw", FIGURES.values(), ids=FIGURES.keys())
+def test_a_figure_is_a_png_and_a_rerun_is_byte_identical(draw, tmp_path):
+    draw(tmp_path / "first.png")
+    draw(tmp_path / "second.png")
+
+    assert (tmp_path / "first.png").read_bytes().startswith(PNG_SIGNATURE)
+    assert (tmp_path / "first.png").read_bytes() == (tmp_path / "second.png").read_bytes()

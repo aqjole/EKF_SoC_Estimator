@@ -54,12 +54,12 @@ PP = 100.0
 MV = 1000.0
 
 
-def window_mask(soc_ref, start, soc_min=SOC_MIN):
-    """Return the evaluation window: True from index `start` to the last index with soc_ref >= soc_min.
+def window_mask(soc_ref, start):
+    """Return the evaluation window: True from index `start` to the last index with soc_ref >= SOC_MIN.
 
-    The window is empty if the reference is below soc_min from `start` on.
+    The window is empty if the reference is below SOC_MIN from `start` on.
     """
-    at_or_above = np.flatnonzero(soc_ref >= soc_min)
+    at_or_above = np.flatnonzero(soc_ref >= SOC_MIN)
     mask = np.zeros(len(soc_ref), dtype=bool)
     if len(at_or_above) > 0:
         mask[start:at_or_above[-1] + 1] = True
@@ -82,12 +82,9 @@ def max_abs_pp(err, mask):
 
 
 def band_times(t, err_pp, mask, band_pp):
-    """Return (t_first, t_conv) of the error trace err_pp (pp) in the band +-band_pp, over the masked samples.
+    """Return (t_first, t_conv) of the error trace err_pp (pp) in the band +-band_pp over the masked samples.
 
-    t_first is the time of the first masked sample with |err_pp| <= band_pp, None if there is none.
-    t_conv is the time of the first masked sample from which |err_pp| <= band_pp holds to the last masked
-    sample, None ("not reached") if |err_pp| > band_pp at the last masked sample. Both are values of t.
-    An empty mask gives (None, None).
+    Both are values of t. None means there is none (see the module docstring); an empty mask gives (None, None).
     """
     t_window = t[mask]
     inside = np.abs(err_pp[mask]) <= band_pp
@@ -108,13 +105,9 @@ def after_conv_mask(mask, t, t_conv):
     return mask & (t >= t_conv)
 
 
-def init_forgetting_time(t, soc_a, soc_b, mask, band_pp=FORGET_BAND_PP):
-    """Return the last-exit time of |soc_a - soc_b| (SoC fractions) from the band +-band_pp, over the masked samples.
-
-    It is the t_conv of band_times for the difference of two runs; None if the runs are still apart
-    at the last masked sample.
-    """
-    return band_times(t, PP * (soc_a - soc_b), mask, band_pp)[1]
+def init_forgetting_time(t, soc_a, soc_b, mask):
+    """Return the t_conv of band_times for the difference of two runs (SoC fractions) in the FORGET_BAND_PP band."""
+    return band_times(t, PP * (soc_a - soc_b), mask, FORGET_BAND_PP)[1]
 
 
 def voltage_rmse_mv(v_pred, v_meas, mask):
@@ -128,8 +121,7 @@ def coulomb_count(i, dt, soc0, q_ref, start=0, current_offset=0.0):
         soc[start] = soc0
         soc[k]     = soc[k-1] - (i[k-1] + current_offset) * dt[k] / (3600 * q_ref)        k > start
 
-    The current held over step k is the previous kept sample's current (C11). i is in A (positive =
-    discharge), dt in s, q_ref in Ah. Samples before `start` are NaN.
+    i is in A (positive = discharge), dt in s, q_ref in Ah. Samples before `start` are NaN.
     """
     soc = np.full(len(i), np.nan)
     removed = np.cumsum((i[start:-1] + current_offset) * dt[start + 1:]) / (3600.0 * q_ref)
@@ -139,9 +131,9 @@ def coulomb_count(i, dt, soc0, q_ref, start=0, current_offset=0.0):
 
 
 def expected_drift_pp(offset_a, duration_s, q_ref):
-    """Error in pp (estimate - reference) a coulomb counter picks up from a constant current offset.
+    """Return the error in pp (estimate - reference) a coulomb counter picks up from a current offset.
 
-    offset_a is added to the current (A, positive = discharge) for duration_s seconds, q_ref in Ah.
-    A positive offset reads as extra discharge, so the estimate falls and the drift is negative.
+    offset_a (A, positive = discharge) is added to the current for duration_s seconds, so the estimate
+    falls and the drift is negative.
     """
     return -PP * offset_a * duration_s / (3600.0 * q_ref)
