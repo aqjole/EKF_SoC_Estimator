@@ -2,9 +2,9 @@
 
 No raw data and no real fit is needed. Each test writes a small synthetic params.csv, fit_levels.csv and
 ocv_correction.csv in tmp_path, runs the export on them and checks the output: the C source compiles
-under strict flags in the float and the double build, the header has the defines, the nine declarations
-and the ekf_params_t struct, every literal goes through EKF_R, the values round-trip to the CSV, and two
-runs give the same bytes.
+under strict flags in the float and the double build, the header has the size and Q_ref defines, the
+nine declarations and the ekf_params_t struct, every literal goes through EKF_R, the values round-trip to
+the CSV, and two runs give the same bytes.
 """
 
 import math
@@ -17,7 +17,7 @@ import pandas as pd
 import pytest
 
 import export_params
-from ekfsoc.constants import REPO_DIR, SOC_GRID, T_GRID_DEGC
+from ekfsoc.constants import Q_REF_AH, REPO_DIR, SOC_GRID, T_GRID_DEGC
 from ekfsoc.model import Params
 
 
@@ -203,6 +203,12 @@ def test_header_defines_sizes_and_declares_nine_arrays(tmp_path):
     assert "#ifndef EKF_PARAMS_H" in text and "#endif" in text
 
 
+def test_header_defines_q_ref_from_the_python_constant(tmp_path):
+    _, _, h_path = run_export(tmp_path)
+    define = re.search(r"^#define EKF_Q_REF_AH " + EKF_R_LITERAL, h_path.read_text(), flags=re.MULTILINE)
+    assert float(define.group(1)) == Q_REF_AH
+
+
 def test_header_has_the_params_struct_with_one_pointer_per_array(tmp_path):
     _, _, h_path = run_export(tmp_path)
     struct = re.search(r"typedef struct \{(.*?)\} ekf_params_t;", h_path.read_text(), flags=re.DOTALL).group(1)
@@ -359,13 +365,6 @@ def test_md_shows_n_a_for_missing_values_and_ignores_flag_columns(tmp_path):
 def test_levels_are_listed_in_level_order():
     rows = table_rows(export_params.level_fit_lines(level_frame({"level": 2}, {"level": 1}), [25.0]))
     assert [row[0] for row in rows] == ["1", "2", "1", "2"]  # fast table, then slow table
-
-
-def test_capacitance_is_tau_over_r_and_nan_without_a_positive_r():
-    assert export_params.capacitance(3.0, 0.01) == pytest.approx(300.0)
-    assert math.isnan(export_params.capacitance(3.0, 0.0))
-    assert math.isnan(export_params.capacitance(3.0, math.nan))
-    assert math.isnan(export_params.capacitance(math.nan, 0.01))
 
 
 def test_md_prints_n_a_for_c_when_a_resistance_is_zero():

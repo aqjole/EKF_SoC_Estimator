@@ -11,6 +11,7 @@
 
 #define EKF_N_T 6
 #define EKF_N_SOC 101
+#define EKF_Q_REF_AH EKF_R(2.780700e+00)  /* Q_ref in Ah, Q_REF_AH of python/ekfsoc/constants.py (docs/model.md C4) */
 
 extern const ekf_real_t ekf_t_grid_degc[EKF_N_T];  /* temperature axis in degC */
 extern const ekf_real_t ekf_soc_grid[EKF_N_SOC];  /* SoC axis as a fraction */

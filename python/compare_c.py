@@ -42,6 +42,9 @@ PLOTS_DIR = REPO_DIR / "results" / "plots" / "s3"
 # Build name -> the EKF_USE_DOUBLE setting and the threshold on max |delta SoC| in pp (the spec, S3).
 BUILDS = {"float": ("OFF", 0.1), "double": ("ON", 1e-3)}
 
+# The columns of the table that hold max and RMS |delta SoC| in pp, float build first.
+STAT_COLUMNS = [f"{build}_{stat}_pp" for build in BUILDS for stat in ("max", "rms")]
+
 # The initial standard deviations the tool uses (c/tools/ekf_run_csv.c); the frozen settings must agree.
 TOOL_P0_STDS = (0.2, 0.05)
 
@@ -105,7 +108,7 @@ def verdict_lines(table):
              "|---|---|---|---|---|---|"]
     for build, (_, limit) in BUILDS.items():
         worst = table.loc[table[f"{build}_max_pp"].idxmax()]
-        result = "PASS" if table[f"{build}_max_pp"].max() < limit else "FAIL"
+        result = "PASS" if worst[f"{build}_max_pp"] < limit else "FAIL"
         lines.append(f"| {build} | {limit:g} | {pp_text(worst[f'{build}_max_pp'])} | "
                      f"{worst['cycle']} at {worst['T']} degC ({worst['test']}) | "
                      f"{pp_text(table[f'{build}_rms_pp'].max())} | {result} |")
@@ -116,7 +119,7 @@ def temperature_lines(table):
     lines = ["| T (degC) | runs | float max (pp) | float largest RMS (pp) | double max (pp) | double largest RMS (pp) |",
              "|---|---|---|---|---|---|"]
     for temp, group in table.groupby("T", sort=False):
-        cells = [pp_text(group[f"{build}_{stat}_pp"].max()) for build in BUILDS for stat in ("max", "rms")]
+        cells = [pp_text(group[column].max()) for column in STAT_COLUMNS]
         lines.append(f"| {temp} | {len(group)} | " + " | ".join(cells) + " |")
     return lines
 
@@ -126,7 +129,7 @@ def run_lines(table):
              "|---|---|---|---|---|---|---|---|"]
     for row in table.itertuples():
         cycle = f"{row.cycle} (tuning)" if row.is_tuning else row.cycle
-        cells = [pp_text(getattr(row, f"{build}_{stat}_pp")) for build in BUILDS for stat in ("max", "rms")]
+        cells = [pp_text(getattr(row, column)) for column in STAT_COLUMNS]
         lines.append(f"| {row.T} | {cycle} | {row.test} | {row.rows} | " + " | ".join(cells) + " |")
     return lines
 

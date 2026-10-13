@@ -23,6 +23,7 @@ import numpy as np
 from ekfsoc.constants import REPO_DIR
 from ekfsoc.ekf import Ekf, EkfConfig
 from ekfsoc.model import Params
+import export_params
 from export_params import C_TABLES, PARAMS_CSV, write_text
 from tune import CONFIG_JSON
 
@@ -66,9 +67,7 @@ X_ABOVE_ONE = (1.004, 0.003, 0.009)
 
 def c_literal(value):
     """Return `value` as EKF_R(...) with 17 significant digits, enough to give back the same double."""
-    if not np.isfinite(value):
-        raise ValueError(f"cannot write {value} as a C literal")
-    return f"EKF_R({value:.16e})"
+    return export_params.c_literal(value, digits=17)
 
 
 def c_vector(values):
@@ -80,14 +79,6 @@ def c_state(x, P, indent):
     """Return the lines of a vec_state_t initializer for state x and covariance P."""
     rows = [f"{indent}        {c_vector(row)}," for row in P]
     return [f"{indent}{{", f"{indent}    {c_vector(x)},", f"{indent}    {{", *rows, f"{indent}    }},", f"{indent}}},"]
-
-
-def new_filter(params, cfg, x, P):
-    """Return a Python Ekf whose state and covariance are set to x and P."""
-    ekf = Ekf(params, cfg, 0.0)
-    ekf.x = np.array(x, dtype=np.float64)
-    ekf.P = np.array(P, dtype=np.float64)
-    return ekf
 
 
 def interp2_lines(params, cfg):
@@ -106,7 +97,8 @@ def step_cases(params, cfg):
     The update starts from the state the predict ends in, and limit_soc uses the P the update ends in,
     so the three cases follow one step of the filter.
     """
-    ekf = new_filter(params, cfg, X_START, P_START)
+    ekf = Ekf(params, cfg, 0.0)
+    ekf.x, ekf.P = np.array(X_START), np.array(P_START)
     ekf.predict(I_A, TEMP_DEGC, DT_S)
     x_predicted, P_predicted = ekf.x.copy(), ekf.P.copy()
 

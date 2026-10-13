@@ -15,10 +15,10 @@ Standard library only, so the CI job runs it without installing the Python requi
 """
 
 import json
-import re
 import shlex
 import subprocess
 import sys
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 REPO_DIR = Path(__file__).resolve().parent.parent
@@ -32,7 +32,6 @@ FOOTPRINT_MD = REPO_DIR / "results" / "c_footprint.md"
 COUNTED_OBJECTS = ("ekf.c.obj", "ekf_params.c.obj")
 MARKER_OBJECT = "ekf_size_marker.c.obj"
 DOUBLE_HELPERS = ("__aeabi_d*", "__aeabi_f2d", "__aeabi_i2d", "__aeabi_ui2d", "__aeabi_l2d", "__aeabi_ul2d")
-DOUBLE_HELPER_RE = re.compile(r"__aeabi_(d\w*|f2d|i2d|ui2d|l2d|ul2d)")
 
 
 def output_of(*command):
@@ -123,7 +122,7 @@ def footprint_md(version, flags, rows, state_size, undefined, helpers):
 def main():
     build_library()
     undefined = undefined_symbols()
-    helpers = [symbol for symbol in undefined if DOUBLE_HELPER_RE.fullmatch(symbol)]
+    helpers = [symbol for symbol in undefined if any(fnmatchcase(symbol, helper) for helper in DOUBLE_HELPERS)]
     text = footprint_md(compiler_version(), library_flags(), section_sizes(), ekf_t_size(), undefined, helpers)
     FOOTPRINT_MD.write_text(text)
     print(f"wrote {FOOTPRINT_MD.relative_to(REPO_DIR)}")

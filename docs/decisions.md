@@ -224,8 +224,8 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
 
 - **`dt = 0` is accepted by `ekf_step` and means update only (no predict); only `dt < 0` is an error.** The spec lists "dt <= 0" among the error cases. The Python reference treats the first processed sample with dt = 0 (update only) and the C port mirrors it, so the first row of every run and any repeated-timestamp row goes through the same path in both. NaN inputs are rejected without changing the state; a temperature outside the table range is clamped and flagged with a warning status.
 - **The ARM CI job installs the pinned Arm GNU Toolchain 15.3.Rel1 tarball, verified by sha256, not the distribution package.** `results/c_footprint.md` is committed and CI checks it byte for byte, so the compiler that produced it must be the one CI uses; the distribution package is an older GCC.
-- **Q_ref is a constant in `c/src/ekf.c` (2.7807 Ah) with a comment naming its source.** It is the one value the C port does not take from the generated tables; the S3 simplification pass may move it into the generated header so it lives in one place.
-- Evidence: `results/equivalence.md` (63 runs, experiment 1: float max 1.85e-02 pp against 0.1 pp, double max 5.00e-09 pp against 1e-3 pp), `results/c_footprint.md` (19,320 B of .text, 0 B .data and .bss, sizeof(ekf_t) = 60 B, only `expf` undefined).
+- **Q_ref reaches the C port through the generated header: `python/export_params.py` emits `EKF_Q_REF_AH` from `Q_REF_AH` in `python/ekfsoc/constants.py`, so the value lives in one place.** (The first S3 build had it as a constant in `c/src/ekf.c`; the simplification pass moved it.)
+- Evidence: `results/equivalence.md` (63 runs, experiment 1: float max 1.85e-02 pp against 0.1 pp, double max 5.00e-09 pp against 1e-3 pp), `results/c_footprint.md` (19,344 B of .text after the simplification pass, 0 B .data and .bss, sizeof(ekf_t) = 60 B, only `expf` undefined).
 
 ## 2. Dataset facts confirmed in S0
 

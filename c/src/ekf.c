@@ -2,15 +2,24 @@
  *
  * Every function repeats its Python namesake with the same operation order, so the double build
  * matches Python to rounding. Equation numbers ("Eq. n") are those of docs/model.md. Each 3 x 3
- * product is its own named step, written as the row-major loop sum_k a[i][k] * b[k][j].
+ * product is its own named step, and every sum over k runs k = 0, 1, 2 from zero.
  */
 #include "ekf.h"
 
 #include <math.h>
 #include <stddef.h>
 
-/* Q_ref in Ah, as Q_REF_AH in python/ekfsoc/constants.py (docs/model.md C4). */
-#define EKF_Q_REF_AH EKF_R(2.7807)
+/* min(max(x, lowest), highest), as in model.py and ekf.py. */
+static ekf_real_t clamp(ekf_real_t x, ekf_real_t lowest, ekf_real_t highest)
+{
+    if (x < lowest) {
+        return lowest;
+    }
+    if (x > highest) {
+        return highest;
+    }
+    return x;
+}
 
 /* Return the cell j of `axis` (n nodes, strictly ascending or descending) that holds x, and in
  * *weight how far x lies into it (Eq. 4, steps 1 to 3). Same steps as find_cell in model.py. */
@@ -32,13 +41,7 @@ static int find_cell(const ekf_real_t *axis, int n, ekf_real_t x, ekf_real_t *we
         highest = first;
     }
 
-    x_clamped = x;  /* min(max(x, lowest), highest) */
-    if (x_clamped < lowest) {
-        x_clamped = lowest;
-    }
-    if (x_clamped > highest) {
-        x_clamped = highest;
-    }
+    x_clamped = clamp(x, lowest, highest);
 
     while (high - low > 1) {
         int mid = (low + high) / 2;
@@ -108,13 +111,13 @@ static void mat3_mul(ekf_real_t a[3][3], ekf_real_t b[3][3], ekf_real_t out[3][3
     }
 }
 
-/* out = a.T */
-static void mat3_transpose(ekf_real_t a[3][3], ekf_real_t out[3][3])
+/* out = a @ b.T */
+static void mat3_mul_transposed(ekf_real_t a[3][3], ekf_real_t b[3][3], ekf_real_t out[3][3])
 {
     int i, j;
     for (i = 0; i < 3; i++) {
         for (j = 0; j < 3; j++) {
-            out[i][j] = a[j][i];
+            out[i][j] = dot3(a[i], b[j]);
         }
     }
 }
@@ -177,7 +180,7 @@ void ekf_predict(ekf_t *e, ekf_real_t i_held, ekf_real_t t_degc, ekf_real_t dt_s
         {EKF_R(0.0), cfg->q_v * dt_s, EKF_R(0.0)},
         {EKF_R(0.0), EKF_R(0.0), cfg->q_v * dt_s},
     };
-    ekf_real_t F_x[3], F_P[3][3], F_t[3][3], F_P_Ft[3][3];
+    ekf_real_t F_x[3], F_P[3][3], F_P_Ft[3][3];
     int i, j;
 
     mat3_vec(F, e->x, F_x);
@@ -186,8 +189,7 @@ void ekf_predict(ekf_t *e, ekf_real_t i_held, ekf_real_t t_degc, ekf_real_t dt_s
     }
 
     mat3_mul(F, e->P, F_P);
-    mat3_transpose(F, F_t);
-    mat3_mul(F_P, F_t, F_P_Ft);
+    mat3_mul_transposed(F_P, F, F_P_Ft);
     for (i = 0; i < 3; i++) {
         for (j = 0; j < 3; j++) {
             e->P[i][j] = F_P_Ft[i][j] + Q[i][j];  /* Eq. 7 */
@@ -198,16 +200,10 @@ void ekf_predict(ekf_t *e, ekf_real_t i_held, ekf_real_t t_degc, ekf_real_t dt_s
 void ekf_limit_soc(ekf_t *e)
 {
     ekf_real_t soc = e->x[0];
-    ekf_real_t soc_bound = soc;  /* min(max(soc, 0), 1) */
+    ekf_real_t soc_bound = clamp(soc, EKF_R(0.0), EKF_R(1.0));
     ekf_real_t excess;
     int i;
 
-    if (soc_bound < EKF_R(0.0)) {
-        soc_bound = EKF_R(0.0);
-    }
-    if (soc_bound > EKF_R(1.0)) {
-        soc_bound = EKF_R(1.0);
-    }
     if (soc == soc_bound) {
         return;
     }
@@ -235,7 +231,7 @@ void ekf_update(ekf_t *e, ekf_real_t i_a, ekf_real_t v_v, ekf_real_t t_degc)
     ekf_real_t H[3] = {docv, EKF_R(-1.0), EKF_R(-1.0)};  /* Eq. 8, dR0/dSoC left out */
 
     ekf_real_t P_Ht[3], K[3], x_post[3];
-    ekf_real_t I_KH[3][3], I_KH_P[3][3], I_KH_t[3][3], I_KH_P_I_KH_t[3][3], K_R_Kt[3][3];
+    ekf_real_t I_KH[3][3], I_KH_P[3][3], I_KH_P_I_KH_t[3][3], K_R_Kt[3][3];
     ekf_real_t S, innovation;
     int i, j;
 
@@ -258,8 +254,7 @@ void ekf_update(ekf_t *e, ekf_real_t i_a, ekf_real_t v_v, ekf_real_t t_degc)
         }
     }
     mat3_mul(I_KH, e->P, I_KH_P);
-    mat3_transpose(I_KH, I_KH_t);
-    mat3_mul(I_KH_P, I_KH_t, I_KH_P_I_KH_t);
+    mat3_mul_transposed(I_KH_P, I_KH, I_KH_P_I_KH_t);
 
     for (i = 0; i < 3; i++) {
         e->x[i] = x_post[i];

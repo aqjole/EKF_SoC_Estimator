@@ -9,8 +9,9 @@ after it has written them. This script turns them into
   results/params.md       tables for the reader: the fit at each HPPC level, C = tau / R,
                           the fit RMSE, the OCV valid SoC range, the OCV fallback flag and the
                           OCV correction at the rest points
-  c/include/ekf_params.h  the two size defines, extern declarations of the nine arrays, the
-                          ekf_params_t struct of pointers to them and its default instance
+  c/include/ekf_params.h  the two size defines, Q_ref (Q_REF_AH of constants.py), extern
+                          declarations of the nine arrays, the ekf_params_t struct of pointers
+                          to them and its default instance
   c/src/ekf_params.c      the arrays as const ekf_real_t, one row per temperature, and
                           ekf_params_default pointing at them
 
@@ -22,7 +23,7 @@ Run from the repo root:  .venv/bin/python python/export_params.py
 import numpy as np
 import pandas as pd
 
-from ekfsoc.constants import REPO_DIR, SOC_GRID, T_GRID_DEGC
+from ekfsoc.constants import Q_REF_AH, REPO_DIR, SOC_GRID, T_GRID_DEGC
 from ekfsoc.model import Params
 
 
@@ -60,17 +61,18 @@ def write_text(path, text):
 # --- C files -------------------------------------------------------------------------------------
 
 
-def c_literal(value):
-    """Return `value` as a C literal in scientific notation with 7 significant digits, e.g. EKF_R(7.000000e-02).
+def c_literal(value, digits=C_DIGITS):
+    """Return `value` as a C literal in scientific notation with `digits` significant digits, e.g. EKF_R(7.000000e-02).
 
     EKF_R (c/include/ekf_types.h) appends f in the float build and nothing in the double build, so
     one generated file compiles clean under -Wdouble-promotion in both. Scientific notation always
     has a point, so the pasted text is a floating literal ('40f' would not be one). params.csv holds
-    6 significant digits, so 7 lose nothing. A value that is not finite has no literal: ValueError.
+    6 significant digits, so the default 7 lose nothing; the C test vectors use 17, which give back
+    the same double. A value that is not finite has no literal: ValueError.
     """
     if not np.isfinite(value):
         raise ValueError(f"cannot write {value} as a C literal")
-    return f"EKF_R(%.{C_DIGITS - 1}e)" % value
+    return f"EKF_R({value:.{digits - 1}e})"
 
 
 def c_values_lines(values, indent):
@@ -87,7 +89,7 @@ def c_array(declaration, comment, body):
 
 
 def header_text(params):
-    """Return the text of c/include/ekf_params.h: the size defines, the nine arrays and the ekf_params_t struct."""
+    """Return the text of c/include/ekf_params.h: the size defines, Q_ref, the nine arrays and the ekf_params_t struct."""
     lines = [
         f"/* {GENERATED_NOTE}",
         " *",
@@ -102,6 +104,7 @@ def header_text(params):
         "",
         f"#define EKF_N_T {len(params.t_grid)}",
         f"#define EKF_N_SOC {len(params.soc_grid)}",
+        f"#define EKF_Q_REF_AH {c_literal(Q_REF_AH)}  /* Q_ref in Ah, Q_REF_AH of python/ekfsoc/constants.py (docs/model.md C4) */",
         "",
         "extern const ekf_real_t ekf_t_grid_degc[EKF_N_T];  /* temperature axis in degC */",
         "extern const ekf_real_t ekf_soc_grid[EKF_N_SOC];  /* SoC axis as a fraction */",
