@@ -220,6 +220,13 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
   - Reason: the experiment-2 objective alone drove q_soc to the lowest grid value and then to the end of the refinement range (1.15), which makes the filter a coulomb counter after its first correction. Such a filter cannot keep a current-sensor offset bounded, which is the first README claim. Adding experiment 4 to the objective rewards the voltage feedback that bounds the offset, on the tuning cycle only. The grid extension records whether the minimum is interior.
   - The spec's rules stand: tuning on 25degC 551_Mixed1 only, one point per decade, one refinement by factors of 3, frozen afterwards, no re-tuning on the evaluation set.
 
+### 1.17 C port rules fixed in S3
+
+- **`dt = 0` is accepted by `ekf_step` and means update only (no predict); only `dt < 0` is an error.** The spec lists "dt <= 0" among the error cases. The Python reference treats the first processed sample with dt = 0 (update only) and the C port mirrors it, so the first row of every run and any repeated-timestamp row goes through the same path in both. NaN inputs are rejected without changing the state; a temperature outside the table range is clamped and flagged with a warning status.
+- **The ARM CI job installs the pinned Arm GNU Toolchain 15.3.Rel1 tarball, verified by sha256, not the distribution package.** `results/c_footprint.md` is committed and CI checks it byte for byte, so the compiler that produced it must be the one CI uses; the distribution package is an older GCC.
+- **Q_ref is a constant in `c/src/ekf.c` (2.7807 Ah) with a comment naming its source.** It is the one value the C port does not take from the generated tables; the S3 simplification pass may move it into the generated header so it lives in one place.
+- Evidence: `results/equivalence.md` (63 runs, experiment 1: float max 1.85e-02 pp against 0.1 pp, double max 5.00e-09 pp against 1e-3 pp), `results/c_footprint.md` (19,320 B of .text, 0 B .data and .bss, sizeof(ekf_t) = 60 B, only `expf` undefined).
+
 ## 2. Dataset facts confirmed in S0
 
 | claim (readme, or the spec's S0 checks) | verdict | evidence |

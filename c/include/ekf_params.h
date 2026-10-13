@@ -7,17 +7,34 @@
 #ifndef EKF_PARAMS_H
 #define EKF_PARAMS_H
 
+#include "ekf_types.h"
+
 #define EKF_N_T 6
 #define EKF_N_SOC 101
 
-extern const float ekf_t_grid_degc[EKF_N_T];  /* temperature axis in degC */
-extern const float ekf_soc_grid[EKF_N_SOC];  /* SoC axis as a fraction */
-extern const float ekf_ocv_v[EKF_N_T][EKF_N_SOC];  /* OCV in V */
-extern const float ekf_docv_v_per_soc[EKF_N_T][EKF_N_SOC];  /* dOCV/dSoC in V per unit SoC */
-extern const float ekf_r0_ohm[EKF_N_T][EKF_N_SOC];  /* R0 in Ohm */
-extern const float ekf_r1_ohm[EKF_N_T][EKF_N_SOC];  /* R1 in Ohm */
-extern const float ekf_tau1_s[EKF_N_T][EKF_N_SOC];  /* tau1 in s */
-extern const float ekf_r2_ohm[EKF_N_T][EKF_N_SOC];  /* R2 in Ohm */
-extern const float ekf_tau2_s[EKF_N_T][EKF_N_SOC];  /* tau2 in s */
+extern const ekf_real_t ekf_t_grid_degc[EKF_N_T];  /* temperature axis in degC */
+extern const ekf_real_t ekf_soc_grid[EKF_N_SOC];  /* SoC axis as a fraction */
+extern const ekf_real_t ekf_ocv_v[EKF_N_T][EKF_N_SOC];  /* OCV in V */
+extern const ekf_real_t ekf_docv_v_per_soc[EKF_N_T][EKF_N_SOC];  /* dOCV/dSoC in V per unit SoC */
+extern const ekf_real_t ekf_r0_ohm[EKF_N_T][EKF_N_SOC];  /* R0 in Ohm */
+extern const ekf_real_t ekf_r1_ohm[EKF_N_T][EKF_N_SOC];  /* R1 in Ohm */
+extern const ekf_real_t ekf_tau1_s[EKF_N_T][EKF_N_SOC];  /* tau1 in s */
+extern const ekf_real_t ekf_r2_ohm[EKF_N_T][EKF_N_SOC];  /* R2 in Ohm */
+extern const ekf_real_t ekf_tau2_s[EKF_N_T][EKF_N_SOC];  /* tau2 in s */
+
+/* One set of model tables. Each table pointer is row-major: entry [j][m] is at j * EKF_N_SOC + m. */
+typedef struct {
+    const ekf_real_t *t_grid;  /* temperature axis in degC, EKF_N_T nodes */
+    const ekf_real_t *soc_grid;  /* SoC axis as a fraction, EKF_N_SOC nodes */
+    const ekf_real_t *ocv;  /* OCV in V */
+    const ekf_real_t *docv;  /* dOCV/dSoC in V per unit SoC */
+    const ekf_real_t *r0;  /* R0 in Ohm */
+    const ekf_real_t *r1;  /* R1 in Ohm */
+    const ekf_real_t *tau1;  /* tau1 in s */
+    const ekf_real_t *r2;  /* R2 in Ohm */
+    const ekf_real_t *tau2;  /* tau2 in s */
+} ekf_params_t;
+
+extern const ekf_params_t ekf_params_default;  /* the arrays above */
 
 #endif /* EKF_PARAMS_H */

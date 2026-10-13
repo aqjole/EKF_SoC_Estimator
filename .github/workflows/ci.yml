@@ -1,0 +1,73 @@
+# The three CI jobs of the spec (S3). The raw dataset is not downloaded here: tests marked needs_data skip,
+# and the C equivalence runs on the committed fixtures in c/tests/fixtures/.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Unit tests
+        run: python -m pytest python/tests -q
+      - name: Generated C tables match results/params.csv
+        run: |
+          python python/export_params.py
+          git diff --exit-code c/src/ekf_params.c c/include/ekf_params.h
+      # S4: check that the README results tables are in sync with results/*.md.
+      # - name: README in sync
+      #   run: ...
+
+  c-host:
+    runs-on: ubuntu-latest
+    env:
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Float build with ASan and UBSan, unit tests and fixture equivalence
+        run: |
+          cmake -S c -B c/build/float -DEKF_SANITIZE=ON
+          cmake --build c/build/float
+          ctest --test-dir c/build/float --output-on-failure
+      - name: Double build, unit tests and fixture equivalence
+        run: |
+          cmake -S c -B c/build/double -DEKF_USE_DOUBLE=ON
+          cmake --build c/build/double
+          ctest --test-dir c/build/double --output-on-failure
+
+  # The committed results/c_footprint.md names the compiler and its section sizes, so CI must use the same
+  # release that wrote it: the pinned Arm GNU Toolchain 15.3.Rel1 (Ubuntu's gcc-arm-none-eabi is an older GCC).
+  c-arm:
+    runs-on: ubuntu-latest
+    env:
+      ARM_TOOLCHAIN: arm-gnu-toolchain-15.3.rel1-x86_64-arm-none-eabi
+      ARM_TOOLCHAIN_SHA256: 563bebb2b97d53382b956d6ee1fe61e2cae26699901417234a37df505ef9b5fa
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned Arm GNU Toolchain 15.3.Rel1
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL -o "$ARM_TOOLCHAIN.tar.xz" \
+            "https://gitlab.arm.com/api/v4/projects/tooling%2Fgnu-toolchains-for-arm/packages/generic/gnu-toolchain/15.3.rel1/$ARM_TOOLCHAIN.tar.xz"
+          echo "$ARM_TOOLCHAIN_SHA256  $ARM_TOOLCHAIN.tar.xz" | sha256sum -c
+          mkdir arm-gnu-toolchain
+          tar -xJf "$ARM_TOOLCHAIN.tar.xz" -C arm-gnu-toolchain --strip-components=1
+          echo "$RUNNER_TEMP/arm-gnu-toolchain/bin" >> "$GITHUB_PATH"
+      - run: arm-none-eabi-gcc --version
+      - name: Cross-compile, footprint and double-precision helper check
+        run: python3 python/arm_footprint.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: c_footprint
+          path: results/c_footprint.md
+      - name: Committed footprint table matches
+        run: git diff --exit-code results/c_footprint.md

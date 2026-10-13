@@ -1,11 +1,11 @@
 # Reproduce the results from the raw data. Stages and targets are described in the spec.
-# Later stages add c, equiv and readme targets and extend "all".
+# S4 adds the readme target.
 
 PYTHON := .venv/bin/python
 
-.PHONY: all data inventory checks fit tune ekf
+.PHONY: all data inventory checks fit tune ekf c equiv arm
 
-all: data inventory checks fit ekf
+all: data inventory checks fit ekf c equiv arm
 
 # Fetch the LG 18650HG2 .mat files into data/raw/ and verify their sha256.
 data:
@@ -33,3 +33,22 @@ tune:
 # Writes results/ekf_results.csv, ekf_summary.md, plots/s2/ and, git-ignored, results/runs/ (per-run traces, reused when still newer than the code).
 ekf:
 	$(PYTHON) python/run_all.py
+
+# S3: configure, build and test the C library, its unit tests and the fixture equivalence in the float and double builds.
+c:
+	cmake -S c -B c/build/float -DEKF_USE_DOUBLE=OFF
+	cmake --build c/build/float
+	ctest --test-dir c/build/float --output-on-failure
+	cmake -S c -B c/build/double -DEKF_USE_DOUBLE=ON
+	cmake --build c/build/double
+	ctest --test-dir c/build/double --output-on-failure
+
+# S3: the C filter against the Python one on every evaluation run, in both builds (needs data/raw/ and make ekf).
+# Writes results/equivalence.md and results/plots/s3/; the C inputs go to results/runs/c_inputs/ (git-ignored).
+equiv:
+	$(PYTHON) python/compare_c.py
+
+# S3: cross-compile the library for a Cortex-M4 (c/cmake/arm-none-eabi.cmake) and check it uses no double-precision helper.
+# Writes results/c_footprint.md (.text/.data/.bss per library object, sizeof(ekf_t), the symbol check); fails on a helper.
+arm:
+	$(PYTHON) python/arm_footprint.py
