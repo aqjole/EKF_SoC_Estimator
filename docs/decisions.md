@@ -202,6 +202,7 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
   - `synthetic.png`: the synthetic-data convergence test.
   - Every other run's trace goes to `results/runs/plots/` (gitignored) when `run_all.py` is run locally.
 - `results/plots/s3/` (written by `python/compare_c.py`, `make equiv`): `equivalence_<T>degC.png`, Python minus C SoC in pp over time for the float and double builds, one file per temperature.
+- `results/plots/s5/` (S5, written by `python/sensitivity.py`, `make sensitivity`, and `python/compare_octave.py`, `make octave`): `sensitivity_capacity.png`, `sensitivity_rate.png` and `equivalence_octave_25degC.png` (1.18 to 1.20).
 - Plot files are PNG, matplotlib Agg backend, metadata stripped so a regeneration is byte-identical where matplotlib allows it. The README of `results/plots/` repeats this list.
 
 ### 1.15 EKF noise settings (S2, frozen)
@@ -226,6 +227,25 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
 - **The ARM CI job installs the pinned Arm GNU Toolchain 15.3.Rel1 tarball, verified by sha256, not the distribution package.** `results/c_footprint.md` is committed and CI checks it byte for byte, so the compiler that produced it must be the one CI uses; the distribution package is an older GCC.
 - **Q_ref reaches the C port through the generated header: `python/export_params.py` emits `EKF_Q_REF_AH` from `Q_REF_AH` in `python/ekfsoc/constants.py`, so the value lives in one place.** (The first S3 build had it as a constant in `c/src/ekf.c`; the simplification pass moved it.)
 - Evidence: `results/equivalence.md` (63 runs, experiment 1: float max 1.85e-02 pp against 0.1 pp, double max 5.00e-09 pp against 1e-3 pp), `results/c_footprint.md` (19,344 B of .text after the simplification pass, 0 B .data and .bss, sizeof(ekf_t) = 60 B, only `expf` undefined).
+
+### 1.18 Capacity-error sensitivity (S5)
+
+- **The filter and the coulomb counter are run with the capacity set to 0.95 Q_ref and 1.05 Q_ref; the reference SoC, the evaluation window (C14) and the frozen noise settings (1.15) do not change.** Experiment 1 (correct initial SoC) on the 63 runs of 1.5. The nominal column is the experiment-1 row of `results/ekf_results.csv`, not a rerun. Q_ref enters the filter through the SoC row of Eq. 6 only, so a keyword argument of `run_ekf` carries the scaled value; the C port is untouched (its `EKF_Q_REF_AH` is a compile-time constant).
+- Reason: a wrong capacity is what ageing looks like to a coulomb counter: its error grows with the charge throughput, about 5 % of the SoC swing at 5 % capacity error. The EKF corrects it through the voltage. The 5 % of the spec brackets the measured fade of `results/capacity.md`. The truth does not move because the reference SoC is the cycler's counter against the measured capacity (1.10).
+- Report: `results/sensitivity.md`, per temperature the mean SoC RMSE over the folder's runs at -5 %, nominal and +5 %, for the EKF and for coulomb counting, with the largest per-run RMSE named; `results/sensitivity.csv` holds every run. Plot `results/plots/s5/sensitivity_capacity.png`: RMSE against temperature, one line per capacity scaling, EKF solid and coulomb counting dashed.
+
+### 1.19 Sample-rate sensitivity: the 1 Hz decimated run (S5)
+
+- **Decimation keeps every 10th kept row of the loader's run (rows 0, 10, 20, ...), recomputes dt between the kept rows and changes nothing else: the kept sample's current is held over the whole step (C11), the reference SoC is read at the kept rows from the counter, the frozen noise settings apply unchanged (the process noise scales with dt, 1.15) and the window is C14 on the kept rows.** Experiment 1 on the 63 runs of 1.5; coulomb counting at 1 Hz on the same rows is the comparator; the 0.1 s values come from `results/ekf_results.csv`.
+- Reason: a 1 Hz logger without current averaging records exactly these rows; averaging the ten currents would model an integrating sensor, a different check. Keeping the hold rule makes the decimated run the same filter on sparser data, so the difference measures the sample rate alone. The coulomb-counting comparator separates the hold error of the input, which both estimators share, from the filter's own loss.
+- Report: `results/sensitivity.md`, per temperature the mean SoC RMSE and the largest max |error| at 0.1 s and at 1 s for the EKF and for coulomb counting; plot `results/plots/s5/sensitivity_rate.png`.
+
+### 1.20 Octave port rules (S5)
+
+- **`octave/` holds the filter only (the Eq. 4 lookups, Eq. 6 to 11 with the projection limit of 1.16), function for function after `python/ekfsoc/ekf.py` and `model.py` with the same operation order, in double precision, in plain Octave with no packages and no syntax newer than Octave 8 (Ubuntu's package), so the same files run under the Homebrew Octave used locally and the distribution Octave in CI.** The loader, the fit and the metrics are not ported: the port reads `results/params.csv` and the input CSV of `c/tools/ekf_run_csv` (dt_s, i_a, v_v, t_degc) with the same command line (input, output, q_soc, q_v, r, soc0), P0 as in 1.15, and writes the SoC with 17 significant digits.
+- **Equivalence is judged as in S3: experiment 1 on the 63 runs, max |delta SoC| against the Python trace below 1e-3 pp (the double threshold).** `python/compare_octave.py` reuses the per-run comparison and the tables of `python/compare_c.py`, parameterised on the implementation; `results/equivalence.md` stays byte-identical. Its `--fixtures` mode runs the three fixtures of `c/tests/fixtures/` against their `soc_expected`, and CI runs that mode in a fourth job with the distribution Octave.
+- Reason: the spec asks for an `.m` EKF that reproduces the Python results; the C port already fixed the input format, the command line and the equivalence procedure, so the Octave port reuses them instead of defining a second convention. 17 digits (not the 10 of the C tool) because Octave's double arithmetic can be compared at full resolution; differences of an ulp in `exp` or in the matrix products may remain and are far below the threshold.
+- Plot: `results/plots/s5/equivalence_octave_25degC.png`, Python minus Octave SoC in pp over time on US06 at 25 degC.
 
 ## 2. Dataset facts confirmed in S0
 

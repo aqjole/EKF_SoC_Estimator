@@ -2,9 +2,9 @@
 
 PYTHON := .venv/bin/python
 
-.PHONY: all data inventory checks fit tune ekf c equiv arm readme readme-check
+.PHONY: all data inventory checks fit tune ekf c equiv arm sensitivity octave readme readme-check
 
-all: data inventory checks fit ekf c equiv arm readme
+all: data inventory checks fit ekf c equiv arm sensitivity octave readme
 
 # Fetch the LG 18650HG2 .mat files into data/raw/ and verify their sha256.
 data:
@@ -51,6 +51,16 @@ equiv:
 # Writes results/c_footprint.md (.text/.data/.bss per library object, sizeof(ekf_t), the symbol check); fails on a helper.
 arm:
 	$(PYTHON) python/arm_footprint.py
+
+# S5: experiment 1 with the capacity at 0.95 and 1.05 Q_ref, and at 1 Hz (every 10th row), on every evaluation run (needs make ekf).
+# Writes results/sensitivity.csv, results/sensitivity.md and results/plots/s5/sensitivity_*.png.
+sensitivity:
+	$(PYTHON) python/sensitivity.py
+
+# S5: the Octave filter (octave/) against the Python one on every evaluation run (needs GNU Octave on PATH and make ekf).
+# Writes results/equivalence_octave.md and results/plots/s5/equivalence_octave_25degC.png.
+octave:
+	$(PYTHON) python/compare_octave.py
 
 # S4: copy the results tables from results/*.md into README.md between its marker comments.
 readme:
