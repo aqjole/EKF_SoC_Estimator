@@ -11,9 +11,9 @@ count in .text (flash), not in .data (RAM). The size marker object and the host 
 
 | object | .text | .data | .bss | total |
 |---|---:|---:|---:|---:|
-| ekf.c.obj | 1912 | 0 | 0 | 1912 |
+| ekf.c.obj | 1956 | 0 | 0 | 1956 |
 | ekf_params.c.obj | 17432 | 0 | 0 | 17432 |
-| total | 19344 | 0 | 0 | 19344 |
+| total | 19388 | 0 | 0 | 19388 |
 
 sizeof(ekf_t) = 60 bytes: the state of one filter, which the caller owns (one per cell). Read
 with arm-none-eabi-nm -S from the object ekf_t_size_marker[sizeof(ekf_t)] (c/src/ekf_size_marker.c).

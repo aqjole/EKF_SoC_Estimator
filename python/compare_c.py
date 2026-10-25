@@ -12,10 +12,12 @@ Run from the repo root:  .venv/bin/python python/compare_c.py   (or: make equiv;
      code or the settings shows up as a failure of the double build, whose threshold is far below any such change.
   4. results/equivalence.md gets max and RMS |delta SoC| in pp per run and build, per temperature and overall,
      against the spec's thresholds; results/plots/s3/ gets Python minus C SoC over time for US06 at each
-     temperature (docs/decisions.md 1.14).
+     temperature (docs/decisions.md 1.14). A run whose delta is not finite is an error, and the command exits
+     with status 1 when a build fails its threshold, so make equiv and CI cannot pass on a failed table.
 """
 
 import subprocess
+import sys
 import time
 from functools import partial
 from multiprocessing import Pool
@@ -103,12 +105,26 @@ def pp_text(value):
     return f"{value:.2e}"
 
 
+def check_finite(table):
+    """Raise if a run has a non-finite statistic: the maxima below skip NaN, so such a run would vanish from the verdict."""
+    bad = table[~np.isfinite(table[STAT_COLUMNS]).all(axis=1)]
+    if not bad.empty:
+        runs = ", ".join(f"{row.folder}/{row.cycle} test {row.test}" for row in bad.itertuples())
+        raise RuntimeError(f"non-finite delta SoC in {runs}")
+
+
+def failed_builds(table):
+    """The builds whose largest max |delta SoC| reaches the threshold of BUILDS."""
+    return [build for build, (_, limit) in BUILDS.items() if table[f"{build}_max_pp"].max() >= limit]
+
+
 def verdict_lines(table):
     lines = ["| build | threshold (pp) | max \\|delta SoC\\| (pp) | worst run | largest RMS (pp) | result |",
              "|---|---|---|---|---|---|"]
+    failed = failed_builds(table)
     for build, (_, limit) in BUILDS.items():
         worst = table.loc[table[f"{build}_max_pp"].idxmax()]
-        result = "PASS" if worst[f"{build}_max_pp"] < limit else "FAIL"
+        result = "FAIL" if build in failed else "PASS"
         lines.append(f"| {build} | {limit:g} | {pp_text(worst[f'{build}_max_pp'])} | "
                      f"{worst['cycle']} at {worst['T']} degC ({worst['test']}) | "
                      f"{pp_text(table[f'{build}_rms_pp'].max())} | {result} |")
@@ -187,6 +203,7 @@ def main():
         compared = pool.map(partial(compare_run, cfg=cfg), specs, chunksize=1)
 
     table = pd.DataFrame([row for row, _ in compared])
+    check_finite(table)
     write_text(EQUIVALENCE_MD, equivalence_text(table, cfg))
     print(f"wrote {EQUIVALENCE_MD.relative_to(REPO_DIR)}")
     print("\n".join(verdict_lines(table)))
@@ -198,6 +215,8 @@ def main():
                              f"{spec.cycle_name} at {spec.nominal_temp_degc} degC: Python minus C SoC, experiment 1")
     print(f"wrote {PLOTS_DIR.relative_to(REPO_DIR)}/")
     print(f"runtime {time.perf_counter() - started:.1f} s")
+    if failed_builds(table):
+        sys.exit(f"equivalence FAIL in the {', '.join(failed_builds(table))} build, see {EQUIVALENCE_MD.relative_to(REPO_DIR)}")
 
 
 if __name__ == "__main__":

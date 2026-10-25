@@ -5,6 +5,7 @@ the cycle name only labels the rows. process_run is called in this process, as a
 """
 
 import os
+import shutil
 
 import numpy as np
 import pytest
@@ -65,6 +66,21 @@ def test_a_run_older_than_its_dependencies_is_computed_again(spec, tmp_path):
     run_all.process_run(spec, tmp_path)
 
     assert traces.stat().st_mtime_ns > old
+
+
+def test_a_run_older_than_its_mat_file_is_computed_again(tmp_path):
+    mat = tmp_path / FIXTURE.name
+    shutil.copyfile(FIXTURE, mat)
+    spec = RunSpec(mat, "25degC", 25, "US06", False)
+    run_all.process_run(spec, tmp_path)
+    traces = tmp_path / TRACES_NAME
+    modified = traces.stat().st_mtime_ns
+    newer = modified + 10**9
+    os.utime(mat, ns=(newer, newer))
+
+    run_all.process_run(spec, tmp_path)
+
+    assert traces.stat().st_mtime_ns > modified
 
 
 def test_trace_name_of_the_example_runs():

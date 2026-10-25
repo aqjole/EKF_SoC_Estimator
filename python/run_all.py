@@ -51,7 +51,8 @@ SUMMARY_MD = REPO_DIR / "results" / "ekf_summary.md"
 RUNS_DIR = REPO_DIR / "results" / "runs"
 PLOTS_DIR = REPO_DIR / "results" / "plots" / "s2"
 
-# What the saved traces depend on: the parameters, the noise settings, the code of the package and this driver.
+# What the saved traces of every run depend on, besides the run's own .mat file: the parameters, the noise
+# settings, the code of the package and this driver.
 DEPENDENCIES = [PARAMS_CSV, CONFIG_JSON, REPO_DIR / "python" / "run_all.py",
                 *sorted((REPO_DIR / "python" / "ekfsoc").glob("*.py"))]
 
@@ -92,9 +93,9 @@ def load_traces(path):
     return flat["t"], flat["v"], flat["reference"], cases
 
 
-def is_fresh(outputs):
-    """True if every output file exists and is newer than every file the results depend on."""
-    newest_input = max(path.stat().st_mtime_ns for path in DEPENDENCIES)
+def is_fresh(outputs, inputs):
+    """True if every output file exists and is newer than every input file."""
+    newest_input = max(path.stat().st_mtime_ns for path in inputs)
     return all(path.exists() and path.stat().st_mtime_ns > newest_input for path in outputs)
 
 
@@ -182,7 +183,7 @@ def process_run(spec, runs_dir):
     plots_dir = runs_dir / "plots"
     plot_paths = [plots_dir / trace_name(experiment, spec) for experiment in SCORED]
 
-    stale = not is_fresh([traces_path, *plot_paths])
+    stale = not is_fresh([traces_path, *plot_paths], [spec.path, *DEPENDENCIES])
     if stale:
         run = load_run(spec.path)
         cases = experiment_runs(run, Params.from_csv(PARAMS_CSV), EkfConfig.from_json(CONFIG_JSON))

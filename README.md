@@ -475,7 +475,7 @@ ekf_status_t ekf_step(ekf_t *e, ekf_real_t i_a, ekf_real_t v_v, ekf_real_t t_deg
 ekf_real_t   ekf_get_soc(const ekf_t *e);
 ```
 
-`ekf_step` predicts over `dt_s` with the held current, updates with the new sample, then holds its current. `dt_s = 0` means update only, as on the first sample of a run; a negative `dt_s` or a NaN input is rejected and leaves the state unchanged. A temperature outside the table range is clamped and returns a warning status (`docs/decisions.md` 1.17). The parameter tables in `c/src/ekf_params.c` are generated from `results/params.csv` by `python/export_params.py`.
+`ekf_step` predicts over `dt_s` with the held current, updates with the new sample, then holds its current. `dt_s = 0` means update only, as on the first sample of a run; a negative `dt_s` or a non-finite input (NaN or an infinity) is rejected and leaves the state unchanged. A temperature outside the table range is clamped and returns a warning status (`docs/decisions.md` 1.17). The parameter tables in `c/src/ekf_params.c` are generated from `results/params.csv` by `python/export_params.py`.
 
 **Builds.** `ekf_real_t` is `float` by default; `-DEKF_USE_DOUBLE=ON` makes it `double`. `-DEKF_SANITIZE=ON` adds AddressSanitizer and UndefinedBehaviorSanitizer to the host build. ctest runs the Unity unit tests (`c/tests/test_ekf.c`) and the three committed US06 fixtures in `c/tests/fixtures/`, where the C SoC must match the Python SoC within the same thresholds as the full equivalence run.
 
@@ -496,9 +496,9 @@ count in .text (flash), not in .data (RAM). The size marker object and the host 
 
 | object | .text | .data | .bss | total |
 |---|---:|---:|---:|---:|
-| ekf.c.obj | 1912 | 0 | 0 | 1912 |
+| ekf.c.obj | 1956 | 0 | 0 | 1956 |
 | ekf_params.c.obj | 17432 | 0 | 0 | 17432 |
-| total | 19344 | 0 | 0 | 19344 |
+| total | 19388 | 0 | 0 | 19388 |
 
 sizeof(ekf_t) = 60 bytes: the state of one filter, which the caller owns (one per cell). Read
 with arm-none-eabi-nm -S from the object ekf_t_size_marker[sizeof(ekf_t)] (c/src/ekf_size_marker.c).

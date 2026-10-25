@@ -13,10 +13,10 @@
 
 typedef enum {
     EKF_OK = 0,
-    EKF_ERR_NAN_INPUT,      /* an input is NaN; the state is left unchanged */
-    EKF_ERR_DT_NEGATIVE,    /* dt_s < 0; the state is left unchanged (dt_s = 0 is allowed) */
-    EKF_WARN_TEMP_CLAMPED,  /* the step ran, but t_degc is outside the table axis and was clamped (Eq. 4) */
-    EKF_ERR_NULL            /* a required pointer is NULL */
+    EKF_ERR_NONFINITE_INPUT, /* an input is NaN or infinite; the state is left unchanged */
+    EKF_ERR_DT_NEGATIVE,     /* dt_s < 0; the state is left unchanged (dt_s = 0 is allowed) */
+    EKF_WARN_TEMP_CLAMPED,   /* the step ran, but t_degc is outside the table axis and was clamped (Eq. 4) */
+    EKF_ERR_NULL             /* a required pointer is NULL */
 } ekf_status_t;
 
 /* The noise settings of the filter (as EkfConfig in Python) and the model tables it reads.

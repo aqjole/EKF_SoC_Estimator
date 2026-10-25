@@ -130,8 +130,8 @@ ekf_status_t ekf_init(ekf_t *e, const ekf_cfg_t *cfg, ekf_real_t soc0)
     if (e == NULL || cfg == NULL || cfg->params == NULL) {
         return EKF_ERR_NULL;
     }
-    if (isnan(soc0)) {
-        return EKF_ERR_NAN_INPUT;
+    if (!isfinite(soc0)) {
+        return EKF_ERR_NONFINITE_INPUT;
     }
 
     var_soc = cfg->p0_soc_std * cfg->p0_soc_std;
@@ -280,8 +280,8 @@ ekf_status_t ekf_step(ekf_t *e, ekf_real_t i_a, ekf_real_t v_v, ekf_real_t t_deg
     if (e == NULL || e->cfg == NULL) {
         return EKF_ERR_NULL;
     }
-    if (isnan(i_a) || isnan(v_v) || isnan(t_degc) || isnan(dt_s)) {
-        return EKF_ERR_NAN_INPUT;
+    if (!isfinite(i_a) || !isfinite(v_v) || !isfinite(t_degc) || !isfinite(dt_s)) {
+        return EKF_ERR_NONFINITE_INPUT;
     }
     if (dt_s < EKF_R(0.0)) {
         return EKF_ERR_DT_NEGATIVE;

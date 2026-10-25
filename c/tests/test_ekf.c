@@ -168,30 +168,46 @@ static void test_step_with_negative_dt_leaves_state(void)
     TEST_ASSERT_EQUAL_MEMORY(&before, &ekf, sizeof ekf);
 }
 
-/* Steps with NaN in input k (0: i_a, 1: v_v, 2: t_degc, 3: dt_s) and the others valid. */
-static ekf_status_t step_with_nan_input(int k)
+/* The values ekf_step and ekf_init must reject: NaN and either infinity. */
+static const ekf_real_t non_finite[3] = {(ekf_real_t)NAN, (ekf_real_t)INFINITY, (ekf_real_t)-INFINITY};
+
+/* Steps with `value` in input k (0: i_a, 1: v_v, 2: t_degc, 3: dt_s) and the others valid. */
+static ekf_status_t step_with_input(int k, ekf_real_t value)
 {
     ekf_real_t inputs[4] = {I_A, V_V, T_DEGC, DT_S};
-    inputs[k] = (ekf_real_t)NAN;
+    inputs[k] = value;
     return ekf_step(&ekf, inputs[0], inputs[1], inputs[2], inputs[3]);
 }
 
-static void test_step_with_nan_input_returns_error(void)
+static void test_init_with_non_finite_soc0_returns_error(void)
 {
-    int k;
-    for (k = 0; k < 4; k++) {
-        TEST_ASSERT_EQUAL_INT(EKF_ERR_NAN_INPUT, step_with_nan_input(k));
+    ekf_t e;
+    int n;
+    for (n = 0; n < 3; n++) {
+        TEST_ASSERT_EQUAL_INT(EKF_ERR_NONFINITE_INPUT, ekf_init(&e, &cfg, non_finite[n]));
     }
 }
 
-static void test_step_with_nan_input_leaves_state(void)
+static void test_step_with_non_finite_input_returns_error(void)
+{
+    int k, n;
+    for (k = 0; k < 4; k++) {
+        for (n = 0; n < 3; n++) {
+            TEST_ASSERT_EQUAL_INT(EKF_ERR_NONFINITE_INPUT, step_with_input(k, non_finite[n]));
+        }
+    }
+}
+
+static void test_step_with_non_finite_input_leaves_state(void)
 {
     ekf_t before;
-    int k;
+    int k, n;
     memcpy(&before, &ekf, sizeof ekf);
 
     for (k = 0; k < 4; k++) {
-        step_with_nan_input(k);
+        for (n = 0; n < 3; n++) {
+            step_with_input(k, non_finite[n]);
+        }
         TEST_ASSERT_EQUAL_MEMORY(&before, &ekf, sizeof ekf);
     }
 }
@@ -234,8 +250,9 @@ int main(void)
     RUN_TEST(test_step_with_zero_dt_is_update_only);
     RUN_TEST(test_step_with_negative_dt_returns_error);
     RUN_TEST(test_step_with_negative_dt_leaves_state);
-    RUN_TEST(test_step_with_nan_input_returns_error);
-    RUN_TEST(test_step_with_nan_input_leaves_state);
+    RUN_TEST(test_init_with_non_finite_soc0_returns_error);
+    RUN_TEST(test_step_with_non_finite_input_returns_error);
+    RUN_TEST(test_step_with_non_finite_input_leaves_state);
     RUN_TEST(test_step_outside_temperature_axis_returns_warning);
     RUN_TEST(test_step_outside_temperature_axis_runs_at_the_clamped_temperature);
     RUN_TEST(test_get_soc_returns_the_soc_state);
