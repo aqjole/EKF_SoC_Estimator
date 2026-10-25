@@ -70,7 +70,7 @@ The two 1C columns are the folder's first and second 1C run in the order they ra
 
 ## How to run
 
-Requirements: Python 3.12, CMake and a C99 compiler. `make arm` also needs `arm-none-eabi-gcc`, the release named in `results/c_footprint.md`.
+Requirements: Python 3.12, CMake and a C99 compiler. `make arm` also needs `arm-none-eabi-gcc`, the release named in `results/c_footprint.md`. `make octave` needs GNU Octave 8 or later with `octave-cli` on PATH.
 
 ```sh
 python3.12 -m venv .venv
@@ -513,11 +513,12 @@ Result: PASS, none found.
 
 <!-- results:footprint:end -->
 
-**CI** (`.github/workflows/ci.yml`) has three jobs. None of them downloads the raw data.
+**CI** (`.github/workflows/ci.yml`) has four jobs. None of them downloads the raw data.
 
 - `python`: the unit tests; the generated C tables must match `results/params.csv`; this README must be in sync with `results/` (`python python/update_readme.py --check`).
 - `c-host`: the float build with ASan and UBSan and the double build, each with its unit tests and fixture equivalence.
 - `c-arm`: installs the pinned Arm GNU Toolchain (checked by sha256), cross-compiles, runs the double-precision helper check, and requires the committed `results/c_footprint.md` to match byte for byte.
+- `octave`: installs Ubuntu's GNU Octave and runs the Octave filter in `octave/` on the three committed fixtures against their expected SoC (`python python/compare_octave.py --fixtures`).
 
 CI has not yet run on GitHub: the repository has no remote at the time of writing.
 
