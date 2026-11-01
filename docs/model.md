@@ -165,6 +165,7 @@ V_i(k)  = a_i(k) · V_i(k-1) + R_i · (1 - a_i(k)) · I(k-1)
 ```
 
 - R_i and tau_i are read with Eq. 4 at the start of the step, at (T(k-1), SoC(k-1)). The current held over the step is the previous kept sample's current, I(k-1) (C11).
+- In the 2RC-I model of S7 (docs/decisions.md 1.28), R1 is read with Eq. 4b at (T(k-1), SoC(k-1), |I(k-1)|): the current that drives the branch over the step. Every other table is read with Eq. 4 as above.
 - Where it comes from: branch i is a resistor R_i in parallel with a capacitor C_i = tau_i / R_i, so dV_i/dt = -V_i / tau_i + R_i · I / tau_i. With I constant over the step, the solution over dt is Eq. 1 exactly. It is not an Euler step, so it holds for any dt, from the 0.1 s logging step to the 1.147 to 2.143 s steps at cycle boundaries (C11).
 - Limits: dt = 0 gives a_i = 1 and leaves V_i unchanged. A long step gives a_i -> 0 and V_i -> R_i · I(k-1), the steady value of a constant current.
 - Start: V_i(0) = 0 for every branch. The open-loop check starts the branches relaxed; C13 lists the runs that open under load.
@@ -210,6 +211,21 @@ Every parameter table F has one row per temperature node T_j (j = 0 to n_T - 1, 
 - The same rule serves every table: OCV, dOCV/dSoC, R0, R1, tau1, R2, tau2, and R3, tau3 in the 3RC model. No table is extrapolated.
 - Clamping matters in use: the measured cell temperature can lie beyond the 40 and -20 degC nodes [inv: summary per folder, drive-cycle cell T min / max] and an estimated SoC can leave 0 to 1.
 
+### Eq. 4b. Table lookup over current (R1 of the 2RC-I model, S7)
+
+The R1 table of the 2RC-I model (docs/decisions.md 1.28) has a third axis, the current magnitude, with nodes I_q (q = 0 to n_I - 1, ascending: 0.75, 1.5, 3, 6, 12, 18 A). Slice q, F[.][.][q], is a table over (T, SoC) like any other. The value at (T, S, I) is computed in this order:
+
+```
+1. clamp:    A_c = min(max(|I|, I_lo), I_hi)       I_lo, I_hi = the end nodes
+2. cell:     q = the largest index in 0 .. n_I - 2 with  A_c - I_q >= 0
+3. weight:   w_I = (A_c - I_q) / (I_{q+1} - I_q)                     in [0, 1]
+4. slices:   F_lo = Eq. 4 on slice q at (T, S),   F_hi = Eq. 4 on slice q + 1 at (T, S)
+5. along I:  F(T, S, I) = (1 - w_I) · F_lo + w_I · F_hi
+```
+
+- The rule is Eq. 4 applied twice and then once more along current, in the same weighted form, so a query on a current node returns that slice's Eq. 4 value with no rounding. No current is extrapolated: below 0.75 A and above 18 A the end slice is used.
+- Off a node, slices that hold the same table give the Eq. 4 value only to rounding, so the 2RC model keeps its own Eq. 4 path for R1.
+
 ### Eq. 5. dOCV/dSoC by central differences
 
 On the SoC grid S_0 .. S_{n-1}, for each temperature node:
@@ -244,6 +260,7 @@ x-   = F · x(k-1) + B · I(k-1)
 
 - Row by row: `SoC- = SoC(k-1) - I(k-1) · dt / (3600 · Q_ref)` is Eq. 3 with η = 1, and `Vi- = a_i · Vi(k-1) + R_i · (1 - a_i) · I(k-1)` is Eq. 1.
 - R_i and tau_i are read with Eq. 4 at the previous posterior SoC, SoC(k-1), and at T(k). Eq. 1 reads T(k-1); the filter takes one temperature per sample, so predict and update of a step use the same one.
+- In the 2RC-I model, R1 is read with Eq. 4b at |I(k-1)| as well, the current held over the step. The current is an input, so this changes the entry R1 · (1 - a1) of B and nothing in F, H or the noise settings.
 - The current is held over the whole step, including the cycle-boundary steps of up to 2.143 s, with no special gap code (C11).
 - SoC is not limited in predict. The limit is applied in update (Eq. 10), and a prior outside 0 to 1 is clamped by the lookups of Eq. 4.
 
