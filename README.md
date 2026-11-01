@@ -1,6 +1,6 @@
 # EKF SoC Estimator
 
-State-of-charge (SoC) estimation for a Li-ion cell with a 2RC equivalent-circuit model and an Extended Kalman Filter (EKF). A Python reference is fitted and validated offline on the public LG 18650HG2 dataset at all six of its temperatures. The same filter is ported to C99 for embedded targets, and the port is checked against the Python reference run by run. A later stage (S5) adds two sensitivity checks (a 5 % error in the filter's capacity, a 1 Hz sample rate) and a GNU Octave port of the filter, checked the same way. A last stage (S6) tried a third RC branch under rules fixed before the fit; it made the open-loop voltage worse at most temperatures, and the 2RC model stays (a negative result, reported below). Every result number in this README is copied from a file in `results/` by `python/update_readme.py`.
+State-of-charge (SoC) estimation for a Li-ion cell with a 2RC equivalent-circuit model and an Extended Kalman Filter (EKF). A Python reference is fitted and validated offline on the public LG 18650HG2 dataset at all six of its temperatures. The same filter is ported to C99 for embedded targets, and the port is checked against the Python reference run by run. A later stage (S5) adds two sensitivity checks (a 5 % error in the filter's capacity, a 1 Hz sample rate) and a GNU Octave port of the filter, checked the same way. A last stage (S6) tried a third RC branch under rules fixed before the fit; it made the US06 open-loop voltage worse at most temperatures, and the 2RC model stays (a negative result, reported below). Every result number in this README is copied from a file in `results/` by `python/update_readme.py`.
 
 ## Claims
 
@@ -92,7 +92,7 @@ make all         # every stage below, in order
 | `make arm` | S3 | cross-compiles for a Cortex-M4 and checks for double-precision helpers | `results/c_footprint.md` |
 | `make sensitivity` | S5 | runs experiment 1 with the filter capacity at -5 % and +5 % and at 1 Hz | `results/sensitivity.*`, `results/plots/s5/sensitivity_*.png` |
 | `make octave` | S5 | runs the Octave filter against the Python filter on every run; slow, because Octave runs the filter row by row | `results/equivalence_octave.md`, `results/plots/s5/equivalence_octave_25degC.png` |
-| `make fit-3rc` | S6 | fits the 3RC model from the same HPPC files, runs both models open loop on US06 and the third-branch ceiling check; needs `make fit` | `results/fit_levels_3rc.csv`, `results/params_3rc.csv`, `results/model_fit_3rc.md`, `results/plots/s6/` |
+| `make fit-3rc` | S6 | fits the 3RC model from the same HPPC files, runs both models open loop on US06, and the third-branch ceiling check on US06 and on every drive run; needs `make fit` | `results/fit_levels_3rc.csv`, `results/params_3rc.csv`, `results/model_fit_3rc.md`, `results/plots/s6/` |
 | `make readme` | S4 | copies the results tables into this README | `README.md` |
 | `make readme-check` | S4 | fails if this README is out of sync with `results/` | |
 
@@ -591,14 +591,27 @@ A constant third branch, R3 in {2, 5, 10, 20} mOhm and tau3 in {10, 20, 30, 50} 
 | -10 | 73.74 | 71.27 | -2.48 | 5 | 30 |
 | -20 | 104.58 | 102.56 | -2.01 | 10 | 30 |
 
+**Ceiling over every drive cycle**
+
+The ceiling above, repeated on every run of the evaluation set and the tuning cycle and pooled per temperature (docs/decisions.md 1.25). R3 in {2, 5, 10, 20, 35, 50, 70, 100} mOhm and tau3 in {10, 20, 30, 50, 100} s. The pooled RMSE is over all rows of a temperature's runs together, error = model minus measured voltage over the whole run, as for US06 above. Like the ceiling above it is chosen on the data it is scored on; it is not a fit. A run is helped when its own best branch lowers its RMSE by more than 10 %.
+
+| T (degC) | runs | 2RC pooled RMSE (mV) | best with a third branch (mV) | change (%) | R3 (mOhm) | tau3 (s) | runs helped |
+|---|---|---|---|---|---|---|---|
+| 40 | 7 | 13.95 | 11.37 | -18.5 | 5 | 20 | 6 |
+| 25 | 11 | 17.40 | 14.75 | -15.3 | 5 | 20 | 9 |
+| 10 | 11 | 24.81 | 22.05 | -11.1 | 5 | 20 | 6 |
+| 0 | 11 | 38.30 | 33.60 | -12.3 | 10 | 20 | 8 |
+| -10 | 11 | 63.38 | 46.84 | -26.1 | 20 | 30 | 10 |
+| -20 | 12 | 87.61 | 70.33 | -19.7 | 35 | 30 | 10 |
+
 <!-- results:model_fit_3rc:end -->
 
-The 3RC model fails the sanity gate and is worse than the 2RC model open loop at most temperatures, so it is not adopted; the EKF experiments and the C port were not run on it (`docs/decisions.md` 1.24). On the HPPC pulses it was fitted to, the middle branch does fit better. On the drive cycle it hurts, for two measured reasons:
+The 3RC model fails the sanity gate and is worse than the 2RC model open loop on US06 at most temperatures, so it is not adopted; the EKF experiments and the C port were not run on it (`docs/decisions.md` 1.24). On the HPPC pulses it was fitted to, the middle branch does fit better. On US06 it hurts, for two measured reasons:
 
 - The middle branch takes part of the slow branch's change inside each pulse window, so its resistance comes out too high; a synthetic check with a known slow branch shows the same bias (`docs/decisions.md` 1.24).
-- The drive cycle asks for little middle-branch resistance at all. The ceiling table adds the best constant third branch from a small grid to the unchanged 2RC model, chosen on the US06 file itself: the gain is small at every temperature, and the best resistance is far below what the HPPC fit gives (`results/model_fit_3rc.md` also lists the level fits).
+- US06 asks for little middle-branch resistance. The first ceiling table adds the best constant third branch from a small grid to the unchanged 2RC model, chosen on the US06 file itself: the gain is small at every temperature, and the best resistance is far below what the HPPC fit gives.
 
-With the other branches as fitted, the ceiling also suggests that the larger cold voltage errors do not come mainly from a missing middle time constant. A revised fit was considered and not run: the ceiling leaves it little room, and changing the fit after seeing the result would have been a post-hoc choice.
+The second reason holds for US06 only. US06 has the lowest mean open-loop error of all drive cycles at every temperature, while nearly every other run has a positive one: the model drops too little voltage under sustained discharge, which is what a middle branch adds. The second ceiling table repeats the check on every drive run, pooled per temperature. There a constant third branch lowers the open-loop error at every temperature, most at -10 and -20 degC, and the resistance it asks for is of the same order as the HPPC fit's (`docs/decisions.md` 1.25; `results/model_fit_3rc.md` also lists the level fits and every run). The middle branch is worth having; what failed is fitting it from 50 s pulse windows. A fit from data that resolve its 20 to 50 s time constant is the open next step, and as a change made after seeing the result it gets its own decision before it runs.
 
 ![3RC parameters against SoC](results/plots/s6/params_3rc.png)
 
@@ -668,7 +681,7 @@ CI has not yet run on GitHub: the repository has no remote at the time of writin
 - The cell aged over the campaign, which ran 25, 40, 10, 0, -10 and -20 degC in that order. It also lost capacity inside the 25 degC block (the two 25 degC 1C runs in the capacity table). One Q_ref, from the freshest cell, is used at every temperature. Missing and off-temperature 1C tests are marked in `results/capacity.md`.
 - The reference SoC is itself coulomb counting, on the cycler's Ah counter. The baseline counts the logged current; the two agree closely (the coulomb-counting table of experiment 1, `docs/model.md` C13). The cycler's stated accuracy is 0.1 % of full scale, so a real sensor offset in the data would be invisible to this comparison.
 - The OCV table is the C/20 discharge branch, corrected onto the HPPC 1 h rest voltages. The correction rests on the few rest points of each temperature and is held flat beyond the first and last of them. The cold rests have not fully relaxed after 1 h, which leaves a small bias in those points (`docs/decisions.md` 1.1, 1.12). The charge half of the C/20 test is not used, because the two halves do not share an Ah axis.
-- The 2RC fit assumes two separable branches: R0, R1 and tau1 from the discharge pulses, R2 and tau2 from the 1 h rests, with V2 = 0 at the start of each move. A third branch fitted from the same pulses made the drive-cycle voltage worse at most temperatures (S6), and the model keeps no time constant between the fast and the slow branch. Charge pulses are never fitted, so regen uses discharge parameters. The EKF Jacobians leave out dR0/dSoC and the SoC dependence of the RC parameters (`docs/decisions.md` 1.12, `docs/model.md` Eq. 7, Eq. 8).
+- The 2RC fit assumes two separable branches: R0, R1 and tau1 from the discharge pulses, R2 and tau2 from the 1 h rests, with V2 = 0 at the start of each move. A third branch fitted from the same pulses made the US06 voltage worse at most temperatures (S6), so the model keeps no time constant between the fast and the slow branch, although the drive cycles ask for one of 20 to 50 s (`docs/decisions.md` 1.25). Charge pulses are never fitted, so regen uses discharge parameters. The EKF Jacobians leave out dR0/dSoC and the SoC dependence of the RC parameters (`docs/decisions.md` 1.12, `docs/model.md` Eq. 7, Eq. 8).
 - The 25 degC open-loop voltage error passes the sanity limit by a thin margin (the gate line under the model-fit table).
 - The noise settings were tuned on one cycle at one temperature. The eight mixes are built from segments of the four standard cycles, so the tuning cycle and the evaluation runs share segments (`docs/decisions.md` 1.11).
 - Errors grow in the cold. Experiment 1 errors are clearly larger at 0, -10 and -20 degC than at 40, 25 and 10 degC, and at -10 and -20 degC many runs of experiments 2 and 3 never settle inside the band.

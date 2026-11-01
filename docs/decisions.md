@@ -284,6 +284,32 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
 - What this means for the motivation of S6: a third branch can improve the US06 voltage by at most about 1 to 2.5 mV (2 to 9 %) while the other branches stay as fitted. The larger gain an exploratory regression suggested before S6 came mostly from the free constant offset of that regression, not from the branch.
 - Any revised fit is a post-hoc change: it is recorded as its own decision before it runs, the gate and the adoption rule of 1.22 stay as they are, and this entry and `results/model_fit_3rc.md` stay as the record of the procedure fixed in advance.
 
+### 1.25 S6: the 3RC rejection re-checked on every drive cycle
+
+**The ceiling of 1.24 was scored on US06 alone, and US06 is the drive cycle that asks least for a middle branch. Repeated on all 63 runs, with the same error, the same scoring and the 2RC tables unchanged, a constant third branch lowers the open-loop RMSE pooled over each temperature's runs by 11 to 26 %, with R3 of 5 to 35 mOhm and tau3 of 20 to 30 s. The sentence of 1.24 that the data "asks for little middle-branch resistance at all" therefore holds for US06 only. The first cause in 1.24, the bias of fit (a), stands; the 3RC model of 1.21 stays not adopted, and 1.24 with its US06 tables stays as the record.**
+
+- Reason: at every temperature US06 has the lowest mean open-loop error of all cycles (model minus measured, -9.8 to +0.1 mV), while 55 of the other 57 runs have a positive mean error, up to +54.8 mV at -20 degC (`results/model_fit_3rc.md`, ceiling per drive run). A positive mean error is a model that drops too little voltage under sustained discharge, which is what a middle branch adds. A ceiling taken on the one cycle without that error cannot speak for the others.
+- Rules of the pooled ceiling, written by `python/fit_3rc.py` to `results/model_fit_3rc.md` as two sections after the US06 ceiling, which stays byte-identical: pooled per temperature, then run by run:
+  - Runs: the 63 runs of `experiments.evaluation_runs` (the 62 evaluation runs and the tuning cycle), grouped by folder temperature.
+  - Error and score as in 1.24: model minus measured voltage over the whole run, every branch voltage 0 at the first row, reference SoC and measured temperature as inputs. The pooled RMSE is the root of the mean squared error over all rows of a temperature's runs together, so a long run weighs more than a short one.
+  - Grid: the grid of 1.24 plus R3 in {35, 50, 70, 100} mOhm and tau3 = 100 s, because on the grid of 1.24 the -20 degC best lies on its upper edge (20 mOhm). The wider grid changes no US06 value of 1.24.
+  - As in 1.24, the branch is chosen on the data it is scored on, so the result bounds from above what a middle branch adds while R1, tau1, R2 and tau2 stay as fitted; it is not a fit.
+- Outcome (`results/model_fit_3rc.md`: ceiling over every drive cycle; the US06 R3 from the ceiling of 1.24 and the fit's median R3 from the 3RC level fits):
+
+  | T (degC) | runs | 2RC pooled RMSE (mV) | best with a third branch (mV) | change | R3 (mOhm) | tau3 (s) | US06 best R3 of 1.24 (mOhm) | 3RC fit median R3 (mOhm) |
+  |---|---|---|---|---|---|---|---|---|
+  | 40 | 7 | 13.95 | 11.37 | -18.5 % | 5 | 20 | 2 | 7.68 |
+  | 25 | 11 | 17.40 | 14.75 | -15.3 % | 5 | 20 | 2 | 11.25 |
+  | 10 | 11 | 24.81 | 22.05 | -11.1 % | 5 | 20 | 2 | 14.85 |
+  | 0 | 11 | 38.30 | 33.60 | -12.3 % | 10 | 20 | 5 | 13.44 |
+  | -10 | 11 | 63.38 | 46.84 | -26.1 % | 20 | 30 | 5 | 29.79 |
+  | -20 | 12 | 87.61 | 70.33 | -19.7 % | 35 | 30 | 10 | 29.78 |
+
+  With each run's own best branch on the same grid, 49 of the 63 runs lower their RMSE by more than 10 %; no US06 run is among them, and no run's best lies on the grid's upper edge.
+- What this changes in 1.24: its bullet that the data asks for little middle-branch resistance, and its conclusion that a third branch is worth at most 1 to 2.5 mV, are statements about US06. Over all drive cycles the branch the data asks for has R3 of the same order as the fit's (5 to 35 against 7.68 to 29.79 mOhm). The fit over-estimates R3 by a factor of about 1.3 to 3 at 40 to -10 degC and not at -20 degC, which is the bias of fit (a) that 1.24 measured. The attribution in 1.24 of the exploratory gain to a free offset holds for US06, where that regression ran.
+- What does not change: nothing is adopted, the gate and the adoption rule of 1.22 stay as they are, and no EKF experiment or C port runs. The README's S6 section takes the pooled table through its marker and words its second reason as a statement about US06.
+- What follows: a revised fit of the middle branch is now supported by the drive-cycle data. It is the post-hoc change of the last bullet of 1.24 and gets its own entry before it runs, with data that resolve a 20 to 60 s time constant instead of the 50 s pulse windows of fit (a). The table above is the most such a fit can gain with the other branches as fitted.
+
 ## 2. Dataset facts confirmed in S0
 
 | claim (readme, or the spec's S0 checks) | verdict | evidence |

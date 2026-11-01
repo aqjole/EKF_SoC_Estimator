@@ -51,6 +51,7 @@ SOURCES = [
     ("equivalence_octave", "results/equivalence_octave.md", ("Per temperature",)),
     ("model_fit_3rc", "results/model_fit_3rc.md", ("Open-loop voltage error on US06, 2RC and 3RC",)),
     ("model_fit_3rc", "results/model_fit_3rc.md", ("Ceiling: a third branch added to the 2RC model",)),
+    ("model_fit_3rc", "results/model_fit_3rc.md", ("Ceiling over every drive cycle",)),
 ]
 
 HEADING = re.compile(r"(#{1,6}) (.+)")

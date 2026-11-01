@@ -10,7 +10,8 @@ Run from the repo root:  .venv/bin/python python/fit_3rc.py   (or: make fit-3rc;
   4. Both models run open-loop on US06 (decisions 1.4) from their CSV tables. results/model_fit_3rc.md
      compares them, counts failed fits and time constants that end on a bound, and applies the 25 degC
      gate of S1 to the 3RC model. It also gives the ceiling of decisions 1.24: the best open-loop RMSE
-     when a constant third branch from a small grid is added to the unchanged 2RC tables.
+     when a constant third branch from a small grid is added to the unchanged 2RC tables. Decisions 1.25
+     repeats that ceiling on every drive run of experiments.evaluation_runs, pooled per temperature.
   5. results/plots/s6/params_3rc.png draws the 3RC tables (decisions 1.14).
 """
 
@@ -19,9 +20,11 @@ from dataclasses import replace
 import numpy as np
 import pandas as pd
 
-from ekfsoc.constants import REPO_DIR, T_GRID_DEGC
-from ekfsoc.fit import FIT_BOUNDS, FITTED_TABLES_3RC, fit_hppc_run
-from ekfsoc.model import Params
+from ekfsoc.constants import RAW_DIR, REPO_DIR, T_GRID_DEGC
+from ekfsoc.experiments import evaluation_runs
+from ekfsoc.fit import FIT_BOUNDS, FITTED_TABLES_3RC, fit_hppc_run, rc_voltage
+from ekfsoc.loader import load_run, soc_ref
+from ekfsoc.model import Params, simulate_open_loop
 from ekfsoc.plots import plot_params
 from export_params import PARAMS_CSV, md_table, write_text
 from fit_all import GATE_RMSE_MV, GATE_TEMP_DEGC, LEVEL_COLUMNS, load_ocv_inputs, resample, validate_us06
@@ -41,6 +44,14 @@ ON_BOUND_REL = 1e-3
 # The grid of the ceiling diagnostic (decisions 1.24): constant R3 and tau3 added to the 2RC tables.
 CEILING_R3_OHM = (0.002, 0.005, 0.01, 0.02)
 CEILING_TAU3_S = (10.0, 20.0, 30.0, 50.0)
+
+# The grid of the pooled ceiling (decisions 1.25): the grid above with larger R3 and a longer tau3 added,
+# because on the grid above the -20 degC best lies on its upper edge.
+POOLED_R3_OHM = CEILING_R3_OHM + (0.035, 0.05, 0.07, 0.1)
+POOLED_TAU3_S = CEILING_TAU3_S + (100.0,)
+
+# A run counts as helped by a third branch when its own best one lowers its RMSE by more than this fraction.
+HELPED_FRACTION = 0.10
 
 
 def build_params_3rc(level_rows):
@@ -155,11 +166,86 @@ def ceiling_section(results_2rc, ceilings):
     return lines
 
 
-def model_fit_3rc_text(results_2rc, results_3rc, level_rows, ceilings):
+def branch_sse(error_mv, current, dt):
+    """Squared-error sums in mV^2, shape (tau3, R3) over the pooled grid, of one run with a third branch added.
+
+    error_mv is the run's 2RC open-loop error, model minus measured. A branch with constant R3 and tau3 is
+    linear in its own state, so with it the model voltage falls by R3 times the voltage of a 1 Ohm branch of
+    the same tau3 (Eq. 1). One 2RC simulation per run therefore serves the whole grid.
+    """
+    sse = np.zeros((len(POOLED_TAU3_S), len(POOLED_R3_OHM)))
+    for a, tau3 in enumerate(POOLED_TAU3_S):
+        unit_mv = 1000.0 * rc_voltage(current, dt, 1.0, tau3)
+        for b, r3 in enumerate(POOLED_R3_OHM):
+            sse[a, b] = np.sum((error_mv - r3 * unit_mv) ** 2)
+    return sse
+
+
+def drive_run_ceiling(params_2rc, spec):
+    """One drive run of the pooled ceiling: its 2RC open-loop error summed for scoring, and its branch_sse grid."""
+    run = load_run(spec.path)
+    error_mv = 1000.0 * (simulate_open_loop(params_2rc, run.i, run.temp, soc_ref(run), run.dt) - run.v)
+    return {"temp": spec.nominal_temp_degc, "cycle": spec.cycle_name, "rows": len(error_mv),
+            "mean_error_mv": float(np.mean(error_mv)), "sse_2rc": float(np.sum(error_mv ** 2)),
+            "sse": branch_sse(error_mv, run.i, run.dt)}
+
+
+def grid_best(sse, rows):
+    """(rmse_mv, r3_ohm, tau3_s) of the smallest squared-error sum on the pooled grid; ties go to the first."""
+    a, b = np.unravel_index(np.argmin(sse), sse.shape)
+    return float(np.sqrt(sse[a, b] / rows)), POOLED_R3_OHM[b], POOLED_TAU3_S[a]
+
+
+def pooled_ceiling_sections(drive_runs):
+    """Lines of the ceiling of decisions 1.25: pooled per temperature over its drive runs, then run by run."""
+    pooled_rows, run_rows = [], []
+    for temp in T_GRID_DEGC:
+        runs = [run for run in drive_runs if run["temp"] == temp]
+        helped = 0
+        for run in runs:
+            rmse_2rc = np.sqrt(run["sse_2rc"] / run["rows"])
+            rmse, r3, tau3 = grid_best(run["sse"], run["rows"])
+            helped += rmse < (1.0 - HELPED_FRACTION) * rmse_2rc
+            run_rows.append([str(temp), run["cycle"], f"{rmse_2rc:.2f}", f"{run['mean_error_mv']:+.1f}", f"{rmse:.2f}",
+                             f"{1000.0 * r3:g}", f"{tau3:g}"])
+        rows = sum(run["rows"] for run in runs)
+        rmse_2rc = np.sqrt(sum(run["sse_2rc"] for run in runs) / rows)
+        rmse, r3, tau3 = grid_best(sum(run["sse"] for run in runs), rows)
+        pooled_rows.append([str(temp), str(len(runs)), f"{rmse_2rc:.2f}", f"{rmse:.2f}",
+                            f"{100.0 * (rmse / rmse_2rc - 1.0):+.1f}", f"{1000.0 * r3:g}", f"{tau3:g}", str(helped)])
+
+    r3_grid = ", ".join(f"{1000.0 * r3:g}" for r3 in POOLED_R3_OHM)
+    tau3_grid = ", ".join(f"{tau3:g}" for tau3 in POOLED_TAU3_S)
+    lines = [
+        "## Ceiling over every drive cycle",
+        "",
+        "The ceiling above, repeated on every run of the evaluation set and the tuning cycle and pooled per "
+        f"temperature (docs/decisions.md 1.25). R3 in {{{r3_grid}}} mOhm and tau3 in {{{tau3_grid}}} s. The pooled "
+        "RMSE is over all rows of a temperature's runs together, error = model minus measured voltage over the whole "
+        "run, as for US06 above. Like the ceiling above it is chosen on the data it is scored on; it is not a fit. "
+        f"A run is helped when its own best branch lowers its RMSE by more than {100 * HELPED_FRACTION:g} %.",
+        "",
+    ]
+    lines += md_table(["T (degC)", "runs", "2RC pooled RMSE (mV)", "best with a third branch (mV)", "change (%)",
+                       "R3 (mOhm)", "tau3 (s)", "runs helped"], pooled_rows)
+    lines += [
+        "",
+        "## Ceiling per drive run",
+        "",
+        "Each run with its own best third branch on the same grid. Mean error = model minus measured voltage, "
+        "averaged over the run; a positive mean is a model that drops too little voltage.",
+        "",
+    ]
+    lines += md_table(["T (degC)", "cycle", "2RC RMSE (mV)", "mean error (mV)", "best with a third branch (mV)",
+                       "R3 (mOhm)", "tau3 (s)"], run_rows)
+    return lines
+
+
+def model_fit_3rc_text(results_2rc, results_3rc, level_rows, ceilings, drive_runs):
     """Return the text of results/model_fit_3rc.md. Every number comes from the arguments."""
     lines = ["# Model fit, 3RC (S6)", "", "Written by `python/fit_3rc.py` (`make fit-3rc`). Do not edit by hand."]
     sections = (comparison_section(results_2rc, results_3rc), fit_section(level_rows),
-                ceiling_section(results_2rc, ceilings))
+                ceiling_section(results_2rc, ceilings), pooled_ceiling_sections(drive_runs))
     for section in sections:
         lines += ["", *section]
     return "\n".join(lines) + "\n"
@@ -184,7 +270,8 @@ def main():
         print(f"US06 {new['temp']:>4} degC: RMSE 2RC {old['rmse_mv']:.2f} mV, 3RC {new['rmse_mv']:.2f} mV")
 
     ceilings = [best_added_branch(params_2rc, temp) for temp in T_GRID_DEGC]
-    write_text(MODEL_FIT_3RC_MD, model_fit_3rc_text(results_2rc, results_3rc, level_rows, ceilings))
+    drive_runs = [drive_run_ceiling(params_2rc, spec) for spec in evaluation_runs(RAW_DIR)]
+    write_text(MODEL_FIT_3RC_MD, model_fit_3rc_text(results_2rc, results_3rc, level_rows, ceilings, drive_runs))
     print(f"wrote {MODEL_FIT_3RC_MD.relative_to(REPO_DIR)}")
 
 
