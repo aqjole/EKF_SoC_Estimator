@@ -9,7 +9,8 @@ Run from the repo root:  .venv/bin/python python/fit_3rc.py   (or: make fit-3rc;
      onto the SoC grid by the rule of fit_all.py.
   4. Both models run open-loop on US06 (decisions 1.4) from their CSV tables. results/model_fit_3rc.md
      compares them, counts failed fits and time constants that end on a bound, and applies the 25 degC
-     gate of S1 to the 3RC model.
+     gate of S1 to the 3RC model. It also gives the ceiling of decisions 1.24: the best open-loop RMSE
+     when a constant third branch from a small grid is added to the unchanged 2RC tables.
   5. results/plots/s6/params_3rc.png draws the 3RC tables (decisions 1.14).
 """
 
@@ -36,6 +37,10 @@ LEVEL_COLUMNS_3RC = LEVEL_COLUMNS[:6] + ("R3_ohm", "tau3_s") + LEVEL_COLUMNS[6:]
 
 # A fitted time constant within this fraction of an end of its bounds counts as on the bound.
 ON_BOUND_REL = 1e-3
+
+# The grid of the ceiling diagnostic (decisions 1.24): constant R3 and tau3 added to the 2RC tables.
+CEILING_R3_OHM = (0.002, 0.005, 0.01, 0.02)
+CEILING_TAU3_S = (10.0, 20.0, 30.0, 50.0)
 
 
 def build_params_3rc(level_rows):
@@ -111,10 +116,51 @@ def fit_section(level_rows):
     return lines
 
 
-def model_fit_3rc_text(results_2rc, results_3rc, level_rows):
+def best_added_branch(params_2rc, temp):
+    """(rmse_mv, r3_ohm, tau3_s): the lowest US06 open-loop RMSE on the grid, with a third branch added to the 2RC tables.
+
+    It is scored on the validation file itself, so it bounds from above what a middle branch adds to the
+    2RC model while R1, tau1, R2 and tau2 stay as fitted; it is not a fit.
+    """
+    shape = params_2rc.ocv.shape
+    best = None
+    for tau3 in CEILING_TAU3_S:
+        for r3 in CEILING_R3_OHM:
+            params = replace(params_2rc, r3=np.full(shape, r3), tau3=np.full(shape, tau3))
+            rmse = validate_us06(params, temp)["rmse_mv"]
+            if best is None or rmse < best[0]:
+                best = (rmse, r3, tau3)
+    return best
+
+
+def ceiling_section(results_2rc, ceilings):
+    """Lines of the ceiling diagnostic: per temperature the 2RC RMSE and the best one with a third branch added."""
+    rows = []
+    for result, (rmse, r3, tau3) in zip(results_2rc, ceilings):
+        rows.append([str(result["temp"]), f"{result['rmse_mv']:.2f}", f"{rmse:.2f}",
+                     f"{rmse - result['rmse_mv']:+.2f}", f"{1000.0 * r3:g}", f"{tau3:g}"])
+    r3_grid = ", ".join(f"{1000.0 * r3:g}" for r3 in CEILING_R3_OHM)
+    tau3_grid = ", ".join(f"{tau3:g}" for tau3 in CEILING_TAU3_S)
+    lines = [
+        "## Ceiling: a third branch added to the 2RC model",
+        "",
+        f"A constant third branch, R3 in {{{r3_grid}}} mOhm and tau3 in {{{tau3_grid}}} s, is added to the unchanged "
+        "2RC tables, and the lowest open-loop US06 RMSE is kept (docs/decisions.md 1.24). It is chosen on the "
+        "validation file itself, so it bounds from above what a middle branch adds while R1, tau1, R2 and tau2 "
+        "stay as fitted; it is not a fit.",
+        "",
+    ]
+    lines += md_table(["T (degC)", "2RC RMSE (mV)", "best with a third branch (mV)", "change (mV)", "R3 (mOhm)",
+                       "tau3 (s)"], rows)
+    return lines
+
+
+def model_fit_3rc_text(results_2rc, results_3rc, level_rows, ceilings):
     """Return the text of results/model_fit_3rc.md. Every number comes from the arguments."""
     lines = ["# Model fit, 3RC (S6)", "", "Written by `python/fit_3rc.py` (`make fit-3rc`). Do not edit by hand."]
-    for section in (comparison_section(results_2rc, results_3rc), fit_section(level_rows)):
+    sections = (comparison_section(results_2rc, results_3rc), fit_section(level_rows),
+                ceiling_section(results_2rc, ceilings))
+    for section in sections:
         lines += ["", *section]
     return "\n".join(lines) + "\n"
 
@@ -137,7 +183,8 @@ def main():
     for old, new in zip(results_2rc, results_3rc):
         print(f"US06 {new['temp']:>4} degC: RMSE 2RC {old['rmse_mv']:.2f} mV, 3RC {new['rmse_mv']:.2f} mV")
 
-    write_text(MODEL_FIT_3RC_MD, model_fit_3rc_text(results_2rc, results_3rc, level_rows))
+    ceilings = [best_added_branch(params_2rc, temp) for temp in T_GRID_DEGC]
+    write_text(MODEL_FIT_3RC_MD, model_fit_3rc_text(results_2rc, results_3rc, level_rows, ceilings))
     print(f"wrote {MODEL_FIT_3RC_MD.relative_to(REPO_DIR)}")
 
 

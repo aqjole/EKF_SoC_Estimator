@@ -272,6 +272,18 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
 
 - Reason: a compile-time constant keeps the rules of S3 (no dynamic allocation, a fixed sizeof(ekf_t)); a branch count chosen at run time would give every build the 3RC sizes. The 2RC build is the one CI checks byte for byte, so it stays the default. If a loop over the branches replaces the written-out 2RC code, the 2RC footprint may change by a few bytes; the regenerated table is committed with that change and the README says so. The Octave port cross-checks the v1.0 filter (1.20); a 3RC Octave port would add no new evidence.
 
+### 1.24 Outcome of the 3RC fit of 1.21 (S6, recorded before any revision)
+
+**Under the rules of 1.21 the 3RC model fails the S1 sanity gate: its open-loop US06 RMSE is 46.79 mV at 25 degC against 29.79 mV for the 2RC model, and it is higher than the 2RC value at five of the six temperatures (`results/model_fit_3rc.md`). It is not adopted, and the experiments of 1.22 and the C port of 1.23 are not run on it. This is a negative result of the pre-registered procedure, published as such; the code was checked and is not the cause.**
+
+- What the fit does: on the data it is fitted to, the middle branch helps. At 25 degC level 5 the pulse-window RMSE of fit (a) falls from 4.44 mV (2RC) to 2.34 mV (3RC), with tau1 moving from 4.49 s to 1.30 s and the middle branch taking R3 = 11.94 mOhm at tau3 = 29.3 s (`results/fit_levels.csv`, `results/fit_levels_3rc.csv`).
+- Why it fails on US06: R1 + R3 + R2 exceeds the 2RC R1 + R2 at most levels (25 degC level 5: 28.1 against 19.8 mOhm), so the model drops too much voltage under sustained load. Two causes, both measured:
+  - Fit (a) gives the middle branch part of the slow branch's change inside each 50 s window, which the window's free offset cannot absorb: on synthetic pulses with a 5 mOhm, 400 s slow branch it returns R3 and tau3 about 11 % and 24 % too high, and the true values without it (`python/tests/test_fit.py`, the 3RC fast-fit test). Fit (b) then lowers R2 only a little.
+  - The US06 data asks for little middle-branch resistance at all. With the 2RC tables unchanged, the best constant third branch on a grid of R3 in {2, 5, 10, 20} mOhm and tau3 in {10, 20, 30, 50} s, chosen on the US06 file itself, lowers the open-loop RMSE by only 0.75 to 2.48 mV, with R3 of 2 to 10 mOhm (`results/model_fit_3rc.md`, ceiling section). The 3RC fit's median R3 is 7.68 to 29.79 mOhm. At 40, 25 and 10 degC the best grid value is the smallest one, 2 mOhm.
+- Code check: the tables of `results/params_3rc.csv` were rebuilt from the level fits and match to the 6-digit rounding; an independent three-branch loop reproduces the 46.79 mV; the two fits recover known R1, tau1, R3, tau3 and R2, tau2 from synthetic data; and the 2RC path stays byte-identical. Swapping branch sets on US06 at 25 degC puts the extra error in the fast branches of fit (a), not in fit (b) or the simulation.
+- What this means for the motivation of S6: a third branch can improve the US06 voltage by at most about 1 to 2.5 mV (2 to 9 %) while the other branches stay as fitted. The larger gain an exploratory regression suggested before S6 came mostly from the free constant offset of that regression, not from the branch.
+- Any revised fit is a post-hoc change: it is recorded as its own decision before it runs, the gate and the adoption rule of 1.22 stay as they are, and this entry and `results/model_fit_3rc.md` stay as the record of the procedure fixed in advance.
+
 ## 2. Dataset facts confirmed in S0
 
 | claim (readme, or the spec's S0 checks) | verdict | evidence |
