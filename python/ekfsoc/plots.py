@@ -94,16 +94,18 @@ def plot_docv(params, path):
     save(fig, path)
 
 
-def plot_params(levels, params, path):
-    """params.png: R0, R1, tau1, R2, tau2 against SoC, one panel each, one line per temperature.
+def plot_params(levels, params, path, fitted_tables=FITTED_TABLES):
+    """params.png: R0, R1, tau1, R2, tau2 (and R3, tau3 for FITTED_TABLES_3RC) against SoC, one panel each,
+    one line per temperature.
 
     Solid line with dots: the HPPC level fits (`levels`, the table of results/fit_levels.csv), each at the SoC
     its fit belongs to. Dashed: the table on the SoC grid (`params`) that was resampled from them.
-    The sixth panel holds the legend.
+    The last panel holds the legend: the sixth of a 2 x 3 grid for five tables, the eighth of 2 x 4 for seven.
     """
-    fig, grid = plt.subplots(2, 3, figsize=(12, 6.5))
+    n_cols = (len(fitted_tables) + 2) // 2
+    fig, grid = plt.subplots(2, n_cols, figsize=(4 * n_cols, 6.5))
     *panels, legend_panel = grid.flat
-    for panel, (field, soc_key, column) in zip(panels, FITTED_TABLES):
+    for panel, (field, soc_key, column) in zip(panels, fitted_tables):
         for temp, table_row in zip(params.t_grid, getattr(params, field)):
             color = TEMP_COLORS[int(temp)]
             fits = levels[levels["T_degC"] == temp]

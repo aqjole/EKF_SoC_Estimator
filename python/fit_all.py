@@ -261,12 +261,18 @@ def model_fit_text(results, counts, level_rows, ocv_table):
 # --- driver --------------------------------------------------------------------------------------
 
 
-def main():
-    # Steps 1 to 3: OCV table and level fits.
+def load_ocv_inputs():
+    """Step 1: the C/20 and HPPC runs, the HPPC rest points and the corrected OCV table (decisions 1.1)."""
     c20_runs = {temp: load_test(temp, "c20") for temp in T_GRID_DEGC}
     hppc_runs = {temp: load_test(temp, "hppc") for temp in T_GRID_DEGC}
     rest_points_by_temp = {temp: rest_points(run, segment_hppc(run)) for temp, run in hppc_runs.items()}
     ocv_table = build_ocv(c20_runs, SOC_GRID, T_GRID_DEGC, rest_points_by_temp)
+    return c20_runs, hppc_runs, rest_points_by_temp, ocv_table
+
+
+def main():
+    # Steps 1 to 3: OCV table and level fits.
+    c20_runs, hppc_runs, rest_points_by_temp, ocv_table = load_ocv_inputs()
     level_rows = {temp: fit_hppc_run(hppc_runs[temp], ocv_table) for temp in T_GRID_DEGC}
     counts = {temp: count_pulses(hppc_runs[temp]) for temp in T_GRID_DEGC}
 

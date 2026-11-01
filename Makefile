@@ -2,7 +2,7 @@
 
 PYTHON := .venv/bin/python
 
-.PHONY: all data inventory checks fit tune ekf c equiv arm sensitivity octave readme readme-check
+.PHONY: all data inventory checks fit fit-3rc tune ekf c equiv arm sensitivity octave readme readme-check
 
 all: data inventory checks fit ekf c equiv arm sensitivity octave readme
 
@@ -22,6 +22,11 @@ checks:
 # Writes results/params.csv, fit_levels.csv, ocv_correction.csv, params.md, model_fit.md, plots/s1/ and the C tables in c/.
 fit:
 	$(PYTHON) python/fit_all.py
+
+# S6: the 3RC fit on the same HPPC files and OCV, and the open-loop check of both models on US06 (needs make fit).
+# Writes results/fit_levels_3rc.csv, params_3rc.csv, model_fit_3rc.md and plots/s6/params_3rc.png.
+fit-3rc:
+	$(PYTHON) python/fit_3rc.py
 
 # S2: tune the EKF noise settings on the tuning cycle and freeze them (not part of "all": the frozen values are committed).
 # Writes results/tuning.md, results/ekf_config.json and section 1.15 of docs/decisions.md.

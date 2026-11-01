@@ -1,6 +1,7 @@
-"""2RC fit of an HPPC run: R0, R1, tau1 from the discharge pulses, R2, tau2 from the 1 h rest after the move.
+"""RC fit of an HPPC run: R0 and the fast branches from the discharge pulses, R2, tau2 from the 1 h rest after the move.
 
-Rules: docs/decisions.md 1.12. Equation numbers are those of docs/model.md. HPPC levels come from
+Rules: docs/decisions.md 1.12 (2RC) and 1.21 (3RC: a middle branch R3, tau3 is fitted with R1, tau1 in fit (a),
+and the bounds change; everything else is the same). Equation numbers are those of docs/model.md. HPPC levels come from
 hppc.segment_hppc. Every fit runs on the data that resolves its branch (fit (b) holds the fast branch
 fixed), so the two RC branches cannot swap.
 
@@ -21,10 +22,12 @@ Fit (a), fit_level_fast: R0, R1, tau1 of one level, from its usable discharge pu
         e_w(k) = [z_w(k) + V1(k)] - mean_w[z_w + V1]
     and least_squares runs over (R1, tau1) alone. This is the same minimum as fitting c_w as well.
   - The OCV change inside a window comes from the OCV table at the file's nominal temperature.
-  - tau1 is bounded to [0.5, 30] s.
+  - tau1 is bounded to [0.5, 30] s. In the 3RC model, z_w(k) = c_w - V1(k) - V3(k) - V2(k) and fit (a)
+    runs over (R1, tau1, R3, tau3) with tau1 in [0.5, 10] s and tau3 in [10, 50] s (FIT_BOUNDS).
 
 Fit (b), fit_level_slow: R2, tau2 of the 1 h rest after the move that follows the level.
-  - The fast branch is taken from fit (a). V1 is computed with Eq. 1 over the move and the rest
+  - The fast branch is taken from fit (a) (both fast branches, V1 + V3, in the 3RC model, where tau2 is
+    bounded to [50, 3600] s). V1 is computed with Eq. 1 over the move and the rest
     (V1 = 0 at the first move row, which follows a 610 s rest) and added back to the measurement:
         y(k) = V(k) + V1(k) + R0 * I(k)  =  A - B * exp(-(t(k) - t0) / tau2)
     The rest has I = 0, so Eq. 1 lets V2 decay from its value B at the first rest row (time t0),
@@ -56,10 +59,18 @@ TAU1_BOUNDS_S = (0.5, 30.0)
 TAU2_BOUNDS_S = (30.0, 3600.0)
 SLOW_STEP_MIN_S = 1.0                  # fit (b) uses rows at least this far from the row before them
 
+# Per model: the tau bounds of the fast branches of fit (a), in the order of FAST_BRANCHES, and of tau2 in fit (b).
+FIT_BOUNDS = {
+    "2rc": {"fast": (TAU1_BOUNDS_S,), "tau2": TAU2_BOUNDS_S},           # docs/decisions.md 1.12
+    "3rc": {"fast": ((0.5, 10.0), (10.0, 50.0)), "tau2": (50.0, 3600.0)},  # docs/decisions.md 1.21
+}
+# The fast branches of fit (a): (key of R, key of tau, start of R, start of tau). Branch 3 is the middle one.
+FAST_BRANCHES = (("R1_ohm", "tau1_s", 0.01, 5.0), ("R3_ohm", "tau3_s", 0.005, 20.0))
 
-# The five fitted tables of fit_hppc_run: (Params field, key of the SoC the value belongs to, key of the value).
+# The fitted tables of fit_hppc_run: (Params field, key of the SoC the value belongs to, key of the value).
 FITTED_TABLES = (("r0", "soc_pulses", "R0_ohm"), ("r1", "soc_pulses", "R1_ohm"), ("tau1", "soc_pulses", "tau1_s"),
                  ("r2", "soc_rest", "R2_ohm"), ("tau2", "soc_rest", "tau2_s"))
+FITTED_TABLES_3RC = FITTED_TABLES + (("r3", "soc_pulses", "R3_ohm"), ("tau3", "soc_pulses", "tau3_s"))
 
 
 def rc_voltage(current, dt, r, tau):
@@ -106,11 +117,17 @@ def ocv_at(ocv_table, temp_degc, soc):
     return interp2(ocv_table.ocv, ocv_table.t_grid, ocv_table.soc_grid, temp_degc, soc)
 
 
-def fit_level_fast(run, level, ocv_table):
-    """Fit (a) for one level: returns {R0_ohm, R1_ohm, tau1_s, rmse_fast_mV, n_pulses_used, fast_ok}."""
+def fit_level_fast(run, level, ocv_table, tau_bounds=FIT_BOUNDS["2rc"]["fast"]):
+    """Fit (a) for one level: returns {R0_ohm, R1_ohm, tau1_s(, R3_ohm, tau3_s), rmse_fast_mV, n_pulses_used, fast_ok}.
+
+    tau_bounds holds one (lower, upper) pair per fast branch: one for the 2RC model, two for the 3RC model.
+    """
     pulses = [pulse for pulse in level.pulses if pulse.kind == "D" and pulse.usable]
+    branches = FAST_BRANCHES[:len(tau_bounds)]
     fit = {"R0_ohm": None, "R1_ohm": None, "tau1_s": None, "rmse_fast_mV": None,
            "n_pulses_used": len(pulses), "fast_ok": False}
+    if len(branches) == 2:
+        fit.update(R3_ohm=None, tau3_s=None)
     if not pulses:
         return fit
 
@@ -126,26 +143,35 @@ def fit_level_fast(run, level, ocv_table):
         windows.append((run.i[rows], run.dt[rows], z))
 
     def residuals(x):
-        r1, tau1 = x
         pieces = []
         for current, dt, z in windows:
-            shifted = z + rc_voltage(current, dt, r1, tau1)
+            shifted = z
+            for b in range(len(branches)):
+                shifted = shifted + rc_voltage(current, dt, x[2 * b], x[2 * b + 1])
             pieces.append(shifted - shifted.mean())
         return np.concatenate(pieces)
 
-    best = solve(residuals, (0.01, 5.0), (0.0, TAU1_BOUNDS_S[0]), (1.0, TAU1_BOUNDS_S[1]))
+    start, lower, upper = [], [], []
+    for (_, _, r_start, tau_start), (tau_low, tau_high) in zip(branches, tau_bounds):
+        start += [r_start, tau_start]
+        lower += [0.0, tau_low]
+        upper += [1.0, tau_high]
+    best = solve(residuals, start, lower, upper)
     if best is None:
         return fit
 
-    fit.update(R0_ohm=r0, R1_ohm=float(best.x[0]), tau1_s=float(best.x[1]), rmse_fast_mV=rmse_mv(best), fast_ok=True)
+    fit.update(R0_ohm=r0, rmse_fast_mV=rmse_mv(best), fast_ok=True)
+    for b, (r_key, tau_key, _, _) in enumerate(branches):
+        fit.update({r_key: float(best.x[2 * b]), tau_key: float(best.x[2 * b + 1])})
     return fit
 
 
-def fit_level_slow(run, level, fast, ocv_table):
+def fit_level_slow(run, level, fast, ocv_table, tau2_bounds=TAU2_BOUNDS_S):
     """Fit (b) for one level: returns {R2_ohm, tau2_s, rmse_slow_mV, slow_ok}.
 
-    `fast` is the dict of fit_level_fast; if its fit failed, this one fails too. ocv_table gives
-    the starting value of the asymptote. Raises ValueError for a level with no rest after its move.
+    `fast` is the dict of fit_level_fast; if its fit failed, this one fails too. Every fast branch it
+    holds (R1, tau1 and, in the 3RC model, R3, tau3) is added back. ocv_table gives the starting value
+    of the asymptote. Raises ValueError for a level with no rest after its move.
     """
     move, rest = level.move, level.rest_after_move
     if rest is None:
@@ -154,12 +180,16 @@ def fit_level_slow(run, level, fast, ocv_table):
     if not fast["fast_ok"]:
         return fit
 
-    # Fast branch over the move and the rest, added back to the measurement of the rest.
+    # Fast branches over the move and the rest, added back to the measurement of the rest.
     span = slice(move.start, rest.stop)
-    v1 = rc_voltage(run.i[span], run.dt[span], fast["R1_ohm"], fast["tau1_s"])[rest.start - move.start:]
+    v_fast = 0.0
+    for r_key, tau_key, _, _ in FAST_BRANCHES:
+        if r_key in fast:
+            v_branch = rc_voltage(run.i[span], run.dt[span], fast[r_key], fast[tau_key])
+            v_fast = v_fast + v_branch[rest.start - move.start:]
     keep = run.dt[rest] > SLOW_STEP_MIN_S
     seconds = (run.t[rest] - run.t[rest.start])[keep]
-    y = (run.v[rest] + v1 + fast["R0_ohm"] * run.i[rest])[keep]
+    y = (run.v[rest] + v_fast + fast["R0_ohm"] * run.i[rest])[keep]
 
     def residuals(x):
         asymptote, amplitude, tau2 = x
@@ -167,7 +197,7 @@ def fit_level_slow(run, level, fast, ocv_table):
 
     asymptote_start = ocv_at(ocv_table, run.meta["nominal_temp_degc"], level.soc_after_move)
     best = solve(residuals, (asymptote_start, 0.01, 600.0),
-                 (-np.inf, 0.0, TAU2_BOUNDS_S[0]), (np.inf, 1.0, TAU2_BOUNDS_S[1]))
+                 (-np.inf, 0.0, tau2_bounds[0]), (np.inf, 1.0, tau2_bounds[1]))
     if best is None:
         return fit
 
@@ -179,20 +209,21 @@ def fit_level_slow(run, level, fast, ocv_table):
     return fit
 
 
-def fit_hppc_run(run, ocv_table):
-    """Fit every level of an HPPC run; returns one dict per level, in file order.
+def fit_hppc_run(run, ocv_table, model="2rc"):
+    """Fit every level of an HPPC run with the bounds of `model` ("2rc" or "3rc"); one dict per level, in file order.
 
     Keys: T_degC, level, soc_pulses, R0_ohm, R1_ohm, tau1_s, rmse_fast_mV, n_pulses_used, fast_ok,
     soc_rest, R2_ohm, tau2_s, rmse_slow_mV, slow_ok. R0, R1 and tau1 belong at soc_pulses; R2 and tau2 at
     soc_rest, the SoC where the move ended. The last level has no 1 h rest: soc_rest, R2, tau2,
-    rmse_slow_mV and slow_ok are None there.
+    rmse_slow_mV and slow_ok are None there. The 3RC model adds R3_ohm and tau3_s, which belong at soc_pulses.
     """
+    bounds = FIT_BOUNDS[model]
     rows = []
     for level in segment_hppc(run):
-        fast = fit_level_fast(run, level, ocv_table)
+        fast = fit_level_fast(run, level, ocv_table, bounds["fast"])
         slow = {"soc_rest": None, "R2_ohm": None, "tau2_s": None, "rmse_slow_mV": None, "slow_ok": None}
         if level.rest_after_move is not None:
-            slow = {"soc_rest": level.soc_after_move, **fit_level_slow(run, level, fast, ocv_table)}
+            slow = {"soc_rest": level.soc_after_move, **fit_level_slow(run, level, fast, ocv_table, bounds["tau2"])}
         rows.append({"T_degC": run.meta["nominal_temp_degc"], "level": level.k, "soc_pulses": level.soc_pulses,
                      **fast, **slow})
     return rows

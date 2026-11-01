@@ -1,15 +1,17 @@
 """Tests for ekfsoc.fit.
 
-Synthetic: HPPC-like data is generated from the 2RC model with known parameters (model.simulate_open_loop
+Synthetic: HPPC-like data is generated from the 2RC (or 3RC) model with known parameters (model.simulate_open_loop
 with flat tables and a sloped OCV), and the two fits must recover them. Data (needs data/raw/): fit_hppc_run
 on the real HPPC files.
 """
+
+from dataclasses import replace
 
 import numpy as np
 import pytest
 
 from ekfsoc.constants import FOLDER_TEMP, RAW_DIR, SOC_GRID, T_GRID_DEGC
-from ekfsoc.fit import TAU1_BOUNDS_S, TAU2_BOUNDS_S, fit_hppc_run, fit_level_fast, fit_level_slow
+from ekfsoc.fit import FIT_BOUNDS, TAU1_BOUNDS_S, TAU2_BOUNDS_S, fit_hppc_run, fit_level_fast, fit_level_slow
 from ekfsoc.hppc import Level, segment_hppc
 from ekfsoc.loader import build_run, find_runs, load_run, soc_ref
 from ekfsoc.model import Params, simulate_open_loop
@@ -17,6 +19,7 @@ from ekfsoc.ocv import OcvTable, build_ocv
 
 R0, R1, TAU1 = 0.020, 0.010, 8.0   # Ohm, Ohm, s
 R2, TAU2 = 0.005, 400.0            # Ohm, s
+R3, TAU3 = 0.006, 25.0             # Ohm, s: the middle branch of the 3RC model (decisions 1.21)
 
 
 N_T = len(T_GRID_DEGC)
@@ -30,12 +33,13 @@ def flat_table(value):
 OCV = 3.2 + 0.8 * np.tile(SOC_GRID, (N_T, 1))
 SYNTHETIC_PARAMS = Params(T_GRID_DEGC, SOC_GRID, OCV, flat_table(0.8), flat_table(R0), flat_table(R1),
                           flat_table(TAU1), flat_table(R2), flat_table(TAU2))
+SYNTHETIC_PARAMS_3RC = replace(SYNTHETIC_PARAMS, r3=flat_table(R3), tau3=flat_table(TAU3))
 SYNTHETIC_OCV_TABLE = OcvTable(SOC_GRID, np.array(T_GRID_DEGC, dtype=float), OCV, flat_table(0.8), OCV,
                                flat_table(0.0), np.zeros(N_T), np.ones(N_T), np.ones(N_T, dtype=bool), False)
 
 
-def synthetic_run(blocks):
-    """A 25 degC Run whose voltage is the 2RC model's, from blocks (current in A, loader sign; seconds; step in s)."""
+def synthetic_run(blocks, params=SYNTHETIC_PARAMS):
+    """A 25 degC Run whose voltage is the model's (params), from blocks (current in A, loader sign; seconds; step in s)."""
     current, dt = [], []
     for amps, seconds, step in blocks:
         n_rows = round(seconds / step)
@@ -50,7 +54,7 @@ def synthetic_run(blocks):
     fields = {"Time": time, "Voltage": np.full(len(time), 3.7), "Current": -current, "Ah": counter,
               "Battery_Temp_degC": np.full(len(time), 25.0)}
     run = build_run(fields, "synthetic_hppc", "25degC", "hppc")
-    run.v = simulate_open_loop(SYNTHETIC_PARAMS, run.i, run.temp, soc_ref(run), run.dt)
+    run.v = simulate_open_loop(params, run.i, run.temp, soc_ref(run), run.dt)
     return run
 
 
@@ -82,6 +86,32 @@ def test_slow_fit_recovers_r2_tau2_from_a_synthetic_move_and_rest():
     slow = fit_level_slow(run, level, fast, SYNTHETIC_OCV_TABLE)
     assert slow["slow_ok"]
     assert [slow["R2_ohm"], slow["tau2_s"]] == pytest.approx([R2, TAU2], rel=0.05)
+
+
+def test_3rc_fast_fit_recovers_both_fast_branches_when_there_is_no_slow_branch():
+    # With the slow branch present (R2 = 5 mOhm, tau2 = 400 s), part of its ramp inside the 50 s windows goes
+    # into R3 and tau3 (about +11 % and +24 % here): the identifiability risk of decisions 1.21. Without it
+    # the fit must find the true values.
+    params = replace(SYNTHETIC_PARAMS_3RC, r2=flat_table(0.0))
+    run = synthetic_run([(0.0, 10, 1.0)] + pulse_level_blocks(), params)
+    (level,) = segment_hppc(run)
+    fast = fit_level_fast(run, level, SYNTHETIC_OCV_TABLE, FIT_BOUNDS["3rc"]["fast"])
+    recovered = [fast["R1_ohm"], fast["tau1_s"], fast["R3_ohm"], fast["tau3_s"]]
+    assert recovered == pytest.approx([R1, TAU1, R3, TAU3], rel=0.05)
+
+
+def test_3rc_slow_fit_adds_back_both_fast_branches():
+    run = synthetic_run([(0.0, 10, 1.0), (0.9, 240, 10.0), (0.0, 3590, 10.0), (0.0, 10, 0.1)], SYNTHETIC_PARAMS_3RC)
+    move_start, rest_start = 10, 34
+    level = Level(k=1, soc_pulses=1.0, pulses=[], move=slice(move_start, rest_start),
+                  rest_after_move=slice(rest_start, len(run.t)), soc_after_move=float(soc_ref(run)[rest_start - 1]))
+    fast = {"R0_ohm": R0, "R1_ohm": R1, "tau1_s": TAU1, "R3_ohm": R3, "tau3_s": TAU3, "fast_ok": True}
+    slow = fit_level_slow(run, level, fast, SYNTHETIC_OCV_TABLE, FIT_BOUNDS["3rc"]["tau2"])
+    assert [slow["R2_ohm"], slow["tau2_s"]] == pytest.approx([R2, TAU2], rel=0.05)
+
+
+def test_3rc_bounds_are_those_of_decisions_1_21():
+    assert FIT_BOUNDS["3rc"] == {"fast": ((0.5, 10.0), (10.0, 50.0)), "tau2": (50.0, 3600.0)}
 
 
 def test_fast_fit_without_a_usable_pulse_returns_none_and_a_flag():
