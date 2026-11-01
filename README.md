@@ -1,6 +1,6 @@
 # EKF SoC Estimator
 
-State-of-charge (SoC) estimation for a Li-ion cell with a 2RC equivalent-circuit model and an Extended Kalman Filter (EKF). A Python reference is fitted and validated offline on the public LG 18650HG2 dataset at all six of its temperatures. The same filter is ported to C99 for embedded targets, and the port is checked against the Python reference run by run. A later stage (S5) adds two sensitivity checks (a 5 % error in the filter's capacity, a 1 Hz sample rate) and a GNU Octave port of the filter, checked the same way. Every result number in this README is copied from a file in `results/` by `python/update_readme.py`.
+State-of-charge (SoC) estimation for a Li-ion cell with a 2RC equivalent-circuit model and an Extended Kalman Filter (EKF). A Python reference is fitted and validated offline on the public LG 18650HG2 dataset at all six of its temperatures. The same filter is ported to C99 for embedded targets, and the port is checked against the Python reference run by run. A later stage (S5) adds two sensitivity checks (a 5 % error in the filter's capacity, a 1 Hz sample rate) and a GNU Octave port of the filter, checked the same way. A last stage (S6) tried a third RC branch under rules fixed before the fit; it made the open-loop voltage worse at most temperatures, and the 2RC model stays (a negative result, reported below). Every result number in this README is copied from a file in `results/` by `python/update_readme.py`.
 
 ## Claims
 
@@ -92,6 +92,7 @@ make all         # every stage below, in order
 | `make arm` | S3 | cross-compiles for a Cortex-M4 and checks for double-precision helpers | `results/c_footprint.md` |
 | `make sensitivity` | S5 | runs experiment 1 with the filter capacity at -5 % and +5 % and at 1 Hz | `results/sensitivity.*`, `results/plots/s5/sensitivity_*.png` |
 | `make octave` | S5 | runs the Octave filter against the Python filter on every run; slow, because Octave runs the filter row by row | `results/equivalence_octave.md`, `results/plots/s5/equivalence_octave_25degC.png` |
+| `make fit-3rc` | S6 | fits the 3RC model from the same HPPC files, runs both models open loop on US06 and the third-branch ceiling check; needs `make fit` | `results/fit_levels_3rc.csv`, `results/params_3rc.csv`, `results/model_fit_3rc.md`, `results/plots/s6/` |
 | `make readme` | S4 | copies the results tables into this README | `README.md` |
 | `make readme-check` | S4 | fails if this README is out of sync with `results/` | |
 
@@ -556,96 +557,52 @@ The Octave filter (`octave/ekf_run_csv.m`, double precision, plain GNU Octave) f
 
 The per-run table is in `results/equivalence_octave.md`.
 
-## C port
+### S6: a third RC branch (negative result)
 
-### S5: sensitivity
+S6 asked whether a third, middle RC branch between the fast and the slow one improves the model. The rules were fixed in `docs/decisions.md` before any 3RC number existed: the middle branch is fitted with the fast one on the same HPPC discharge pulses, each branch has its own time-constant bounds, the S1 sanity gate applies, and the 3RC model would be adopted only if it lowered the experiment-1 SoC error broadly (1.21, 1.22). The code handles two or three branches, and every 2RC result above regenerates byte for byte.
 
-Experiment 1 again on the same 63 runs, with the frozen noise settings, changing one thing at a time (`docs/decisions.md` 1.18, 1.19). These S5 averages include the 62 evaluation runs and the tuning cycle; the S2 evaluation averages above exclude the tuning cycle. The tables are in `results/sensitivity.md`.
+<!-- results:model_fit_3rc:begin -->
 
-**Capacity error.** A stand-in for ageing (`docs/decisions.md` 1.18).
+**Open-loop voltage error on US06, 2RC and 3RC**
 
-<!-- results:sensitivity_capacity:begin -->
+Both models run without feedback on the US06 file of each temperature, as in `results/model_fit.md`: measured current and temperature, reference SoC, every branch voltage 0 at the first row, the tables of `results/params.csv` (2RC) and `results/params_3rc.csv` (3RC). Error = model minus measured voltage. The window columns run up to the last row with reference SoC >= 10 % (docs/model.md C14).
 
-**Capacity error: the filter capacity at -5 % and +5 %**
-
-- The filter and the coulomb counter both believe 0.95 Q_ref and 1.05 Q_ref (Q_ref = 2.7807 Ah) and start from the reference SoC at the first row (experiment 1).
-- Every cell is the mean SoC RMSE in pp over the evaluation window of the folder's runs; nominal is the experiment-1 value of `results/ekf_results.csv`; the reference SoC does not change.
-
-| T (degC) | runs | EKF -5 % | EKF nominal | EKF +5 % | coulomb counting -5 % | coulomb counting nominal | coulomb counting +5 % |
-|---|---|---|---|---|---|---|---|
-| 40 | 7 | 1.11 | 0.79 | 0.63 | 2.67 | 0.06 | 2.32 |
-| 25 | 11 | 1.11 | 0.85 | 0.81 | 2.62 | 0.04 | 2.32 |
-| 10 | 11 | 1.43 | 1.18 | 1.19 | 2.79 | 0.03 | 2.47 |
-| 0 | 11 | 2.43 | 2.04 | 1.88 | 2.74 | 0.04 | 2.42 |
-| -10 | 11 | 3.85 | 3.43 | 3.29 | 2.58 | 0.05 | 2.26 |
-| -20 | 12 | 4.02 | 3.70 | 3.67 | 1.95 | 0.03 | 1.73 |
-| all | 63 | 2.43 | 2.10 | 2.02 | 2.54 | 0.04 | 2.24 |
-
-Largest per-run EKF RMSE: 9.35 pp (Mix 8 at -20 degC, -5 %); largest per-run coulomb-counting RMSE: 3.19 pp (US06 at 10 degC, -5 %).
-
-Plot: `results/plots/s5/sensitivity_capacity.png`.
-
-<!-- results:sensitivity_capacity:end -->
-
-![Mean SoC RMSE per temperature with the filter capacity at -5 %, nominal and +5 %](results/plots/s5/sensitivity_capacity.png)
-
-On the folder means, the capacity error moves the EKF far less than it moves coulomb counting at every temperature. From 40 to 0 degC the EKF with the wrong capacity still has a lower mean RMSE than coulomb counting with it. At -10 and -20 degC coulomb counting with the wrong capacity has the lower mean: there the EKF's mean error at the nominal capacity is already larger than the mean drift of a 5 % capacity error. Single runs can go the other way at a given temperature; `results/sensitivity.csv` lists every run.
-
-**Sample rate.** Every 10th row is kept (1 Hz), dt is recomputed between the kept rows and each kept current is held over the whole step.
-
-<!-- results:sensitivity_rate:begin -->
-
-**Sample rate: every 10th row (1 Hz)**
-
-- The 1 Hz run keeps rows 0, 10, 20, ... of the loader's run and recomputes dt between them. The kept sample's current is held over the whole step (docs/model.md C11), the reference SoC is read at the kept rows and the evaluation window is C14 on them.
-- RMSE cells are means over the folder's runs; max |error| cells are the largest over the folder's runs. The 0.1 s columns are experiment 1 of `results/ekf_results.csv`.
-
-| T (degC) | runs | EKF RMSE 0.1 s | EKF RMSE 1 s | EKF max \|error\| 0.1 s | EKF max \|error\| 1 s | coulomb counting RMSE 0.1 s | coulomb counting RMSE 1 s |
-|---|---|---|---|---|---|---|---|
-| 40 | 7 | 0.79 | 0.66 | 2.27 | 2.10 | 0.06 | 0.43 |
-| 25 | 11 | 0.85 | 0.70 | 3.34 | 2.28 | 0.04 | 0.53 |
-| 10 | 11 | 1.18 | 1.12 | 5.01 | 3.84 | 0.03 | 0.58 |
-| 0 | 11 | 2.04 | 1.65 | 10.20 | 5.41 | 0.04 | 0.54 |
-| -10 | 11 | 3.43 | 3.00 | 15.57 | 9.60 | 0.05 | 0.56 |
-| -20 | 12 | 3.70 | 3.79 | 18.53 | 11.57 | 0.03 | 0.25 |
-| all | 63 | 2.10 | 1.92 | 18.53 | 11.57 | 0.04 | 0.48 |
-
-Plot: `results/plots/s5/sensitivity_rate.png`.
-
-<!-- results:sensitivity_rate:end -->
-
-![Mean SoC RMSE per temperature at 0.1 s and 1 s, EKF and coulomb counting](results/plots/s5/sensitivity_rate.png)
-
-At 1 Hz the EKF's mean RMSE is lower in every folder except -20 degC, and its largest |error| is lower in all six. Coulomb counting gets clearly worse, because holding one current sample for a whole second misses the changes in between. The EKF's mean RMSE over all runs does not rise with it, although single runs do get worse at 1 Hz (`results/sensitivity.csv`); this run does not separate the reasons.
-
-### S5: Octave port
-
-The Octave filter (`octave/ekf_run_csv.m`, double precision, plain GNU Octave) follows `python/ekfsoc/ekf.py` function for function and reads the same input files as the C tool (`docs/decisions.md` 1.20). It runs experiment 1 on the same 63 runs, and delta SoC is the Python SoC minus the Octave SoC on every row, in pp.
-
-<!-- results:equivalence_octave:begin -->
-
-**Result**
-
-| build | threshold (pp) | max \|delta SoC\| (pp) | worst run | largest RMS (pp) | result |
+| T (degC) | 2RC RMSE (mV) | 3RC RMSE (mV) | 3RC - 2RC (mV) | 2RC RMSE, SoC_ref >= 10 % (mV) | 3RC RMSE, SoC_ref >= 10 % (mV) |
 |---|---|---|---|---|---|
-| octave | 0.001 | 8.67e-12 | Mix 6 at -20 degC (611) | 1.79e-12 | PASS |
+| 40 | 20.90 | 27.91 | +7.01 | 18.31 | 20.74 |
+| 25 | 29.79 | 46.79 | +17.01 | 22.20 | 26.35 |
+| 10 | 40.68 | 60.00 | +19.32 | 40.68 | 60.00 |
+| 0 | 59.47 | 61.99 | +2.52 | 59.47 | 61.99 |
+| -10 | 73.74 | 87.11 | +13.37 | 73.74 | 87.11 |
+| -20 | 104.58 | 103.29 | -1.29 | 104.58 | 103.29 |
 
-**Per temperature**
+Gate: the 3RC open-loop RMSE at 25 degC is 46.79 mV against the sanity limit of 30 mV. **FAIL.** The limit is a bug check, not a published target.
 
-| T (degC) | runs | octave max (pp) | octave largest RMS (pp) |
-|---|---|---|---|
-| 40 | 7 | 1.78e-13 | 2.82e-14 |
-| 25 | 11 | 1.55e-13 | 2.64e-14 |
-| 10 | 11 | 1.08e-12 | 3.46e-13 |
-| 0 | 11 | 7.55e-13 | 3.28e-13 |
-| -10 | 11 | 2.19e-12 | 2.68e-13 |
-| -20 | 12 | 8.67e-12 | 1.79e-12 |
+**Ceiling: a third branch added to the 2RC model**
 
-<!-- results:equivalence_octave:end -->
+A constant third branch, R3 in {2, 5, 10, 20} mOhm and tau3 in {10, 20, 30, 50} s, is added to the unchanged 2RC tables, and the lowest open-loop US06 RMSE is kept (docs/decisions.md 1.24). It is chosen on the validation file itself, so it bounds from above what a middle branch adds while R1, tau1, R2 and tau2 stay as fitted; it is not a fit.
 
-![Python minus Octave SoC on US06 at 25 degC](results/plots/s5/equivalence_octave_25degC.png)
+| T (degC) | 2RC RMSE (mV) | best with a third branch (mV) | change (mV) | R3 (mOhm) | tau3 (s) |
+|---|---|---|---|---|---|
+| 40 | 20.90 | 19.07 | -1.83 | 2 | 20 |
+| 25 | 29.79 | 29.04 | -0.75 | 2 | 20 |
+| 10 | 40.68 | 39.77 | -0.91 | 2 | 20 |
+| 0 | 59.47 | 57.70 | -1.77 | 5 | 20 |
+| -10 | 73.74 | 71.27 | -2.48 | 5 | 30 |
+| -20 | 104.58 | 102.56 | -2.01 | 10 | 30 |
 
-The per-run table is in `results/equivalence_octave.md`.
+<!-- results:model_fit_3rc:end -->
+
+The 3RC model fails the sanity gate and is worse than the 2RC model open loop at most temperatures, so it is not adopted; the EKF experiments and the C port were not run on it (`docs/decisions.md` 1.24). On the HPPC pulses it was fitted to, the middle branch does fit better. On the drive cycle it hurts, for two measured reasons:
+
+- The middle branch takes part of the slow branch's change inside each pulse window, so its resistance comes out too high; a synthetic check with a known slow branch shows the same bias (`docs/decisions.md` 1.24).
+- The drive cycle asks for little middle-branch resistance at all. The ceiling table adds the best constant third branch from a small grid to the unchanged 2RC model, chosen on the US06 file itself: the gain is small at every temperature, and the best resistance is far below what the HPPC fit gives (`results/model_fit_3rc.md` also lists the level fits).
+
+With the other branches as fitted, the ceiling also suggests that the larger cold voltage errors do not come mainly from a missing middle time constant. A revised fit was considered and not run: the ceiling leaves it little room, and changing the fit after seeing the result would have been a post-hoc choice.
+
+![3RC parameters against SoC](results/plots/s6/params_3rc.png)
+
+## C port
 
 **API** (`c/include/ekf.h`). The caller owns one `ekf_t` per cell and one `ekf_cfg_t` with the noise settings and a pointer to the parameter tables. The library allocates nothing and keeps no state of its own.
 
@@ -711,7 +668,7 @@ CI has not yet run on GitHub: the repository has no remote at the time of writin
 - The cell aged over the campaign, which ran 25, 40, 10, 0, -10 and -20 degC in that order. It also lost capacity inside the 25 degC block (the two 25 degC 1C runs in the capacity table). One Q_ref, from the freshest cell, is used at every temperature. Missing and off-temperature 1C tests are marked in `results/capacity.md`.
 - The reference SoC is itself coulomb counting, on the cycler's Ah counter. The baseline counts the logged current; the two agree closely (the coulomb-counting table of experiment 1, `docs/model.md` C13). The cycler's stated accuracy is 0.1 % of full scale, so a real sensor offset in the data would be invisible to this comparison.
 - The OCV table is the C/20 discharge branch, corrected onto the HPPC 1 h rest voltages. The correction rests on the few rest points of each temperature and is held flat beyond the first and last of them. The cold rests have not fully relaxed after 1 h, which leaves a small bias in those points (`docs/decisions.md` 1.1, 1.12). The charge half of the C/20 test is not used, because the two halves do not share an Ah axis.
-- The 2RC fit assumes two separable branches: R0, R1 and tau1 from the discharge pulses, R2 and tau2 from the 1 h rests, with V2 = 0 at the start of each move. Charge pulses are never fitted, so regen uses discharge parameters. The EKF Jacobians leave out dR0/dSoC and the SoC dependence of the RC parameters (`docs/decisions.md` 1.12, `docs/model.md` Eq. 7, Eq. 8).
+- The 2RC fit assumes two separable branches: R0, R1 and tau1 from the discharge pulses, R2 and tau2 from the 1 h rests, with V2 = 0 at the start of each move. A third branch fitted from the same pulses made the drive-cycle voltage worse at most temperatures (S6), and the model keeps no time constant between the fast and the slow branch. Charge pulses are never fitted, so regen uses discharge parameters. The EKF Jacobians leave out dR0/dSoC and the SoC dependence of the RC parameters (`docs/decisions.md` 1.12, `docs/model.md` Eq. 7, Eq. 8).
 - The 25 degC open-loop voltage error passes the sanity limit by a thin margin (the gate line under the model-fit table).
 - The noise settings were tuned on one cycle at one temperature. The eight mixes are built from segments of the four standard cycles, so the tuning cycle and the evaluation runs share segments (`docs/decisions.md` 1.11).
 - Errors grow in the cold. Experiment 1 errors are clearly larger at 0, -10 and -20 degC than at 40, 25 and 10 degC, and at -10 and -20 degC many runs of experiments 2 and 3 never settle inside the band.

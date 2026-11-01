@@ -49,6 +49,8 @@ SOURCES = [
     ("sensitivity_rate", "results/sensitivity.md", ("Sample rate: every 10th row (1 Hz)",)),
     ("equivalence_octave", "results/equivalence_octave.md", ("Result",)),
     ("equivalence_octave", "results/equivalence_octave.md", ("Per temperature",)),
+    ("model_fit_3rc", "results/model_fit_3rc.md", ("Open-loop voltage error on US06, 2RC and 3RC",)),
+    ("model_fit_3rc", "results/model_fit_3rc.md", ("Ceiling: a third branch added to the 2RC model",)),
 ]
 
 HEADING = re.compile(r"(#{1,6}) (.+)")

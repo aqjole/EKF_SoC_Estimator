@@ -4,7 +4,7 @@ PYTHON := .venv/bin/python
 
 .PHONY: all data inventory checks fit fit-3rc tune ekf c equiv arm sensitivity octave readme readme-check
 
-all: data inventory checks fit ekf c equiv arm sensitivity octave readme
+all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc readme
 
 # Fetch the LG 18650HG2 .mat files into data/raw/ and verify their sha256.
 data:
