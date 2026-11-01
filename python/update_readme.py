@@ -52,6 +52,8 @@ SOURCES = [
     ("model_fit_3rc", "results/model_fit_3rc.md", ("Open-loop voltage error on US06, 2RC and 3RC",)),
     ("model_fit_3rc", "results/model_fit_3rc.md", ("Ceiling: a third branch added to the 2RC model",)),
     ("model_fit_3rc", "results/model_fit_3rc.md", ("Ceiling over every drive cycle",)),
+    ("model_fit_3rc_rest", "results/model_fit_3rc_rest.md", ("Open-loop voltage error on US06, 2RC and second 3RC fit",)),
+    ("model_fit_3rc_rest", "results/model_fit_3rc_rest.md", ("Open-loop error over every drive cycle",)),
 ]
 
 HEADING = re.compile(r"(#{1,6}) (.+)")
