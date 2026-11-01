@@ -1,6 +1,6 @@
 # EKF SoC Estimator
 
-State-of-charge (SoC) estimation for a Li-ion cell with a 2RC equivalent-circuit model and an Extended Kalman Filter (EKF). A Python reference is fitted and validated offline on the public LG 18650HG2 dataset at all six of its temperatures. The same filter is ported to C99 for embedded targets, and the port is checked against the Python reference run by run. Every result number in this README is copied from a file in `results/` by `python/update_readme.py`.
+State-of-charge (SoC) estimation for a Li-ion cell with a 2RC equivalent-circuit model and an Extended Kalman Filter (EKF). A Python reference is fitted and validated offline on the public LG 18650HG2 dataset at all six of its temperatures. The same filter is ported to C99 for embedded targets, and the port is checked against the Python reference run by run. A later stage (S5) adds two sensitivity checks (a 5 % error in the filter's capacity, a 1 Hz sample rate) and a GNU Octave port of the filter, checked the same way. Every result number in this README is copied from a file in `results/` by `python/update_readme.py`.
 
 ## Claims
 
@@ -70,7 +70,7 @@ The two 1C columns are the folder's first and second 1C run in the order they ra
 
 ## How to run
 
-Requirements: Python 3.12, CMake and a C99 compiler. `make arm` also needs `arm-none-eabi-gcc`, the release named in `results/c_footprint.md`. `make octave` needs GNU Octave 8 or later with `octave-cli` on PATH.
+Requirements: Python 3.12, CMake and a C99 compiler. `make arm` also needs `arm-none-eabi-gcc`, the release named in `results/c_footprint.md`. `make octave` needs GNU Octave 8 or later with `octave-cli` on PATH; `results/equivalence_octave.md` was written with GNU Octave 8.4.0 (`docs/decisions.md` 1.20).
 
 ```sh
 python3.12 -m venv .venv
@@ -90,6 +90,8 @@ make all         # every stage below, in order
 | `make c` | S3 | builds the C library in the float and double builds and runs ctest | `c/build/` (git-ignored) |
 | `make equiv` | S3 | runs the C filter against the Python filter on every run | `results/equivalence.md`, `results/plots/s3/` |
 | `make arm` | S3 | cross-compiles for a Cortex-M4 and checks for double-precision helpers | `results/c_footprint.md` |
+| `make sensitivity` | S5 | runs experiment 1 with the filter capacity at -5 % and +5 % and at 1 Hz | `results/sensitivity.*`, `results/plots/s5/sensitivity_*.png` |
+| `make octave` | S5 | runs the Octave filter against the Python filter on every run; slow, because Octave runs the filter row by row | `results/equivalence_octave.md`, `results/plots/s5/equivalence_octave_25degC.png` |
 | `make readme` | S4 | copies the results tables into this README | `README.md` |
 | `make readme-check` | S4 | fails if this README is out of sync with `results/` | |
 
@@ -465,6 +467,95 @@ The C filter (`c/tools/ekf_run_csv`) runs experiment 1 on every evaluation run a
 
 The per-run table is in `results/equivalence.md`.
 
+### S5: sensitivity
+
+Experiment 1 again on the same 63 runs, with the frozen noise settings, changing one thing at a time (`docs/decisions.md` 1.18, 1.19). These S5 averages include the 62 evaluation runs and the tuning cycle; the S2 evaluation averages above exclude the tuning cycle. The tables are in `results/sensitivity.md`.
+
+**Capacity error.** A stand-in for ageing (`docs/decisions.md` 1.18).
+
+<!-- results:sensitivity_capacity:begin -->
+
+**Capacity error: the filter capacity at -5 % and +5 %**
+
+- The filter and the coulomb counter both believe 0.95 Q_ref and 1.05 Q_ref (Q_ref = 2.7807 Ah) and start from the reference SoC at the first row (experiment 1).
+- Every cell is the mean SoC RMSE in pp over the evaluation window of the folder's runs; nominal is the experiment-1 value of `results/ekf_results.csv`; the reference SoC does not change.
+
+| T (degC) | runs | EKF -5 % | EKF nominal | EKF +5 % | coulomb counting -5 % | coulomb counting nominal | coulomb counting +5 % |
+|---|---|---|---|---|---|---|---|
+| 40 | 7 | 1.11 | 0.79 | 0.63 | 2.67 | 0.06 | 2.32 |
+| 25 | 11 | 1.11 | 0.85 | 0.81 | 2.62 | 0.04 | 2.32 |
+| 10 | 11 | 1.43 | 1.18 | 1.19 | 2.79 | 0.03 | 2.47 |
+| 0 | 11 | 2.43 | 2.04 | 1.88 | 2.74 | 0.04 | 2.42 |
+| -10 | 11 | 3.85 | 3.43 | 3.29 | 2.58 | 0.05 | 2.26 |
+| -20 | 12 | 4.02 | 3.70 | 3.67 | 1.95 | 0.03 | 1.73 |
+| all | 63 | 2.43 | 2.10 | 2.02 | 2.54 | 0.04 | 2.24 |
+
+Largest per-run EKF RMSE: 9.35 pp (Mix 8 at -20 degC, -5 %); largest per-run coulomb-counting RMSE: 3.19 pp (US06 at 10 degC, -5 %).
+
+Plot: `results/plots/s5/sensitivity_capacity.png`.
+
+<!-- results:sensitivity_capacity:end -->
+
+![Mean SoC RMSE per temperature with the filter capacity at -5 %, nominal and +5 %](results/plots/s5/sensitivity_capacity.png)
+
+On the folder means, the capacity error moves the EKF far less than it moves coulomb counting at every temperature. From 40 to 0 degC the EKF with the wrong capacity still has a lower mean RMSE than coulomb counting with it. At -10 and -20 degC coulomb counting with the wrong capacity has the lower mean: there the EKF's mean error at the nominal capacity is already larger than the mean drift of a 5 % capacity error. Single runs can go the other way at a given temperature; `results/sensitivity.csv` lists every run.
+
+**Sample rate.** Every 10th row is kept (1 Hz), dt is recomputed between the kept rows and each kept current is held over the whole step.
+
+<!-- results:sensitivity_rate:begin -->
+
+**Sample rate: every 10th row (1 Hz)**
+
+- The 1 Hz run keeps rows 0, 10, 20, ... of the loader's run and recomputes dt between them. The kept sample's current is held over the whole step (docs/model.md C11), the reference SoC is read at the kept rows and the evaluation window is C14 on them.
+- RMSE cells are means over the folder's runs; max |error| cells are the largest over the folder's runs. The 0.1 s columns are experiment 1 of `results/ekf_results.csv`.
+
+| T (degC) | runs | EKF RMSE 0.1 s | EKF RMSE 1 s | EKF max \|error\| 0.1 s | EKF max \|error\| 1 s | coulomb counting RMSE 0.1 s | coulomb counting RMSE 1 s |
+|---|---|---|---|---|---|---|---|
+| 40 | 7 | 0.79 | 0.66 | 2.27 | 2.10 | 0.06 | 0.43 |
+| 25 | 11 | 0.85 | 0.70 | 3.34 | 2.28 | 0.04 | 0.53 |
+| 10 | 11 | 1.18 | 1.12 | 5.01 | 3.84 | 0.03 | 0.58 |
+| 0 | 11 | 2.04 | 1.65 | 10.20 | 5.41 | 0.04 | 0.54 |
+| -10 | 11 | 3.43 | 3.00 | 15.57 | 9.60 | 0.05 | 0.56 |
+| -20 | 12 | 3.70 | 3.79 | 18.53 | 11.57 | 0.03 | 0.25 |
+| all | 63 | 2.10 | 1.92 | 18.53 | 11.57 | 0.04 | 0.48 |
+
+Plot: `results/plots/s5/sensitivity_rate.png`.
+
+<!-- results:sensitivity_rate:end -->
+
+![Mean SoC RMSE per temperature at 0.1 s and 1 s, EKF and coulomb counting](results/plots/s5/sensitivity_rate.png)
+
+At 1 Hz the EKF's mean RMSE is lower in every folder except -20 degC, and its largest |error| is lower in all six. Coulomb counting gets clearly worse, because holding one current sample for a whole second misses the changes in between. The EKF's mean RMSE over all runs does not rise with it, although single runs do get worse at 1 Hz (`results/sensitivity.csv`); this run does not separate the reasons.
+
+### S5: Octave port
+
+The Octave filter (`octave/ekf_run_csv.m`, double precision, plain GNU Octave) follows `python/ekfsoc/ekf.py` function for function and reads the same input files as the C tool (`docs/decisions.md` 1.20). It runs experiment 1 on the same 63 runs, and delta SoC is the Python SoC minus the Octave SoC on every row, in pp.
+
+<!-- results:equivalence_octave:begin -->
+
+**Result**
+
+| build | threshold (pp) | max \|delta SoC\| (pp) | worst run | largest RMS (pp) | result |
+|---|---|---|---|---|---|
+| octave | 0.001 | 8.67e-12 | Mix 6 at -20 degC (611) | 1.79e-12 | PASS |
+
+**Per temperature**
+
+| T (degC) | runs | octave max (pp) | octave largest RMS (pp) |
+|---|---|---|---|
+| 40 | 7 | 1.78e-13 | 2.82e-14 |
+| 25 | 11 | 1.55e-13 | 2.64e-14 |
+| 10 | 11 | 1.08e-12 | 3.46e-13 |
+| 0 | 11 | 7.55e-13 | 3.28e-13 |
+| -10 | 11 | 2.19e-12 | 2.68e-13 |
+| -20 | 12 | 8.67e-12 | 1.79e-12 |
+
+<!-- results:equivalence_octave:end -->
+
+![Python minus Octave SoC on US06 at 25 degC](results/plots/s5/equivalence_octave_25degC.png)
+
+The per-run table is in `results/equivalence_octave.md`.
+
 ## C port
 
 ### S5: sensitivity
@@ -628,7 +719,8 @@ CI has not yet run on GitHub: the repository has no remote at the time of writin
 - In experiment 4 some cold runs at -10 and -20 degC have a larger SoC RMSE with the EKF than with coulomb counting; `results/ekf_results.csv` lists both per run (`rmse_pp` and `cc_rmse_pp`, experiment `exp4`). US06 at -10 degC also ends with a slightly larger EKF error than coulomb counting.
 - The cycler caps the cold currents: discharge and regen are much lower at -10 and -20 degC than at the warm temperatures, and regen is already reduced at 0 degC (`results/data_inventory.md`, summary per folder). The cold drive cycles are therefore not the same loads as the warm ones.
 - The evaluation set is 62 runs. Where no run exists (HWFET at 25 degC, Mix 4 to 8 at 40 degC, Mix 4 at -10 degC, Mix 3 at 10 and 0 degC) the tables show `n/a`.
-- The C equivalence covers experiment 1. The other experiments use the same `ekf_step` with other start values and inputs, but they are not compared run by run.
+- The C and Octave equivalence checks cover experiment 1 only. The other experiments run the same filter with other start values and inputs, but they are not compared run by run.
+- The capacity sensitivity scales only the filter's capacity. Real ageing also changes the resistances and the OCV, while the model's tables stay as fitted.
 - Valid only within the tested temperature range.
 
 ## Reproducibility
