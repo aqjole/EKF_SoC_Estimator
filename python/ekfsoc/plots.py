@@ -115,6 +115,8 @@ def plot_params(levels, params, path, fitted_tables=FITTED_TABLES):
         panel.set_xlabel("SoC (%)")
         panel.set_ylabel(f"{name} ({unit})")
 
+    for panel in panels[len(fitted_tables):]:  # a grid with more panels than tables (the two of decisions 1.26)
+        panel.axis("off")
     legend_panel.axis("off")
     legend_panel.legend(handles=temperature_keys() + [key("HPPC level fit", linestyle="-", marker="o"),
                                                       key("table on the SoC grid", linestyle="--")],

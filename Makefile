@@ -2,9 +2,9 @@
 
 PYTHON := .venv/bin/python
 
-.PHONY: all data inventory checks fit fit-3rc tune ekf c equiv arm sensitivity octave readme readme-check
+.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest tune ekf c equiv arm sensitivity octave readme readme-check
 
-all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc readme
+all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3rc-rest readme
 
 # Fetch the LG 18650HG2 .mat files into data/raw/ and verify their sha256.
 data:
@@ -27,6 +27,11 @@ fit:
 # Writes results/fit_levels_3rc.csv, params_3rc.csv, model_fit_3rc.md and plots/s6/params_3rc.png.
 fit-3rc:
 	$(PYTHON) python/fit_3rc.py
+
+# S6: the second 3RC fit, the middle branch alone on the whole HPPC pulse train (docs/decisions.md 1.26; needs make fit).
+# Writes results/fit_levels_3rc_rest.csv, params_3rc_rest.csv, model_fit_3rc_rest.md and plots/s6/params_3rc_rest.png.
+fit-3rc-rest:
+	$(PYTHON) python/fit_3rc_rest.py
 
 # S2: tune the EKF noise settings on the tuning cycle and freeze them (not part of "all": the frozen values are committed).
 # Writes results/tuning.md, results/ekf_config.json and section 1.15 of docs/decisions.md.
