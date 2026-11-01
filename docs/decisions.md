@@ -203,6 +203,7 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
   - Every other run's trace goes to `results/runs/plots/` (gitignored) when `run_all.py` is run locally.
 - `results/plots/s3/` (written by `python/compare_c.py`, `make equiv`): `equivalence_<T>degC.png`, Python minus C SoC in pp over time for the float and double builds, one file per temperature.
 - `results/plots/s5/` (S5, written by `python/sensitivity.py`, `make sensitivity`, and `python/compare_octave.py`, `make octave`): `sensitivity_capacity.png`, `sensitivity_rate.png` and `equivalence_octave_25degC.png` (1.18 to 1.20).
+- `results/plots/s6/` (S6, written by `python/fit_all.py --model 3rc`, `make fit-3rc`, and `python/compare_models.py`, `make compare-models`): `params_3rc.png`, R0 to tau3 against SoC as `params.png` of S1, with R3 and tau3 added (1.21); `model_compare.png`, the open-loop RMSE and the experiment-1 mean SoC RMSE against temperature, 2RC and 3RC (1.22).
 - Plot files are PNG, matplotlib Agg backend, metadata stripped so a regeneration is byte-identical where matplotlib allows it. The README of `results/plots/` repeats this list.
 
 ### 1.15 EKF noise settings (S2, frozen)
@@ -246,6 +247,30 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
 - **Equivalence is judged as in S3: experiment 1 on the 63 runs, max |delta SoC| against the Python trace below 1e-3 pp (the double threshold).** `python/compare_octave.py` reuses the per-run comparison and the tables of `python/compare_c.py`, parameterised on the implementation; `results/equivalence.md` stays byte-identical. Its `--fixtures` mode runs the three fixtures of `c/tests/fixtures/` against their `soc_expected`, and CI runs that mode in a fourth job with the distribution Octave.
 - Reason: the spec asks for an `.m` EKF that reproduces the Python results; the C port already fixed the input format, the command line and the equivalence procedure, so the Octave port reuses them instead of defining a second convention. 17 digits (not the 10 of the C tool) because Octave's double arithmetic can be compared at full resolution; differences of an ulp in `exp` or in the matrix products may remain and are far below the threshold.
 - Plot: `results/plots/s5/equivalence_octave_25degC.png`, Python minus Octave SoC in pp over time on US06 at 25 degC.
+
+### 1.21 3RC model and fit rules (S6)
+
+**S6 adds a third RC branch, between the fast and the slow one, as a second model beside the 2RC model of v1.0, which stays as it is. The new branch is numbered 3 (R3, tau3, V3), so branches 1 and 2 keep their v1.0 meaning and the 2RC state [SoC, V1, V2] is the first three entries of the 3RC state [SoC, V1, V2, V3]. OCV, dOCV/dSoC and R0 are the v1.0 tables, unchanged; R1, tau1, R2 and tau2 are refitted together with R3 and tau3.**
+
+- Fit (a), 3RC: R1, tau1, R3 and tau3 from one least-squares fit over the four discharge pulses D1 to D4 and their 40 s rests (0.1 s data), with R0 held fixed per level at its v1.0 value and one free constant offset per pulse window, as in 1.12. Bounds: tau1 in [0.5, 10] s, tau3 in [10, 50] s.
+- Fit (b), 3RC: R2 and tau2 from the 3600 s rest after the move, as in 1.12, with the tau1 and tau3 branches of (a) added back over the move and the rest, and tau2 in [50, 3600] s. V2 = 0 at the start of the move, as in 1.12.
+- Export: the level fits go to `results/fit_levels_3rc.csv` and are resampled onto the 101-point grid as in 1.12 into `results/params_3rc.csv`, which holds the seven v1.0 tables plus r3 and tau3. `results/params_3rc.md` gives the table and, per temperature, the number of levels whose tau1, tau3 or tau2 ends on a bound.
+- Reason: the v1.0 level fits have tau1 from 0.53 to 6.2 s and tau2 from 99.6 to 2128 s (`results/fit_levels.csv`), so no branch follows the voltage between about 10 s and 100 s. The upper bound of tau3 is the length of one pulse window, 50 s: a longer time constant cannot be told apart from the window's free offset. The splits at 10 s (tau1 and tau3) and at 50 s (tau3 and tau2) keep the three branches from swapping, as the bounds of 1.12 do for two, and no v1.0 level fit lies outside the new tau1 or tau2 bound. The 610 s rests after the charge pulses would resolve tau3 better, but the fits use discharge pulses only (1.12), and adding charge pulses would change two things at once.
+- Risk, recorded before the fit: tau3 is identified from 50 s windows with a free offset, so it may end on a bound at many levels. The count is reported in `results/params_3rc.md`, and 1.22 judges the model by its results, not by its fit.
+- Validation: the open-loop US06 run of 1.4 for the 3RC model at every temperature, next to the 2RC values, in `results/model_fit_3rc.md`. The S1 sanity gate (30 mV at 25 degC) applies to the 3RC model as well.
+
+### 1.22 3RC evaluation and adoption rule (S6)
+
+**The 3RC filter runs experiments 1 to 4 on the 63 runs of 1.5 with the frozen noise settings of 1.15 unchanged: q_v applies to V3 as to V1 and V2, and P0 gets p0_v_std for V3. There is no re-tuning. The 3RC model is adopted (the README recommends it, and S6 ports it to C under 1.23) if and only if its experiment-1 mean SoC RMSE over the evaluation runs (tuning cycle excluded) is lower than the 2RC value at four or more of the six temperatures and higher at none by more than 0.10 pp. Otherwise S6 reports a negative result and the C port is not touched.**
+
+- Reason: fixed noise settings make the comparison measure the model change alone; a re-tune would add a second change, judged on the tuning cycle only (1.3). Experiment 1 is the criterion because there the model, not the recovery from a wrong start, decides the error, and it is the gate metric of S2. Four of six temperatures with none worse by more than 0.10 pp asks for a broad improvement, not a win at one temperature paid for at another; 0.10 pp is about a tenth of the 25 degC mean of 0.87 pp (`results/ekf_summary.md`). The rule is fixed here, before any 3RC result exists, and either outcome is published.
+- Report: `results/ekf_results_3rc.csv` (the columns of `results/ekf_results.csv`) and `results/model_compare.md`: per temperature the open-loop RMSE, the experiment-1 and experiment-4 mean SoC RMSE and the reached counts of experiments 2 and 3, 2RC next to 3RC, with the adoption verdict computed by the script. No v1.0 or v1.1 result file is rewritten.
+
+### 1.23 C port of the 3RC filter (S6, only if 1.22 adopts the model)
+
+**The C library takes the branch count as a compile-time constant, `EKF_N_RC`, 2 by default and 3 for the 3RC build; the state and the covariance are sized 1 + EKF_N_RC, and `python/export_params.py` generates `c/src/ekf_params_3rc.c` from `results/params_3rc.csv`. The 2RC build stays the default with the same operation order, so `results/equivalence.md` stays byte-identical. The 3RC build is judged as in S3 (experiment 1 on the 63 runs, float below 0.1 pp, double below 1e-3 pp) in `results/equivalence_3rc.md`, and `results/c_footprint.md` lists it next to the 2RC build. The Octave port stays 2RC.**
+
+- Reason: a compile-time constant keeps the rules of S3 (no dynamic allocation, a fixed sizeof(ekf_t)); a branch count chosen at run time would give every build the 3RC sizes. The 2RC build is the one CI checks byte for byte, so it stays the default. If a loop over the branches replaces the written-out 2RC code, the 2RC footprint may change by a few bytes; the regenerated table is committed with that change and the README says so. The Octave port cross-checks the v1.0 filter (1.20); a 3RC Octave port would add no new evidence.
 
 ## 2. Dataset facts confirmed in S0
 

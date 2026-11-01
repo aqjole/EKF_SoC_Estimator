@@ -1,6 +1,6 @@
 # Model: conventions and equations
 
-The 2RC equivalent-circuit model and the EKF, as used by every stage: loader, OCV and 2RC fit, EKF, metrics and the C port. The conventions below were fixed in S0 and checked against the raw data. The equations for S1 (2RC model, SoC update, table lookup, OCV slope) follow them; the EKF equations of S2 (Eq. 6 to 11) come after those. Decisions that affect results are recorded in `docs/decisions.md`.
+The 2RC equivalent-circuit model and the EKF, as used by every stage: loader, OCV and 2RC fit, EKF, metrics and the C port. S6 adds a 3RC variant with a third, middle branch; the equations below cover both. The conventions below were fixed in S0 and checked against the raw data. The equations for S1 (2RC model, SoC update, table lookup, OCV slope) follow them; the EKF equations of S2 (Eq. 6 to 11) come after those. Decisions that affect results are recorded in `docs/decisions.md`.
 
 Data: LG 18650HG2 Li-ion Battery Data, Kollmeyer et al., McMaster University, Mendeley Data v2, DOI 10.17632/b5mj79w5w9.2, CC BY 4.0. There are 206 `.mat` files in `data/raw/` [inv].
 
@@ -137,45 +137,46 @@ Each convention gives the rule in bold, then the reason, then the evidence.
 | SoC0 | SoC at the first row used (C13) | 1 | 1, except 0.99638 for `10degC/571_Mixed6` and 0.99484 for `10degC/582_LA92` |
 | η | coulombic efficiency (C5) | 1 | 1 |
 | Ah_removed | charge removed since the counting start (C3) | Ah | positive on discharge, negative under regen |
-| V1, V2 | voltages across the fast (1) and slow (2) RC branches | V | follow the recent current: > 0 after discharge, < 0 after regen, 0 after a long rest |
+| V1, V2, V3 | voltages across the fast (1), slow (2) and, in the 3RC model of S6, middle (3) RC branches | V | follow the recent current: > 0 after discharge, < 0 after regen, 0 after a long rest |
 | I | cell current (I = -Current) | A | > 0 discharge, < 0 charge |
 | V | measured terminal voltage | V | > 0 (2.786 to 4.240 V in the data, C1) |
 | T | measured cell temperature, Battery_Temp_degC | degC | either sign (40 to -20 degC grid) |
 | dt | step between kept rows, from Time | s | > 0 (C8, C9) |
 | Q_ref | reference capacity | Ah | > 0; 2.7807 Ah (C4) |
 | R0 | series (ohmic) resistance | Ohm | > 0 |
-| R1, R2 | RC branch resistances | Ohm | > 0 |
-| tau1, tau2 | RC branch time constants, tau_i = R_i · C_i | s | > 0; tau1 in [0.5, 30] s, tau2 in [30, 3600] s (3600 s = the HPPC 1 h rest after each move, 3600.105 to 3600.131 s [chk 10]) |
+| R1, R2, R3 | RC branch resistances (R3: 3RC model only) | Ohm | > 0 |
+| tau1, tau2, tau3 | RC branch time constants, tau_i = R_i · C_i | s | > 0; 2RC: tau1 in [0.5, 30] s, tau2 in [30, 3600] s (3600 s = the HPPC 1 h rest after each move, 3600.105 to 3600.131 s [chk 10]); 3RC: tau1 in [0.5, 10] s, tau3 in [10, 50] s, tau2 in [50, 3600] s (docs/decisions.md 1.21) |
 | OCV | open-circuit voltage OCV(SoC, T) | V | > 0; checked monotone in SoC (S1) |
 | dOCV/dSoC | slope of OCV over SoC, a table by central differences (S1) | V (per unit SoC) | >= 0 |
-| Q | process noise covariance diag(q_soc, q_v, q_v) · dt; q_soc in 1/s, q_v in V²/s | 1, V², V² on the diagonal | >= 0 (positive semi-definite) |
+| n | number of RC branches | 1 | 2 (the 2RC model of v1.0) or 3 (the 3RC model of S6) |
+| Q | process noise covariance diag(q_soc, q_v, ..., q_v) · dt, q_v once per branch; q_soc in 1/s, q_v in V²/s | 1, then V² per branch on the diagonal | >= 0 (positive semi-definite) |
 | R | measurement noise variance | V² | > 0 |
-| P0 | initial state covariance diag(0.2², 0.05², 0.05²) | 1, V², V² on the diagonal | > 0 (positive definite) |
+| P0 | initial state covariance diag(0.2², 0.05², ..., 0.05²), 0.05² once per branch | 1, then V² per branch on the diagonal | > 0 (positive definite) |
 
 ## Equations
 
-The equations of S1, numbered for citation in the Python and C code (a comment reads "docs/model.md Eq. 1"). Symbols are those of the table above. Index k counts the rows a run keeps after the loader rules, `dt(k) = t(k) - t(k-1)` (C8, C9), and I is the loader-sign current, positive on discharge (C2). R0, R1, R2, tau1, tau2 and OCV are not constants: each is a table over (T, SoC) read with Eq. 4. Python (`python/ekfsoc/model.py`) and the C port repeat these equations with the same operation order.
+The equations of S1, numbered for citation in the Python and C code (a comment reads "docs/model.md Eq. 1"). Symbols are those of the table above. Index k counts the rows a run keeps after the loader rules, `dt(k) = t(k) - t(k-1)` (C8, C9), and I is the loader-sign current, positive on discharge (C2). R0, R_i, tau_i and OCV are not constants: each is a table over (T, SoC) read with Eq. 4. The equations are written for n RC branches: n = 2 is the 2RC model of v1.0, n = 3 the 3RC model of S6 (docs/decisions.md 1.21). Sums and lists over the branches run in the order i = 1, 2, 3, so with n = 2 every expression is the v1.0 one, operation for operation. Python (`python/ekfsoc/model.py`) and the C port repeat these equations with the same operation order.
 
-### Eq. 1. The two RC branches, exact zero-order hold
+### Eq. 1. The RC branches, exact zero-order hold
 
 ```
-a_i(k)  = exp(-dt(k) / tau_i)                                        i = 1, 2
+a_i(k)  = exp(-dt(k) / tau_i)                                        i = 1, ..., n
 V_i(k)  = a_i(k) · V_i(k-1) + R_i · (1 - a_i(k)) · I(k-1)
 ```
 
 - R_i and tau_i are read with Eq. 4 at the start of the step, at (T(k-1), SoC(k-1)). The current held over the step is the previous kept sample's current, I(k-1) (C11).
 - Where it comes from: branch i is a resistor R_i in parallel with a capacitor C_i = tau_i / R_i, so dV_i/dt = -V_i / tau_i + R_i · I / tau_i. With I constant over the step, the solution over dt is Eq. 1 exactly. It is not an Euler step, so it holds for any dt, from the 0.1 s logging step to the 1.147 to 2.143 s steps at cycle boundaries (C11).
 - Limits: dt = 0 gives a_i = 1 and leaves V_i unchanged. A long step gives a_i -> 0 and V_i -> R_i · I(k-1), the steady value of a constant current.
-- Start: V1(0) = V2(0) = 0. The open-loop check starts the branches relaxed; C13 lists the runs that open under load.
+- Start: V_i(0) = 0 for every branch. The open-loop check starts the branches relaxed; C13 lists the runs that open under load.
 - Sign: V_i > 0 after a discharge, V_i < 0 after regen (Symbols).
 
 ### Eq. 2. Terminal voltage
 
 ```
-V_model(k) = OCV(SoC(k), T(k)) - V1(k) - V2(k) - R0(SoC(k), T(k)) · I(k)
+V_model(k) = OCV(SoC(k), T(k)) - V1(k) - V2(k) [- V3(k)] - R0(SoC(k), T(k)) · I(k)        [ ] for n = 3
 ```
 
-- OCV and R0 are read with Eq. 4 at the sample itself, (T(k), SoC(k)). The sample's own current drops across R0 at once, while it enters V1 and V2 only from the next row on (Eq. 1).
+- OCV and R0 are read with Eq. 4 at the sample itself, (T(k), SoC(k)). The sample's own current drops across R0 at once, while it enters the branch voltages only from the next row on (Eq. 1).
 - V_model is compared with the measured terminal voltage V.
 - In S1's open-loop check SoC(k) is the reference SoC of C13, so only the voltage model is under test. In S2 the filter's SoC state takes its place.
 
@@ -225,43 +226,43 @@ dOCV/dSoC(S_{n-1}) = (OCV(S_{n-1}) - OCV(S_{n-2})) / (S_{n-1} - S_{n-2})     one
 
 ## EKF equations (S2)
 
-The filter of S2, numbered after Eq. 5 and cited the same way in the Python (`python/ekfsoc/ekf.py`) and C code, which repeat these equations with the same operation order. State x = [SoC, V1, V2]^T with covariance P (3 x 3), input I, measurement V. One step handles one kept row k and has two parts, `predict` (Eq. 6, Eq. 7) and `update` (Eq. 8 to Eq. 11):
+The filter of S2, numbered after Eq. 5 and cited the same way in the Python (`python/ekfsoc/ekf.py`) and C code, which repeat these equations with the same operation order. State x = [SoC, V1, ..., Vn]^T with covariance P ((1 + n) x (1 + n)), so 3 x 3 for the 2RC model and 4 x 4 for the 3RC model, input I, measurement V. One step handles one kept row k and has two parts, `predict` (Eq. 6, Eq. 7) and `update` (Eq. 8 to Eq. 11):
 
-- x(k-1) and P(k-1) are the posterior of the previous row. x- and P- are the prior after predict (SoC-, V1-, V2- are the entries of x-). x and P without a mark are the posterior after update.
+- x(k-1) and P(k-1) are the posterior of the previous row. x- and P- are the prior after predict (SoC-, V1-, ..., Vn- are the entries of x-). x and P without a mark are the posterior after update.
 - dt = dt(k) and T = T(k), the measured cell temperature of the row being processed. The held current is I(k-1), the previous kept sample's current (C11). The update uses the row's own V(k) and I(k).
 - Q is the process noise covariance, R the measurement noise variance, P0 the initial covariance (Symbols). The same q_soc, q_v, R and P0 are used for every experiment and temperature, and the filter is never told that an initial SoC is wrong.
-- Start of a run, or of a restart in mid-run: x = [SoC0, 0, 0], P = P0, and the first processed row has its dt taken as 0. Then F is the identity and B and Q are zero, so predict changes nothing and that row gets an update only. V1 = V2 = 0 holds also where a run opens under load or the filter starts mid-test (C13).
+- Start of a run, or of a restart in mid-run: x = [SoC0, 0, ..., 0], P = P0, and the first processed row has its dt taken as 0. Then F is the identity and B and Q are zero, so predict changes nothing and that row gets an update only. V_i = 0 holds also where a run opens under load or the filter starts mid-test (C13).
 
 ### Eq. 6. Process model
 
 ```
-a_i  = exp(-dt / tau_i)                                              i = 1, 2
-F    = diag(1, a1, a2)
-B    = [ -dt / (3600 · Q_ref),   R1 · (1 - a1),   R2 · (1 - a2) ]^T
+a_i  = exp(-dt / tau_i)                                              i = 1, ..., n
+F    = diag(1, a1, ..., an)
+B    = [ -dt / (3600 · Q_ref),   R1 · (1 - a1),   ...,   Rn · (1 - an) ]^T
 x-   = F · x(k-1) + B · I(k-1)
 ```
 
 - Row by row: `SoC- = SoC(k-1) - I(k-1) · dt / (3600 · Q_ref)` is Eq. 3 with η = 1, and `Vi- = a_i · Vi(k-1) + R_i · (1 - a_i) · I(k-1)` is Eq. 1.
-- R1, tau1, R2 and tau2 are read with Eq. 4 at the previous posterior SoC, SoC(k-1), and at T(k). Eq. 1 reads T(k-1); the filter takes one temperature per sample, so predict and update of a step use the same one.
+- R_i and tau_i are read with Eq. 4 at the previous posterior SoC, SoC(k-1), and at T(k). Eq. 1 reads T(k-1); the filter takes one temperature per sample, so predict and update of a step use the same one.
 - The current is held over the whole step, including the cycle-boundary steps of up to 2.143 s, with no special gap code (C11).
 - SoC is not limited in predict. The limit is applied in update (Eq. 10), and a prior outside 0 to 1 is clamped by the lookups of Eq. 4.
 
 ### Eq. 7. Covariance prediction
 
 ```
-Q    = diag(q_soc, q_v, q_v) · dt                                    q_soc in 1/s, q_v in V²/s
+Q    = diag(q_soc, q_v, ..., q_v) · dt                                q_soc in 1/s, q_v in V²/s
 P-   = F · P(k-1) · F^T + Q
 ```
 
 - Process noise grows in proportion to the elapsed time, so a longer step widens the prior by more (C11).
-- F is diagonal, so `P-[i][j] = f_i · f_j · P(k-1)[i][j]` plus `Q[i][i]` on the diagonal, with f = (1, a1, a2). The code writes it as two 3 x 3 products, `F · P` and then `(F · P) · F^T`.
+- F is diagonal, so `P-[i][j] = f_i · f_j · P(k-1)[i][j]` plus `Q[i][i]` on the diagonal, with f = (1, a1, ..., an). The code writes it as two (1 + n) x (1 + n) products, `F · P` and then `(F · P) · F^T`.
 - F is the Jacobian of Eq. 6 with respect to x in which the dependence of a_i and R_i on SoC is left out, as dR0/dSoC is left out of H in Eq. 8. Both are approximations.
 
 ### Eq. 8. Predicted voltage and measurement Jacobian
 
 ```
-y_hat = OCV(SoC-, T) - V1- - V2- - R0(SoC-, T) · I(k)
-H     = [ dOCV/dSoC(SoC-, T),   -1,   -1 ]
+y_hat = OCV(SoC-, T) - V1- - V2- [- V3-] - R0(SoC-, T) · I(k)        [ ] for n = 3
+H     = [ dOCV/dSoC(SoC-, T),   -1,   ...,   -1 ]                    one -1 per branch
 ```
 
 - OCV, dOCV/dSoC and R0 are read with Eq. 4 at the prior SoC, SoC-, and at T(k). I(k) is the row's own current (Eq. 2). y_hat is Eq. 2 with the prior state in place of the true one, and is what the voltage diagnostic compares with V(k).
@@ -271,7 +272,7 @@ H     = [ dOCV/dSoC(SoC-, T),   -1,   -1 ]
 
 ```
 S    = H · P- · H^T + R                                              scalar, V²
-K    = P- · H^T / S                                                  3 x 1
+K    = P- · H^T / S                                                  (1 + n) x 1
 ```
 
 - S > 0 because P- is positive semi-definite and R > 0.
@@ -284,7 +285,7 @@ b      = min(max(SoC, 0), 1)                                         SoC of the 
 x      = x - P[:, 0] · (SoC - b) / P[0][0]                           P from Eq. 11, SoC and x as above
 ```
 
-- The third line acts only when the updated SoC is outside [0, 1] (otherwise SoC = b and it changes nothing, and the code skips it). The whole state then moves onto the nearer bound b along the first column of the posterior P, so V1 and V2 move with SoC by their correlation with it and SoC equals b afterwards.
+- The third line acts only when the updated SoC is outside [0, 1] (otherwise SoC = b and it changes nothing, and the code skips it). The whole state then moves onto the nearer bound b along the first column of the posterior P, so the branch voltages move with SoC by their correlation with it and SoC equals b afterwards.
 - P is the posterior of Eq. 11, which the code forms before this step, and the projection leaves it unchanged.
 - Reason: truncating SoC alone keeps the V2 part of an innovation that pushed SoC past a bound, which grew the next innovation and ran V2 away to thousands of volts (docs/decisions.md 1.16).
 
