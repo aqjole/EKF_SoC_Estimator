@@ -11,7 +11,7 @@ import pytest
 from scipy.interpolate import RegularGridInterpolator
 
 from ekfsoc.constants import SOC_GRID, T_GRID_DEGC
-from ekfsoc.model import Params, find_cell, interp2, simulate_2rc_open_loop
+from ekfsoc.model import Params, find_cell, interp2, simulate_open_loop
 
 
 # --- interp2 -------------------------------------------------------------------------------------
@@ -105,7 +105,7 @@ def test_find_cell_on_the_descending_temperature_axis(temp, expected):
     assert find_cell(T_GRID_DEGC, temp) == expected
 
 
-# --- simulate_2rc_open_loop -----------------------------------------------------------------------
+# --- simulate_open_loop -----------------------------------------------------------------------
 
 
 def constant_params(ocv, r0, r1, tau1, r2, tau2):
@@ -136,7 +136,7 @@ def test_constant_current_reproduces_the_closed_form_rc_step_response():
     dt = np.full(n, step)
     dt[0] = 0.0
 
-    v_model = simulate_2rc_open_loop(params, i, temp, soc, dt)
+    v_model = simulate_open_loop(params, i, temp, soc, dt)
 
     # Closed form for a current switched on at k = 0: V_i(t) = R_i * I * (1 - exp(-t / tau_i)), t = k * step.
     for k in range(n):
@@ -155,7 +155,7 @@ def test_two_hand_computed_zero_order_hold_steps_with_unequal_dt_and_current():
     temp = np.zeros(3)
     soc = np.full(3, 0.5)
 
-    v_model = simulate_2rc_open_loop(params, i, temp, soc, dt)
+    v_model = simulate_open_loop(params, i, temp, soc, dt)
 
     # Row 0: both states are 0, so only R0 acts: 3.7 - 0.05 * 2 = 3.6 V.
     assert v_model[0] == pytest.approx(3.6, abs=1e-12)
@@ -203,7 +203,7 @@ def test_rc_parameters_are_taken_at_the_start_of_the_step_and_ocv_and_r0_at_the_
     temp = np.array([10.0, 10.0])
     soc = np.array([0.0, 1.0])
 
-    v_model = simulate_2rc_open_loop(params, i, temp, soc, dt)
+    v_model = simulate_open_loop(params, i, temp, soc, dt)
 
     # Row 0 at SoC 0: 3.0 - 0 - 0 - 0.10 * 1 = 2.9 V.
     assert v_model[0] == pytest.approx(2.9, abs=1e-12)
@@ -213,10 +213,48 @@ def test_rc_parameters_are_taken_at_the_start_of_the_step_and_ocv_and_r0_at_the_
     assert v_model[1] == pytest.approx(4.0 - 0.01 * (1.0 - math.exp(-1.0)) - 0.20, abs=1e-12)
 
 
+def with_third_branch(params, r3, tau3):
+    """The same Params plus a third branch whose tables are the constants r3 and tau3 (the 3RC model of S6)."""
+    shape = params.ocv.shape
+    return replace(params, r3=np.full(shape, r3), tau3=np.full(shape, tau3))
+
+
+def test_third_branch_with_zero_resistance_gives_the_2rc_voltage_bit_for_bit():
+    # The 3RC arithmetic must contain the 2RC arithmetic unchanged (docs/model.md, Equations).
+    params = constant_params(3.7, 0.05, 0.01, 2.0, 0.02, 10.0)
+    rng = np.random.default_rng(5)
+    i = rng.normal(0.0, 3.0, 50)
+    dt = np.full(50, 0.1)
+    dt[0] = 0.0
+    temp = np.full(50, 10.0)
+    soc = np.linspace(0.9, 0.8, 50)
+
+    v_2rc = simulate_open_loop(params, i, temp, soc, dt)
+    v_3rc = simulate_open_loop(with_third_branch(params, 0.0, 30.0), i, temp, soc, dt)
+
+    assert np.array_equal(v_3rc, v_2rc)
+
+
+def test_third_branch_follows_its_closed_form_step_response():
+    ocv, r0, r1, tau1, r2, tau2, r3, tau3 = 3.7, 0.030, 0.012, 4.0, 0.020, 200.0, 0.015, 30.0
+    params = with_third_branch(constant_params(ocv, r0, r1, tau1, r2, tau2), r3, tau3)
+    current, step, n = 5.0, 0.5, 400
+    dt = np.full(n, step)
+    dt[0] = 0.0
+
+    v_model = simulate_open_loop(params, np.full(n, current), np.full(n, 12.0), np.full(n, 0.6), dt)
+
+    # V_i(t) = R_i * I * (1 - exp(-t / tau_i)) for each of the three branches, t = k * step.
+    t = np.arange(n) * step
+    expected = ocv - r0 * current - current * (r1 * (1.0 - np.exp(-t / tau1)) + r2 * (1.0 - np.exp(-t / tau2))
+                                               + r3 * (1.0 - np.exp(-t / tau3)))
+    assert np.max(np.abs(v_model - expected)) < 1e-12
+
+
 def test_simulate_rejects_arrays_of_different_length():
     params = constant_params(3.7, 0.05, 0.01, 2.0, 0.02, 10.0)
     with pytest.raises(ValueError):
-        simulate_2rc_open_loop(params, np.zeros(3), np.zeros(3), np.zeros(2), np.zeros(3))
+        simulate_open_loop(params, np.zeros(3), np.zeros(3), np.zeros(2), np.zeros(3))
 
 
 # --- Params and results/params.csv ----------------------------------------------------------------
@@ -311,3 +349,30 @@ def test_from_csv_rejects_a_soc_value_that_changes_in_a_later_block(csv_path, tm
     bad.write_text("\n".join(lines) + "\n")
     with pytest.raises(ValueError):
         Params.from_csv(bad)
+
+
+@pytest.fixture
+def csv_path_3rc(tmp_path):
+    """results/params_3rc.csv-style file: synthetic_params() plus constant r3 and tau3 tables."""
+    path = tmp_path / "params_3rc.csv"
+    replace(synthetic_params(), r3=np.full((3, 4), 0.004), tau3=np.full((3, 4), 25.0)).to_csv(path)
+    return path
+
+
+def test_3rc_csv_header_ends_with_the_third_branch_columns(csv_path_3rc):
+    assert csv_path_3rc.read_text().splitlines()[0].endswith(",R3_ohm,tau3_s")
+
+
+def test_3rc_params_round_trip_through_csv_with_three_branches(csv_path_3rc):
+    assert Params.from_csv(csv_path_3rc).branches == [("r1", "tau1"), ("r2", "tau2"), ("r3", "tau3")]
+
+
+def test_3rc_params_round_trip_keeps_the_third_branch_tables(csv_path_3rc):
+    reloaded = Params.from_csv(csv_path_3rc)
+    expected = np.stack([np.full((3, 4), 0.004), np.full((3, 4), 25.0)])
+    assert np.array_equal(np.stack([reloaded.r3, reloaded.tau3]), expected)
+
+
+def test_params_rejects_r3_without_tau3():
+    with pytest.raises(ValueError):
+        replace(synthetic_params(), r3=np.zeros((3, 4)))

@@ -28,7 +28,7 @@ from ekfsoc.constants import FOLDER_TEMP, RAW_DIR, REPO_DIR, SOC_GRID, T_GRID_DE
 from ekfsoc.fit import FITTED_TABLES, fit_hppc_run
 from ekfsoc.hppc import rest_points, segment_hppc
 from ekfsoc.loader import find_runs, load_run, soc_ref
-from ekfsoc.model import Params, simulate_2rc_open_loop
+from ekfsoc.model import Params, simulate_open_loop
 from ekfsoc.ocv import build_ocv, discharge_curve, rest_offsets
 from ekfsoc.plots import plot_docv, plot_model_fit, plot_ocv, plot_params
 from export_params import LEVELS_CSV, OCV_CORRECTION_CSV, PARAMS_CSV, export_params, md_table, write_text
@@ -139,7 +139,7 @@ def validate_us06(params, temp):
     """
     run = load_test(temp, "us06")
     reference_soc = soc_ref(run)
-    v_model = simulate_2rc_open_loop(params, run.i, run.temp, reference_soc, run.dt)
+    v_model = simulate_open_loop(params, run.i, run.temp, reference_soc, run.dt)
     error_mv = 1000.0 * (v_model - run.v)
     n_window = np.flatnonzero(reference_soc >= WINDOW_MIN_SOC)[-1] + 1
     return {

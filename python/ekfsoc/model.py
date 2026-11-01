@@ -1,14 +1,18 @@
-"""The 2RC model: parameter tables, table lookup and the open-loop voltage simulation.
+"""The RC model: parameter tables, table lookup and the open-loop voltage simulation.
+
+The model has n RC branches: n = 2 is the 2RC model of v1.0, n = 3 the 3RC model of S6, whose third
+branch (r3, tau3) is the middle one (docs/decisions.md 1.21). Branches are always taken in the order
+1, 2, 3, so a 2RC run does the v1.0 arithmetic operation for operation.
 
 Equation numbers ("Eq. n") are those of the Equations section of docs/model.md:
 
-- Eq. 1  2RC state update with an exact zero-order hold (rc_step, used by simulate_2rc_open_loop)
-- Eq. 2  terminal voltage (simulate_2rc_open_loop)
+- Eq. 1  RC branch update with an exact zero-order hold (rc_step, used by simulate_open_loop)
+- Eq. 2  terminal voltage (simulate_open_loop)
 - Eq. 3  coulomb-counting SoC update (not run here: the simulation takes the reference SoC as input)
 - Eq. 4  bilinear table lookup with clamping (find_cell, interp2)
 - Eq. 5  dOCV/dSoC by central differences (computed in ocv.py, stored as the table `docv`)
 
-All seven tables share the two axes of docs/model.md C15: the temperature axis is stored in the
+All tables share the two axes of docs/model.md C15: the temperature axis is stored in the
 order 40, 25, 10, 0, -10, -20 degC (descending) and the SoC axis from 0 to 1 (ascending).
 Table row j is temperature t_grid[j] and column m is SoC soc_grid[m].
 The C port (c/src/) repeats find_cell and interp2 with the same operation order.
@@ -21,11 +25,13 @@ from dataclasses import dataclass
 import numpy as np
 
 
-# The seven tables of Params, in CSV column order (after T_degC and soc).
+# The seven tables of a 2RC Params, in CSV column order (after T_degC and soc); a 3RC Params adds r3, tau3.
 TABLE_NAMES = ("ocv", "docv", "r0", "r1", "tau1", "r2", "tau2")
+TABLE_NAMES_3RC = TABLE_NAMES + ("r3", "tau3")
 
-# Column order of results/params.csv: the two axes, then the tables in the order of TABLE_NAMES.
+# Column order of results/params.csv (2RC) and results/params_3rc.csv: the two axes, then the tables.
 CSV_COLUMNS = ("T_degC", "soc", "ocv_V", "docv_V_per_soc", "R0_ohm", "R1_ohm", "tau1_s", "R2_ohm", "tau2_s")
+CSV_COLUMNS_3RC = CSV_COLUMNS + ("R3_ohm", "tau3_s")
 
 
 def find_cell(axis, x):
@@ -99,7 +105,7 @@ def interp2(table, t_grid, soc_grid, temp, soc):
 
 @dataclass(eq=False)
 class Params:
-    """The two axes and the seven parameter tables of the model (docs/model.md C15, Symbols).
+    """The two axes and the parameter tables of the model (docs/model.md C15, Symbols).
 
     t_grid    temperature axis in degC, length n_t (descending: 40 ... -20)
     soc_grid  SoC axis as a fraction, length n_soc (ascending: 0 ... 1)
@@ -108,6 +114,7 @@ class Params:
     r0        R0 in Ohm
     r1, tau1  RC branch 1 (fast): R1 in Ohm, tau1 in s
     r2, tau2  RC branch 2 (slow): R2 in Ohm, tau2 in s
+    r3, tau3  RC branch 3 (middle) of the 3RC model, None in a 2RC Params
     Every table has shape (n_t, n_soc). The arrays are copied to float64 on creation.
     """
 
@@ -120,6 +127,8 @@ class Params:
     tau1: np.ndarray
     r2: np.ndarray
     tau2: np.ndarray
+    r3: np.ndarray | None = None
+    tau3: np.ndarray | None = None
 
     def __post_init__(self):
         """Convert to float64 arrays and check the axes and table shapes, so a bad table fails at once."""
@@ -133,16 +142,33 @@ class Params:
             if not (np.all(steps > 0.0) or np.all(steps < 0.0)):
                 raise ValueError(f"{axis_name} must be strictly ascending or strictly descending")
 
+        if (self.r3 is None) != (self.tau3 is None):
+            raise ValueError("r3 and tau3 must be given together")
         expected_shape = (len(self.t_grid), len(self.soc_grid))
-        for name in TABLE_NAMES:
+        for name in self.table_names:
             table = np.array(getattr(self, name), dtype=np.float64)
             if table.shape != expected_shape:
                 raise ValueError(f"table {name} has shape {table.shape}, expected {expected_shape}")
             setattr(self, name, table)
 
+    @property
+    def table_names(self):
+        """The names of the tables this Params holds, in CSV column order."""
+        return TABLE_NAMES if self.r3 is None else TABLE_NAMES_3RC
+
+    @property
+    def branches(self):
+        """The (resistance, time constant) table names of each RC branch, in branch order 1, 2(, 3)."""
+        pairs = [("r1", "tau1"), ("r2", "tau2")]
+        if self.r3 is not None:
+            pairs.append(("r3", "tau3"))
+        return pairs
+
     @classmethod
     def from_csv(cls, path):
-        """Read results/params.csv: one row per (T, soc), T-major (all SoC of the first T, then the next T).
+        """Read results/params.csv or params_3rc.csv: one row per (T, soc), T-major.
+
+        The rows hold all SoC of the first T, then the next T.
 
         The axes are rebuilt from the first column (one value per block) and from the SoC column of
         the first block. A wrong header, a ragged block or an axis value that changes in a later
@@ -151,39 +177,41 @@ class Params:
         with open(path, newline="") as handle:
             reader = csv.reader(handle)
             header = next(reader, None)
-            if header is None or tuple(header) != CSV_COLUMNS:
-                raise ValueError(f"{path}: header is {header}, expected {list(CSV_COLUMNS)}")
+            if header is None or tuple(header) not in (CSV_COLUMNS, CSV_COLUMNS_3RC):
+                raise ValueError(f"{path}: header is {header}, expected the 2RC or the 3RC columns")
+            columns = tuple(header)
             rows = [[float(cell) for cell in line] for line in reader if line]
 
-        if not rows or any(len(row) != len(CSV_COLUMNS) for row in rows):
-            raise ValueError(f"{path}: expected at least one data row, each of {len(CSV_COLUMNS)} cells")
+        if not rows or any(len(row) != len(columns) for row in rows):
+            raise ValueError(f"{path}: expected at least one data row, each of {len(columns)} cells")
         data = np.array(rows)
 
         n_soc = int(np.count_nonzero(data[:, 0] == data[0, 0]))  # rows of the first T block
         if len(data) % n_soc != 0:
             raise ValueError(f"{path}: {len(data)} rows is not a whole number of blocks of {n_soc}")
-        blocks = data.reshape(-1, n_soc, len(CSV_COLUMNS))  # blocks[j, m] is the row of T j and SoC m
+        blocks = data.reshape(-1, n_soc, len(columns))  # blocks[j, m] is the row of T j and SoC m
 
         t_grid = blocks[:, 0, 0]
         soc_grid = blocks[0, :, 1]
         if not (np.all(blocks[:, :, 0] == t_grid[:, None]) and np.all(blocks[:, :, 1] == soc_grid)):
             raise ValueError(f"{path}: the T and soc columns do not form the same grid in every block")
 
-        tables = {name: blocks[:, :, 2 + column] for column, name in enumerate(TABLE_NAMES)}
+        names = TABLE_NAMES if columns == CSV_COLUMNS else TABLE_NAMES_3RC
+        tables = {name: blocks[:, :, 2 + column] for column, name in enumerate(names)}
         return cls(t_grid=t_grid, soc_grid=soc_grid, **tables)
 
     def to_csv(self, path):
-        """Write the CSV that from_csv reads: header CSV_COLUMNS, then one row per (T, soc), T-major.
+        """Write the CSV that from_csv reads: the header, then one row per (T, soc), T-major.
 
         Every number has 6 significant digits, so writing the same Params twice gives the same
         bytes, and a round trip returns the values to about 1e-6 relative.
         """
         with open(path, "w", newline="") as handle:
             writer = csv.writer(handle, lineterminator="\n")
-            writer.writerow(CSV_COLUMNS)
+            writer.writerow(CSV_COLUMNS if self.r3 is None else CSV_COLUMNS_3RC)
             for j, temp in enumerate(self.t_grid):
                 for m, soc in enumerate(self.soc_grid):
-                    cells = [temp, soc] + [getattr(self, name)[j, m] for name in TABLE_NAMES]
+                    cells = [temp, soc] + [getattr(self, name)[j, m] for name in self.table_names]
                     writer.writerow([f"{cell:.6g}" for cell in cells])
 
 
@@ -193,17 +221,18 @@ def rc_step(v, r, tau, current, dt):
     return a * v + r * (1.0 - a) * current
 
 
-def simulate_2rc_open_loop(params, i, temp, soc, dt):
-    """Run the 2RC model over a run with the SoC given, and return the model voltage in V (Eq. 1, Eq. 2).
+def simulate_open_loop(params, i, temp, soc, dt):
+    """Run the RC model over a run with the SoC given, and return the model voltage in V (Eq. 1, Eq. 2).
 
     Inputs are 1-D arrays of the same length: i in A (positive = discharge), temp in degC,
     soc as a fraction (the reference SoC in S1, so only the voltage model is tested) and dt in s
     with dt[0] = 0 and dt[k] = t[k] - t[k-1], as in the loader's Run.
 
-    Plain per-sample loop. V1 = V2 = 0 at k = 0 (the model starts relaxed). For each row k:
-      1. Look up ocv, r0, r1, tau1, r2, tau2 at (temp[k], soc[k]) with interp2 (Eq. 4).
-      2. Terminal voltage (Eq. 2): v_model[k] = ocv - V1 - V2 - r0 * i[k].
-      3. Move the two RC states on to row k+1 with rc_step (Eq. 1), under the zero-order hold the
+    Plain per-sample loop over the branches of params (two or three). Every V_i = 0 at k = 0 (the
+    model starts relaxed). For each row k:
+      1. Look up ocv, r0 and each branch's R_i, tau_i at (temp[k], soc[k]) with interp2 (Eq. 4).
+      2. Terminal voltage (Eq. 2): v_model[k] = ocv - V1 - V2 (- V3) - r0 * i[k], subtracted in branch order.
+      3. Move the RC states on to row k+1 with rc_step (Eq. 1), under the zero-order hold the
          loader rules fix (docs/model.md C11): the current of row k is held over the step dt[k+1],
          and R_i and tau_i are those at the start of the step, looked up in step 1.
     So row k's own current enters the voltage at once through R0 (Eq. 2) and enters the RC
@@ -223,29 +252,28 @@ def simulate_2rc_open_loop(params, i, temp, soc, dt):
     soc_grid = params.soc_grid.tolist()
     ocv_table = params.ocv.tolist()
     r0_table = params.r0.tolist()
-    r1_table = params.r1.tolist()
-    tau1_table = params.tau1.tolist()
-    r2_table = params.r2.tolist()
-    tau2_table = params.tau2.tolist()
+    branch_tables = [(getattr(params, r_name).tolist(), getattr(params, tau_name).tolist())
+                     for r_name, tau_name in params.branches]
 
     v_model = np.zeros(n)
-    v1 = 0.0
-    v2 = 0.0
+    v_branch = [0.0] * len(branch_tables)
     for k in range(n):
         cell_temp = temps[k]
         cell_soc = socs[k]
         ocv = interp2(ocv_table, t_grid, soc_grid, cell_temp, cell_soc)
         r0 = interp2(r0_table, t_grid, soc_grid, cell_temp, cell_soc)
-        r1 = interp2(r1_table, t_grid, soc_grid, cell_temp, cell_soc)
-        tau1 = interp2(tau1_table, t_grid, soc_grid, cell_temp, cell_soc)
-        r2 = interp2(r2_table, t_grid, soc_grid, cell_temp, cell_soc)
-        tau2 = interp2(tau2_table, t_grid, soc_grid, cell_temp, cell_soc)
+        r_tau = [(interp2(r_table, t_grid, soc_grid, cell_temp, cell_soc),
+                  interp2(tau_table, t_grid, soc_grid, cell_temp, cell_soc))
+                 for r_table, tau_table in branch_tables]
 
-        v_model[k] = ocv - v1 - v2 - r0 * currents[k]  # Eq. 2
+        v_terminal = ocv
+        for v_i in v_branch:
+            v_terminal -= v_i
+        v_model[k] = v_terminal - r0 * currents[k]  # Eq. 2
 
         if k + 1 < n:  # Eq. 1: the current of row k is held over the step to row k+1
             step = dts[k + 1]
-            v1 = rc_step(v1, r1, tau1, currents[k], step)
-            v2 = rc_step(v2, r2, tau2, currents[k], step)
+            v_branch = [rc_step(v_i, r_i, tau_i, currents[k], step)
+                        for v_i, (r_i, tau_i) in zip(v_branch, r_tau)]
 
     return v_model

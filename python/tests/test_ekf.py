@@ -8,13 +8,14 @@ not by calling the code under test.
 """
 
 import math
+from dataclasses import replace
 
 import numpy as np
 import pytest
 
 from ekfsoc.constants import Q_REF_AH, REPO_DIR
 from ekfsoc.ekf import Ekf, EkfConfig, run_ekf
-from ekfsoc.model import Params, simulate_2rc_open_loop
+from ekfsoc.model import Params, simulate_open_loop
 from ekfsoc.synthetic import SOC_START, SYNTHETIC_CFG, WRONG_INIT_PP, synthetic_data
 
 
@@ -133,6 +134,47 @@ def test_predict_moves_the_rc_branches_and_a_full_covariance():
             assert ekf.P[i, j] == pytest.approx(expected, abs=1e-15)
 
 
+def toy_params_3rc(r3, tau3, **two_branches):
+    """toy_params plus a third (middle) branch with constant r3 and tau3 (the 3RC model of S6)."""
+    params = toy_params(**two_branches)
+    return replace(params, r3=np.full((2, 2), r3), tau3=np.full((2, 2), tau3))
+
+
+def test_3rc_filter_starts_with_a_four_entry_state():
+    params = toy_params_3rc(r3=0.01, tau3=30.0, r0=0.05, r1=0.02, tau1=10.0, r2=0.03, tau2=100.0)
+    ekf = Ekf(params, EkfConfig(q_soc=1e-4, q_v=1e-3, r=0.01), soc0=0.7)
+    assert np.array_equal(ekf.x, [0.7, 0.0, 0.0, 0.0])
+
+
+def test_3rc_filter_starts_with_p0_std_on_every_branch_voltage():
+    params = toy_params_3rc(r3=0.01, tau3=30.0, r0=0.05, r1=0.02, tau1=10.0, r2=0.03, tau2=100.0)
+    ekf = Ekf(params, EkfConfig(q_soc=1e-4, q_v=1e-3, r=0.01), soc0=0.7)
+    assert np.array_equal(ekf.P, np.diag([0.2**2] + [0.05**2] * 3))
+
+
+def test_3rc_predict_moves_the_third_branch_by_eq_1():
+    params = toy_params_3rc(r3=0.01, tau3=30.0, r0=0.05, r1=0.02, tau1=10.0, r2=0.03, tau2=100.0)
+    ekf = Ekf(params, EkfConfig(q_soc=1e-4, q_v=1e-3, r=0.01), soc0=0.5)
+    ekf.x = np.array([0.5, 0.02, 0.01, 0.005])
+
+    ekf.predict(i_held=2.0, t_degC=25.0, dt_s=10.0)
+
+    # a3 = exp(-10 / 30); V3 = a3 * 0.005 + 0.01 * (1 - a3) * 2.
+    a3 = math.exp(-1.0 / 3.0)
+    assert ekf.x[3] == pytest.approx(a3 * 0.005 + 0.01 * (1.0 - a3) * 2.0, abs=1e-15)
+
+
+def test_3rc_update_subtracts_every_branch_voltage_from_the_prediction():
+    params = toy_params_3rc(r3=0.01, tau3=30.0, r0=0.05, r1=0.02, tau1=10.0, r2=0.03, tau2=100.0)
+    ekf = Ekf(params, EkfConfig(q_soc=1e-4, q_v=1e-3, r=0.01), soc0=0.5)
+    ekf.x = np.array([0.5, 0.02, 0.01, 0.005])
+
+    ekf.update(i_a=2.0, v_v=3.4, t_degC=25.0)
+
+    # y_hat = OCV(0.5) - V1 - V2 - V3 - R0 * I = 3.5 - 0.02 - 0.01 - 0.005 - 0.05 * 2 = 3.365 V.
+    assert ekf.y_hat == pytest.approx(3.365, abs=1e-12)
+
+
 @pytest.mark.parametrize("soc0, v_measured, expected", [(0.99, 4.5, 1.0), (0.01, 2.0, 0.0)])
 def test_soc_is_clamped_to_zero_and_one_after_the_update(soc0, v_measured, expected):
     # The innovation (about +-1.5 V) pushes the gain-weighted SoC far past the end of its range.
@@ -245,7 +287,7 @@ def biased_discharge(synthetic):
     i = np.full(N_BIASED, 3.0)
     temp = np.full(N_BIASED, 25.0)
     soc_true = 1.0 - np.concatenate(([0.0], np.cumsum(i[:-1] * dt[1:]))) / (3600.0 * Q_REF_AH)
-    v_model = simulate_2rc_open_loop(synthetic["params"], i, temp, soc_true, dt)
+    v_model = simulate_open_loop(synthetic["params"], i, temp, soc_true, dt)
     return {"params": synthetic["params"], "i": i, "v": v_model + BIAS_V, "temp": temp, "dt": dt, "soc_true": soc_true}
 
 

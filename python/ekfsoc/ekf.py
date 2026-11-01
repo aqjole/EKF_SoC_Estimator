@@ -1,9 +1,13 @@
-"""The extended Kalman filter of the 2RC model: state x = [SoC, V1, V2], input I, measurement V.
+"""The extended Kalman filter of the RC model: state x = [SoC, V1, ..., Vn], input I, measurement V.
+
+n is the branch count of the parameters: 2 for the 2RC model of v1.0, 3 for the 3RC model of S6
+(docs/decisions.md 1.21, 1.22). Branches are taken in the order 1, 2, 3, so a 2RC filter does the
+v1.0 arithmetic operation for operation.
 
 Equation numbers ("Eq. n") are those of docs/model.md. One step is predict() (Eq. 6, 7) then update()
 (Eq. 8 to 11); the C port repeats both function for function, with the same operation order. Eq. 3 is
-the SoC row of Eq. 6 and the table lookups are Eq. 4 (model.interp2). Every 3 x 3 product is its own
-named step. limit_soc() (the projection of Eq. 10) needs the posterior P of Eq. 11, so update() forms
+the SoC row of Eq. 6 and the table lookups are Eq. 4 (model.interp2). Every (1 + n) x (1 + n) product
+is its own named step. limit_soc() (the projection of Eq. 10) needs the posterior P of Eq. 11, so update() forms
 Eq. 11 first.
 """
 
@@ -14,7 +18,7 @@ from dataclasses import asdict, dataclass
 import numpy as np
 
 from ekfsoc.constants import Q_REF_AH
-from ekfsoc.model import TABLE_NAMES, interp2
+from ekfsoc.model import interp2
 
 
 @dataclass
@@ -22,10 +26,10 @@ class EkfConfig:
     """The noise settings of the filter, the same for every experiment and temperature (the spec, S2).
 
     q_soc       process noise of the SoC state in 1/s (Q[0][0] = q_soc * dt)
-    q_v         process noise of V1 and V2 in V^2/s (Q[1][1] = Q[2][2] = q_v * dt)
+    q_v         process noise of each branch voltage in V^2/s (Q[i][i] = q_v * dt for i >= 1)
     r           measurement noise variance in V^2
     p0_soc_std  initial standard deviation of the SoC state (0.2 = 20 pp)
-    p0_v_std    initial standard deviation of V1 and V2 in V (0.05 = 50 mV)
+    p0_v_std    initial standard deviation of each branch voltage in V (0.05 = 50 mV)
     """
 
     q_soc: float
@@ -46,10 +50,11 @@ class EkfConfig:
 
 
 class Ekf:
-    """The filter state x (numpy, shape (3,)) and covariance P (numpy, shape (3, 3)).
+    """The filter state x (numpy, shape (1 + n,)) and covariance P (numpy, shape (1 + n, 1 + n)).
 
-    soc0 is the initial SoC and V1 = V2 = 0. The filter is never told whether soc0 is right: P0 is
-    the same diagonal for every run (docs/model.md, Symbols).
+    n is the number of RC branches of params (Params.branches). soc0 is the initial SoC and every
+    V_i = 0. The filter is never told whether soc0 is right: P0 is the same diagonal for every run
+    (docs/model.md, Symbols).
     q_ref_ah is the capacity the filter believes, in Ah; only the capacity sensitivity of S5 changes it
     (docs/decisions.md 1.18).
     After step() or update(), y_hat is the voltage predicted before the measurement was used (Eq. 8).
@@ -61,9 +66,11 @@ class Ekf:
         # Plain lists make the lookups in the loop fast; interp2 works on them unchanged.
         self.t_grid = params.t_grid.tolist()
         self.soc_grid = params.soc_grid.tolist()
-        self.tables = {name: getattr(params, name).tolist() for name in TABLE_NAMES}
-        self.x = np.array([soc0, 0.0, 0.0])
-        self.P = np.diag([cfg.p0_soc_std**2, cfg.p0_v_std**2, cfg.p0_v_std**2])
+        self.tables = {name: getattr(params, name).tolist() for name in params.table_names}
+        self.branches = params.branches
+        n_rc = len(self.branches)
+        self.x = np.array([soc0] + [0.0] * n_rc)
+        self.P = np.diag([cfg.p0_soc_std**2] + [cfg.p0_v_std**2] * n_rc)
         self.i_held = 0.0  # the previous sample's current, held over the next step (docs/model.md C11)
         self.y_hat = math.nan
 
@@ -74,20 +81,17 @@ class Ekf:
     def predict(self, i_held, t_degC, dt_s):
         """Move x and P over a step of dt_s with i_held held over it (Eq. 6, Eq. 7).
 
-        R1, tau1, R2, tau2 are read at the previous posterior SoC and the measured temperature.
+        Each branch's R_i, tau_i are read at the previous posterior SoC and the measured temperature.
         dt_s = 0 leaves x and P unchanged: F is the identity and B and Q are zero.
         """
         soc = float(self.x[0])
-        r1 = self.lookup("r1", t_degC, soc)
-        tau1 = self.lookup("tau1", t_degC, soc)
-        r2 = self.lookup("r2", t_degC, soc)
-        tau2 = self.lookup("tau2", t_degC, soc)
+        r = [self.lookup(r_name, t_degC, soc) for r_name, _ in self.branches]
+        tau = [self.lookup(tau_name, t_degC, soc) for _, tau_name in self.branches]
 
-        a1 = math.exp(-dt_s / tau1)
-        a2 = math.exp(-dt_s / tau2)
-        F = np.diag([1.0, a1, a2])
-        B = np.array([-dt_s / (3600.0 * self.q_ref_ah), r1 * (1.0 - a1), r2 * (1.0 - a2)])
-        Q = np.diag([self.cfg.q_soc, self.cfg.q_v, self.cfg.q_v]) * dt_s
+        a = [math.exp(-dt_s / tau_i) for tau_i in tau]
+        F = np.diag([1.0] + a)
+        B = np.array([-dt_s / (3600.0 * self.q_ref_ah)] + [r_i * (1.0 - a_i) for r_i, a_i in zip(r, a)])
+        Q = np.diag([self.cfg.q_soc] + [self.cfg.q_v] * len(a)) * dt_s
 
         self.x = F @ self.x + B * i_held  # Eq. 6
         F_P = F @ self.P
@@ -97,8 +101,8 @@ class Ekf:
         """Return x_post with its SoC limited to [0, 1] (Eq. 10, docs/decisions.md 1.16); P_post is not changed.
 
         A SoC inside [0, 1] is left alone. Otherwise the whole state moves onto the nearer bound along
-        the posterior covariance, x_c = x - P[:, 0] * (SoC - bound) / P[0][0], so V1 and V2 move with
-        SoC by their correlation with it. Cutting SoC alone would keep the V2 part of the innovation.
+        the posterior covariance, x_c = x - P[:, 0] * (SoC - bound) / P[0][0], so the branch voltages move
+        with SoC by their correlation with it. Cutting SoC alone would keep the V2 part of the innovation.
         """
         soc_bound = min(max(x_post[0], 0.0), 1.0)
         if x_post[0] == soc_bound:
@@ -113,13 +117,16 @@ class Ekf:
 
         OCV, dOCV/dSoC and R0 are read at the prior SoC and the measured temperature.
         """
-        soc_prior, v1_prior, v2_prior = self.x.tolist()
+        soc_prior, *v_prior = self.x.tolist()
         ocv = self.lookup("ocv", t_degC, soc_prior)
         docv = self.lookup("docv", t_degC, soc_prior)
         r0 = self.lookup("r0", t_degC, soc_prior)
 
-        y_hat = ocv - v1_prior - v2_prior - r0 * i_a  # Eq. 8
-        H = np.array([docv, -1.0, -1.0])  # Eq. 8, dR0/dSoC left out
+        v_terminal = ocv
+        for v_i in v_prior:
+            v_terminal -= v_i
+        y_hat = v_terminal - r0 * i_a  # Eq. 8
+        H = np.array([docv] + [-1.0] * len(v_prior))  # Eq. 8, dR0/dSoC left out
 
         P_Ht = self.P @ H
         S = H @ P_Ht + self.cfg.r  # Eq. 9
@@ -128,7 +135,7 @@ class Ekf:
         innovation = v_v - y_hat
         x_post = self.x + K * innovation  # Eq. 10
 
-        I_KH = np.eye(3) - np.outer(K, H)
+        I_KH = np.eye(len(H)) - np.outer(K, H)
         I_KH_P = I_KH @ self.P
         K_R_Kt = self.cfg.r * np.outer(K, K)
         P_post = I_KH_P @ I_KH.T + K_R_Kt  # Eq. 11
@@ -154,7 +161,7 @@ def run_ekf(params, cfg, i, v, temp, dt, soc0, start=0, current_offset=0.0, q_re
     """Run the filter over rows start .. len(i)-1 of a run and return the per-row results as a dict.
 
     i, v, temp, dt are float64 arrays like those of a loader Run (A, V, degC, s; dt[k] = t[k] - t[k-1]);
-    soc0 is the initial SoC. V1 = V2 = 0 at row `start`, whose dt is taken as 0: that row gets an
+    soc0 is the initial SoC. Every V_i = 0 at row `start`, whose dt is taken as 0: that row gets an
     update and no predict. current_offset (A) is added to every current the filter sees. q_ref_ah is
     the capacity of the SoC row of Eq. 6 (Ekf).
     The dict holds, one entry per row and NaN before `start`:

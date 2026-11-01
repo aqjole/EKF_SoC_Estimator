@@ -1,6 +1,6 @@
 """Tests for ekfsoc.fit.
 
-Synthetic: HPPC-like data is generated from the 2RC model with known parameters (model.simulate_2rc_open_loop
+Synthetic: HPPC-like data is generated from the 2RC model with known parameters (model.simulate_open_loop
 with flat tables and a sloped OCV), and the two fits must recover them. Data (needs data/raw/): fit_hppc_run
 on the real HPPC files.
 """
@@ -12,7 +12,7 @@ from ekfsoc.constants import FOLDER_TEMP, RAW_DIR, SOC_GRID, T_GRID_DEGC
 from ekfsoc.fit import TAU1_BOUNDS_S, TAU2_BOUNDS_S, fit_hppc_run, fit_level_fast, fit_level_slow
 from ekfsoc.hppc import Level, segment_hppc
 from ekfsoc.loader import build_run, find_runs, load_run, soc_ref
-from ekfsoc.model import Params, simulate_2rc_open_loop
+from ekfsoc.model import Params, simulate_open_loop
 from ekfsoc.ocv import OcvTable, build_ocv
 
 R0, R1, TAU1 = 0.020, 0.010, 8.0   # Ohm, Ohm, s
@@ -50,7 +50,7 @@ def synthetic_run(blocks):
     fields = {"Time": time, "Voltage": np.full(len(time), 3.7), "Current": -current, "Ah": counter,
               "Battery_Temp_degC": np.full(len(time), 25.0)}
     run = build_run(fields, "synthetic_hppc", "25degC", "hppc")
-    run.v = simulate_2rc_open_loop(SYNTHETIC_PARAMS, run.i, run.temp, soc_ref(run), run.dt)
+    run.v = simulate_open_loop(SYNTHETIC_PARAMS, run.i, run.temp, soc_ref(run), run.dt)
     return run
 
 

@@ -8,7 +8,7 @@ import numpy as np
 
 from ekfsoc.constants import Q_REF_AH
 from ekfsoc.ekf import EkfConfig
-from ekfsoc.model import simulate_2rc_open_loop
+from ekfsoc.model import simulate_open_loop
 
 
 # Provisional noise settings for this check only. The frozen settings come from python/tune.py
@@ -39,6 +39,6 @@ def synthetic_data(params):
     temp = np.full(N_SAMPLES, TEMP_DEGC)
     # True SoC by coulomb counting (Eq. 3): the previous sample's current held over each step.
     soc_true = SOC_START - np.concatenate(([0.0], np.cumsum(i[:-1] * dt[1:]))) / (3600.0 * Q_REF_AH)
-    v_model = simulate_2rc_open_loop(params, i, temp, soc_true, dt)
+    v_model = simulate_open_loop(params, i, temp, soc_true, dt)
     v = v_model + np.random.default_rng(NOISE_SEED).normal(0.0, NOISE_STD_V, N_SAMPLES)
     return {"params": params, "i": i, "v": v, "temp": temp, "dt": dt, "t": t, "soc_true": soc_true}

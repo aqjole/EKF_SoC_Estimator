@@ -207,7 +207,7 @@ Every parameter table F has one row per temperature node T_j (j = 0 to n_T - 1, 
 ```
 
 - The weights are written (1 - w) · x + w · y and not x + w · (y - x), so a query exactly on a node returns that node's value with no rounding. At the last node of an axis the cell is the last one (index n - 2) and w = 1.
-- The same rule serves all seven tables: OCV, dOCV/dSoC, R0, R1, tau1, R2, tau2. No table is extrapolated.
+- The same rule serves every table: OCV, dOCV/dSoC, R0, R1, tau1, R2, tau2, and R3, tau3 in the 3RC model. No table is extrapolated.
 - Clamping matters in use: the measured cell temperature can lie beyond the 40 and -20 degC nodes [inv: summary per folder, drive-cycle cell T min / max] and an estimated SoC can leave 0 to 1.
 
 ### Eq. 5. dOCV/dSoC by central differences
