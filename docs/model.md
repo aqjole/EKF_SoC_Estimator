@@ -166,6 +166,7 @@ V_i(k)  = a_i(k) · V_i(k-1) + R_i · (1 - a_i(k)) · I(k-1)
 
 - R_i and tau_i are read with Eq. 4 at the start of the step, at (T(k-1), SoC(k-1)). The current held over the step is the previous kept sample's current, I(k-1) (C11).
 - In the 2RC-I model of S7 (docs/decisions.md 1.28), R1 is read with Eq. 4b at (T(k-1), SoC(k-1), |I(k-1)|): the current that drives the branch over the step. Every other table is read with Eq. 4 as above.
+- In the 2RC-Id model of S8 step A (docs/decisions.md 1.33), R1 is read as in the 2RC-I model when I(k-1) > 0, and with Eq. 4 from the v1.0 R1 table at (T(k-1), SoC(k-1)) when I(k-1) < 0. At I(k-1) = 0 the branch input R1 · I(k-1) is zero, so the table does not matter.
 - Where it comes from: branch i is a resistor R_i in parallel with a capacitor C_i = tau_i / R_i, so dV_i/dt = -V_i / tau_i + R_i · I / tau_i. With I constant over the step, the solution over dt is Eq. 1 exactly. It is not an Euler step, so it holds for any dt, from the 0.1 s logging step to the 1.147 to 2.143 s steps at cycle boundaries (C11).
 - Limits: dt = 0 gives a_i = 1 and leaves V_i unchanged. A long step gives a_i -> 0 and V_i -> R_i · I(k-1), the steady value of a constant current.
 - Start: V_i(0) = 0 for every branch. The open-loop check starts the branches relaxed; C13 lists the runs that open under load.
@@ -260,7 +261,7 @@ x-   = F · x(k-1) + B · I(k-1)
 
 - Row by row: `SoC- = SoC(k-1) - I(k-1) · dt / (3600 · Q_ref)` is Eq. 3 with η = 1, and `Vi- = a_i · Vi(k-1) + R_i · (1 - a_i) · I(k-1)` is Eq. 1.
 - R_i and tau_i are read with Eq. 4 at the previous posterior SoC, SoC(k-1), and at T(k). Eq. 1 reads T(k-1); the filter takes one temperature per sample, so predict and update of a step use the same one.
-- In the 2RC-I model, R1 is read with Eq. 4b at |I(k-1)| as well, the current held over the step. The current is an input, so this changes the entry R1 · (1 - a1) of B and nothing in F, H or the noise settings.
+- In the 2RC-I model, R1 is read with Eq. 4b at |I(k-1)| as well, the current held over the step. The current is an input, so this changes the entry R1 · (1 - a1) of B and nothing in F, H or the noise settings. The 2RC-Id model chooses the R1 table by the sign of I(k-1) as under Eq. 1, with the same effect on B only.
 - The current is held over the whole step, including the cycle-boundary steps of up to 2.143 s, with no special gap code (C11).
 - SoC is not limited in predict. The limit is applied in update (Eq. 10), and a prior outside 0 to 1 is clamped by the lookups of Eq. 4.
 
