@@ -181,10 +181,21 @@ def branch_sse(error_mv, current, dt):
     return sse
 
 
+def open_loop_error_mv(params, run):
+    """The open-loop error of a drive run in mV, model minus measured over the whole run (decisions 1.25)."""
+    return 1000.0 * (simulate_open_loop(params, run.i, run.temp, soc_ref(run), run.dt) - run.v)
+
+
+def drive_run_sse(params, spec):
+    """(rows, sum of squared open-loop errors in mV^2) of one drive run: the pooled score of decisions 1.25."""
+    error_mv = open_loop_error_mv(params, load_run(spec.path))
+    return len(error_mv), float(np.sum(error_mv ** 2))
+
+
 def drive_run_ceiling(params_2rc, spec):
     """One drive run of the pooled ceiling: its 2RC open-loop error summed for scoring, and its branch_sse grid."""
     run = load_run(spec.path)
-    error_mv = 1000.0 * (simulate_open_loop(params_2rc, run.i, run.temp, soc_ref(run), run.dt) - run.v)
+    error_mv = open_loop_error_mv(params_2rc, run)
     return {"temp": spec.nominal_temp_degc, "cycle": spec.cycle_name, "rows": len(error_mv),
             "mean_error_mv": float(np.mean(error_mv)), "sse_2rc": float(np.sum(error_mv ** 2)),
             "sse": branch_sse(error_mv, run.i, run.dt)}

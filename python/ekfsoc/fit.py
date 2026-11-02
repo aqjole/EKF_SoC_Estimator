@@ -117,6 +117,23 @@ def ocv_at(ocv_table, temp_degc, soc):
     return interp2(ocv_table.ocv, ocv_table.t_grid, ocv_table.soc_grid, temp_degc, soc)
 
 
+def pulse_windows(run, pulses, r0, ocv_table):
+    """The windows of fit (a), one per pulse: (current, dt, z) over the pulse and the rest after it.
+
+    z = V - OCV(SoC_ref) + R0 * I, the RC drops with a free constant per window (module docstring). The S7 fit
+    of R1 over current uses the same windows (docs/decisions.md 1.28).
+    """
+    temp_degc = run.meta["nominal_temp_degc"]
+    soc = soc_ref(run)
+    windows = []
+    for pulse in pulses:
+        rows = slice(pulse.rows.start, pulse.rest_rows.stop)
+        ocv = np.array([ocv_at(ocv_table, temp_degc, s) for s in soc[rows]])
+        z = run.v[rows] - ocv + r0 * run.i[rows]
+        windows.append((run.i[rows], run.dt[rows], z))
+    return windows
+
+
 def fit_level_fast(run, level, ocv_table, tau_bounds=FIT_BOUNDS["2rc"]["fast"]):
     """Fit (a) for one level: returns {R0_ohm, R1_ohm, tau1_s(, R3_ohm, tau3_s), rmse_fast_mV, n_pulses_used, fast_ok}.
 
@@ -132,15 +149,7 @@ def fit_level_fast(run, level, ocv_table, tau_bounds=FIT_BOUNDS["2rc"]["fast"]):
         return fit
 
     r0 = float(np.median([step_r0(run, pulse) for pulse in pulses]))
-    temp_degc = run.meta["nominal_temp_degc"]
-    soc = soc_ref(run)
-
-    windows = []
-    for pulse in pulses:
-        rows = slice(pulse.rows.start, pulse.rest_rows.stop)
-        ocv = np.array([ocv_at(ocv_table, temp_degc, s) for s in soc[rows]])
-        z = run.v[rows] - ocv + r0 * run.i[rows]
-        windows.append((run.i[rows], run.dt[rows], z))
+    windows = pulse_windows(run, pulses, r0, ocv_table)
 
     def residuals(x):
         pieces = []

@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass
 import numpy as np
 
 from ekfsoc.constants import Q_REF_AH
-from ekfsoc.model import interp2
+from ekfsoc.model import interp2, interp_current
 
 
 @dataclass
@@ -68,6 +68,8 @@ class Ekf:
         self.soc_grid = params.soc_grid.tolist()
         self.tables = {name: getattr(params, name).tolist() for name in params.table_names}
         self.branches = params.branches
+        self.r1_slices = params.r1_slices()  # the 2RC-I model (S7) reads R1 over current, None otherwise
+        self.i_grid = None if self.r1_slices is None else params.i_grid.tolist()
         n_rc = len(self.branches)
         self.x = np.array([soc0] + [0.0] * n_rc)
         self.P = np.diag([cfg.p0_soc_std**2] + [cfg.p0_v_std**2] * n_rc)
@@ -81,12 +83,15 @@ class Ekf:
     def predict(self, i_held, t_degC, dt_s):
         """Move x and P over a step of dt_s with i_held held over it (Eq. 6, Eq. 7).
 
-        Each branch's R_i, tau_i are read at the previous posterior SoC and the measured temperature.
+        Each branch's R_i, tau_i are read at the previous posterior SoC and the measured temperature; in the
+        2RC-I model R1 is read at |i_held| as well (Eq. 4b).
         dt_s = 0 leaves x and P unchanged: F is the identity and B and Q are zero.
         """
         soc = float(self.x[0])
         r = [self.lookup(r_name, t_degC, soc) for r_name, _ in self.branches]
         tau = [self.lookup(tau_name, t_degC, soc) for _, tau_name in self.branches]
+        if self.r1_slices is not None:
+            r[0] = interp_current(self.r1_slices, self.t_grid, self.soc_grid, self.i_grid, t_degC, soc, i_held)
 
         a = [math.exp(-dt_s / tau_i) for tau_i in tau]
         F = np.diag([1.0] + a)

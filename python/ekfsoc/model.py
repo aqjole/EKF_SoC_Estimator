@@ -103,6 +103,18 @@ def interp2(table, t_grid, soc_grid, temp, soc):
     return float((1.0 - weight_t) * value_j + weight_t * value_j1)
 
 
+def interp_current(slices, t_grid, soc_grid, i_grid, temp, soc, current):
+    """R1 of the 2RC-I model at (temp, soc, |current|) by Eq. 4b (docs/decisions.md 1.28).
+
+    slices[q] is the (T, SoC) table at the current node i_grid[q] (ascending). The current magnitude is
+    clamped to the axis, Eq. 4 is read on the two bracketing slices, and the two are weighted along current.
+    """
+    q, weight_i = find_cell(i_grid, abs(current))
+    low = interp2(slices[q], t_grid, soc_grid, temp, soc)
+    high = interp2(slices[q + 1], t_grid, soc_grid, temp, soc)
+    return float((1.0 - weight_i) * low + weight_i * high)
+
+
 @dataclass(eq=False)
 class Params:
     """The two axes and the parameter tables of the model (docs/model.md C15, Symbols).
@@ -115,7 +127,9 @@ class Params:
     r1, tau1  RC branch 1 (fast): R1 in Ohm, tau1 in s
     r2, tau2  RC branch 2 (slow): R2 in Ohm, tau2 in s
     r3, tau3  RC branch 3 (middle) of the 3RC model, None in a 2RC Params
-    Every table has shape (n_t, n_soc). The arrays are copied to float64 on creation.
+    i_grid, r1_current  the current axis in A (ascending) and the R1 table over (T, SoC, |I|) of the 2RC-I
+              model (S7), shape (n_t, n_soc, n_i); None otherwise. When present, R1 is read from it (Eq. 4b).
+    Every other table has shape (n_t, n_soc). The arrays are copied to float64 on creation.
     """
 
     t_grid: np.ndarray
@@ -129,6 +143,8 @@ class Params:
     tau2: np.ndarray
     r3: np.ndarray | None = None
     tau3: np.ndarray | None = None
+    i_grid: np.ndarray | None = None
+    r1_current: np.ndarray | None = None
 
     def __post_init__(self):
         """Convert to float64 arrays and check the axes and table shapes, so a bad table fails at once."""
@@ -150,6 +166,23 @@ class Params:
             if table.shape != expected_shape:
                 raise ValueError(f"table {name} has shape {table.shape}, expected {expected_shape}")
             setattr(self, name, table)
+
+        if (self.i_grid is None) != (self.r1_current is None):
+            raise ValueError("i_grid and r1_current must be given together")
+        if self.i_grid is not None:
+            self.i_grid = np.array(self.i_grid, dtype=np.float64)
+            if self.i_grid.ndim != 1 or len(self.i_grid) < 2 or not np.all(np.diff(self.i_grid) > 0.0):
+                raise ValueError("i_grid must be a strictly ascending axis with at least 2 nodes")
+            self.r1_current = np.array(self.r1_current, dtype=np.float64)
+            if self.r1_current.shape != expected_shape + (len(self.i_grid),):
+                raise ValueError(f"r1_current has shape {self.r1_current.shape}, expected "
+                                 f"{expected_shape + (len(self.i_grid),)}")
+
+    def r1_slices(self):
+        """The R1 table over current as one (T, SoC) list of lists per current node, or None (Eq. 4b)."""
+        if self.r1_current is None:
+            return None
+        return [self.r1_current[:, :, q].tolist() for q in range(len(self.i_grid))]
 
     @property
     def table_names(self):
@@ -230,7 +263,8 @@ def simulate_open_loop(params, i, temp, soc, dt):
 
     Plain per-sample loop over the branches of params (two or three). Every V_i = 0 at k = 0 (the
     model starts relaxed). For each row k:
-      1. Look up ocv, r0 and each branch's R_i, tau_i at (temp[k], soc[k]) with interp2 (Eq. 4).
+      1. Look up ocv, r0 and each branch's R_i, tau_i at (temp[k], soc[k]) with interp2 (Eq. 4). In the
+         2RC-I model R1 is read at |i[k]| as well, the current held over the next step (Eq. 4b).
       2. Terminal voltage (Eq. 2): v_model[k] = ocv - V1 - V2 (- V3) - r0 * i[k], subtracted in branch order.
       3. Move the RC states on to row k+1 with rc_step (Eq. 1), under the zero-order hold the
          loader rules fix (docs/model.md C11): the current of row k is held over the step dt[k+1],
@@ -254,6 +288,8 @@ def simulate_open_loop(params, i, temp, soc, dt):
     r0_table = params.r0.tolist()
     branch_tables = [(getattr(params, r_name).tolist(), getattr(params, tau_name).tolist())
                      for r_name, tau_name in params.branches]
+    r1_slices = params.r1_slices()
+    i_grid = None if r1_slices is None else params.i_grid.tolist()
 
     v_model = np.zeros(n)
     v_branch = [0.0] * len(branch_tables)
@@ -265,6 +301,9 @@ def simulate_open_loop(params, i, temp, soc, dt):
         r_tau = [(interp2(r_table, t_grid, soc_grid, cell_temp, cell_soc),
                   interp2(tau_table, t_grid, soc_grid, cell_temp, cell_soc))
                  for r_table, tau_table in branch_tables]
+        if r1_slices is not None:
+            r1 = interp_current(r1_slices, t_grid, soc_grid, i_grid, cell_temp, cell_soc, currents[k])
+            r_tau[0] = (r1, r_tau[0][1])
 
         v_terminal = ocv
         for v_i in v_branch:

@@ -216,3 +216,43 @@ def plot_summary(path, results_df, metric, title):
     axes[0].legend(handles=keys, loc="best", frameon=False)
     fig.suptitle(title, color=INK_COLOR)
     save(fig, path)
+
+
+def plot_r1_current(pulses, path):
+    """r1_current.png: R1 against the pulse current, one line per temperature (S7, docs/decisions.md 1.28).
+
+    Each dot is one pulse number (D1 to D4): the median current and the median R1 over the levels, from the
+    used pulses of `pulses` (the table of results/fit_pulses_r1i.csv). The current axis is logarithmic, because
+    the pulse currents double from one pulse to the next.
+    """
+    fig, axis = plt.subplots(figsize=(6.5, 4.5))
+    used = pulses[pulses["used"]]
+    for temp, color in TEMP_COLORS.items():
+        medians = used[used["T_degC"] == temp].groupby("pulse")[["I_A", "R1_ohm"]].median()
+        axis.plot(medians["I_A"], 1000.0 * medians["R1_ohm"], color=color, marker="o", markersize=4, linewidth=1.0)
+    axis.set_xscale("log")
+    axis.set_xticks([0.75, 1.5, 3, 6, 12, 18], labels=["0.75", "1.5", "3", "6", "12", "18"])
+    axis.set_xlabel("pulse current (A)")
+    axis.set_ylabel("R1 (mOhm), median over the levels")
+    axis.legend(handles=temperature_keys(), frameon=False, fontsize=8)
+    save(fig, path)
+
+
+def plot_model_compare(old, new, open_loop, path):
+    """model_compare_r1i.png: the pooled open-loop RMSE and the experiment-1 mean SoC RMSE against temperature,
+    2RC and 2RC-I (S7, docs/decisions.md 1.29). `old` and `new` map temperature to a dict with "exp1";
+    open_loop maps temperature to (US06 2RC, US06 2RC-I, pooled 2RC, pooled 2RC-I)."""
+    temps = sorted(old)
+    fig, (left, right) = plt.subplots(1, 2, figsize=(10, 4))
+    for axis, values, label in ((left, [(open_loop[t][2], open_loop[t][3]) for t in temps],
+                                 "open-loop RMSE over every drive run (mV)"),
+                                (right, [(old[t]["exp1"], new[t]["exp1"]) for t in temps],
+                                 "experiment 1, mean SoC RMSE (pp)")):
+        axis.plot(temps, [pair[0] for pair in values], color=MEASURED_COLOR, marker="o", label="2RC")
+        axis.plot(temps, [pair[1] for pair in values], color=MODEL_COLOR, marker="o", label="2RC-I")
+        axis.set_xticks(temps)
+        axis.set_xlabel("temperature (degC)")
+        axis.set_ylabel(label)
+        axis.set_ylim(bottom=0.0)
+    right.legend(frameon=False)
+    save(fig, path)

@@ -23,11 +23,11 @@ from ekfsoc.constants import RAW_DIR, REPO_DIR, T_GRID_DEGC
 from ekfsoc.experiments import evaluation_runs
 from ekfsoc.fit import rc_voltage, solve
 from ekfsoc.hppc import segment_hppc
-from ekfsoc.loader import load_run, soc_ref
+from ekfsoc.loader import soc_ref
 from ekfsoc.model import Params, simulate_open_loop
 from ekfsoc.plots import plot_params
 from export_params import PARAMS_CSV, md_table, write_text
-from fit_3rc import drive_run_ceiling, grid_best, on_bound
+from fit_3rc import drive_run_ceiling, drive_run_sse, grid_best, on_bound
 from fit_all import GATE_RMSE_MV, GATE_TEMP_DEGC, load_test, resample, validate_us06
 
 
@@ -185,11 +185,7 @@ def drive_section(params_2rc, params_rest):
     specs = evaluation_runs(RAW_DIR)
     for temp in T_GRID_DEGC:
         runs = [drive_run_ceiling(params_2rc, spec) for spec in specs if spec.nominal_temp_degc == temp]
-        sse_rest = 0.0
-        for spec in (spec for spec in specs if spec.nominal_temp_degc == temp):
-            run = load_run(spec.path)
-            error_mv = 1000.0 * (simulate_open_loop(params_rest, run.i, run.temp, soc_ref(run), run.dt) - run.v)
-            sse_rest += float(np.sum(error_mv ** 2))
+        sse_rest = sum(drive_run_sse(params_rest, spec)[1] for spec in specs if spec.nominal_temp_degc == temp)
         n = sum(run["rows"] for run in runs)
         rmse_2rc = np.sqrt(sum(run["sse_2rc"] for run in runs) / n)
         ceiling = grid_best(sum(run["sse"] for run in runs), n)[0]
