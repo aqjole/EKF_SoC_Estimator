@@ -54,6 +54,11 @@ SOURCES = [
     ("model_fit_3rc", "results/model_fit_3rc.md", ("Ceiling over every drive cycle",)),
     ("model_fit_3rc_rest", "results/model_fit_3rc_rest.md", ("Open-loop voltage error on US06, 2RC and second 3RC fit",)),
     ("model_fit_3rc_rest", "results/model_fit_3rc_rest.md", ("Open-loop error over every drive cycle",)),
+    ("model_fit_r1i", "results/model_fit_r1i.md", ("R1 per pulse",)),
+    ("model_compare_r1i", "results/model_compare_r1i.md", ("Open loop",)),
+    ("model_compare_r1i", "results/model_compare_r1i.md", ("Experiment 1",)),
+    ("model_compare_r1i", "results/model_compare_r1i.md", ("Experiments 2 to 4",)),
+    ("model_compare_r1i", "results/model_compare_r1i.md", ("Adoption verdict",)),
 ]
 
 HEADING = re.compile(r"(#{1,6}) (.+)")

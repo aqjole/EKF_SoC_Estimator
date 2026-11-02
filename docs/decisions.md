@@ -364,6 +364,17 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
 
 - Reason: the table with six current nodes is six times the size of the v1.0 R1 table: 3,636 values (14,544 B in float) in place of 606, so the library would grow by about 12 kB from 19,388 B (`results/c_footprint.md`). Whether that fits, and as which build, is worth deciding only once the model has earned it.
 
+### 1.31 S7: outcome, the 2RC-I model is adopted
+
+**Under 1.28 and 1.29 the 2RC-I model passes the S1 gate (open-loop US06 RMSE 29.75 mV at 25 degC against 30 mV; 2RC: 29.79 mV) and the adoption rule: its experiment-1 mean SoC RMSE is lower than the 2RC value at five of the six temperatures and higher by more than 0.10 pp at none (`results/model_compare_r1i.md`). It is adopted. The C port runs only under its own entry, written before the port starts (1.30).**
+
+- The fit: R1 falls with the pulse current at every temperature. The median R1 of D1 against D4 is 6.44 against 5.78 mOhm at 40 degC and 98.77 against 41.38 mOhm at -20 degC, and no pulse is left out (`results/model_fit_r1i.md`).
+- Open loop: pooled over every drive run, the RMSE falls by 9.5 % at -20 degC, 9.3 % at -10 degC and 5.2 % at 0 degC, and moves by less than 3 % at the warmer temperatures. On US06 it changes by -0.34 to +4.00 mV and is worse at -10 degC, so the gate passes with a margin of 0.25 mV.
+- Experiment 1: the mean changes by -0.04, -0.01, +0.03, -0.29, -0.22 and -0.46 pp at 40, 25, 10, 0, -10 and -20 degC, and 49 of the 62 evaluation runs end lower. In the cold, part of the mean gain comes from a few runs that improve a lot, while the median barely moves: at -20 degC Mix 8 falls from 9.12 to 4.17 pp, Mix 4 from 6.05 to 2.98 pp and HWFET from 3.09 to 1.79 pp, while US06 rises from 2.75 to 5.36 pp and Mix 6 from 3.96 to 6.34 pp (`results/ekf_results.csv`, `results/ekf_results_r1i.csv`). The median moves by -0.01 pp at -20 degC and +0.17 pp at -10 degC. Mix 8 and Mix 4 are the runs that open under load (`docs/model.md` C13), so part of the cold gain is at the start. US06, the cycle with the highest currents, gets worse from 10 degC down: its experiment-1 RMSE rises from 1.18 to 2.28 pp at 10 degC, 1.13 to 2.99 pp at 0 degC, 3.23 to 6.25 pp at -10 degC and 2.75 to 5.36 pp at -20 degC; at 40 and 25 degC it falls slightly.
+- Experiments 2 to 4: the experiment-4 mean is lower at five temperatures and 0.10 pp higher at -20 degC. At -20 degC one run fewer reaches the 2 pp band in experiment 2 and in the high start of experiment 3; the reached counts are equal elsewhere.
+- Code check: an independent implementation reproduced four pulse R1 values, the cells of `results/r1_current.csv` (to the CSV rounding), the experiment-1 RMSE of three runs and the per-temperature means. The S7 outputs are byte-identical across runs, and every earlier result regenerates byte for byte with the S7 code.
+- What this leaves: the history confound of D1 (1.28); R1 held below the smallest pulse current; a US06 that the model makes worse from 10 degC down, so the adopted model is not better for every load; and a cold gain that rests partly on a few runs. The verdict is the one the rule fixed in advance; these points are reported with it.
+
 ## 2. Dataset facts confirmed in S0
 
 | claim (readme, or the spec's S0 checks) | verdict | evidence |

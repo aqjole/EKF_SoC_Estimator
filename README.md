@@ -1,6 +1,6 @@
 # EKF SoC Estimator
 
-State-of-charge (SoC) estimation for a Li-ion cell with a 2RC equivalent-circuit model and an Extended Kalman Filter (EKF). A Python reference is fitted and validated offline on the public LG 18650HG2 dataset at all six of its temperatures. The same filter is ported to C99 for embedded targets, and the port is checked against the Python reference run by run. A later stage (S5) adds two sensitivity checks (a 5 % error in the filter's capacity, a 1 Hz sample rate) and a GNU Octave port of the filter, checked the same way. A last stage (S6) tried a third RC branch, fitted twice, each time under rules fixed before the fit; both fits made the US06 open-loop voltage worse at most temperatures, and the 2RC model stays (a negative result, reported below). Every result number in this README is copied from a file in `results/` by `python/update_readme.py`.
+State-of-charge (SoC) estimation for a Li-ion cell with a 2RC equivalent-circuit model and an Extended Kalman Filter (EKF). A Python reference is fitted and validated offline on the public LG 18650HG2 dataset at all six of its temperatures. The same filter is ported to C99 for embedded targets, and the port is checked against the Python reference run by run. A later stage (S5) adds two sensitivity checks (a 5 % error in the filter's capacity, a 1 Hz sample rate) and a GNU Octave port of the filter, checked the same way. A last stage (S6) tried a third RC branch, fitted twice, each time under rules fixed before the fit; both fits made the US06 open-loop voltage worse at most temperatures, and the 2RC model stays (a negative result, reported below). A further stage (S7) made R1 depend on the current, under the same kind of rules; this "2RC-I" model lowers the SoC error in the cold and is adopted in the Python reference, while the C port still runs the 2RC model. Every result number in this README is copied from a file in `results/` by `python/update_readme.py`.
 
 ## Claims
 
@@ -94,6 +94,8 @@ make all         # every stage below, in order
 | `make octave` | S5 | runs the Octave filter against the Python filter on every run; slow, because Octave runs the filter row by row | `results/equivalence_octave.md`, `results/plots/s5/equivalence_octave_25degC.png` |
 | `make fit-3rc` | S6 | fits the 3RC model from the same HPPC files, runs both models open loop on US06, and the third-branch ceiling check on US06 and on every drive run; needs `make fit` | `results/fit_levels_3rc.csv`, `results/params_3rc.csv`, `results/model_fit_3rc.md`, `results/plots/s6/` |
 | `make fit-3rc-rest` | S6 | fits the middle branch alone on the HPPC pulse trains with the 2RC tables fixed, and runs the result open loop on US06 and on every drive run; needs `make fit` | `results/fit_levels_3rc_rest.csv`, `results/params_3rc_rest.csv`, `results/model_fit_3rc_rest.md`, `results/plots/s6/params_3rc_rest.png` |
+| `make fit-r1i` | S7 | fits R1 per HPPC discharge pulse and builds the R1 table over current, then runs the 2RC-I model open loop on US06 and on every drive run; needs `make fit` | `results/fit_pulses_r1i.csv`, `results/r1_current.csv`, `results/model_fit_r1i.md`, `results/plots/s7/r1_current.png` |
+| `make ekf-r1i` | S7 | runs experiments 1 to 4 on the 2RC-I model and writes the comparison with the adoption verdict; needs `make ekf` and `make fit-r1i` | `results/ekf_results_r1i.csv`, `results/model_compare_r1i.md`, `results/plots/s7/model_compare_r1i.png` |
 | `make readme` | S4 | copies the results tables into this README | `README.md` |
 | `make readme-check` | S4 | fails if this README is out of sync with `results/` | |
 
@@ -652,6 +654,84 @@ Pooled over all rows of a temperature's runs, scored as in docs/decisions.md 1.2
 
 ![Middle branch of the second 3RC fit against SoC](results/plots/s6/params_3rc_rest.png)
 
+### S7: R1 that depends on current (adopted)
+
+S7 asked whether the cold error comes from a resistance that falls as the current grows. In the 2RC-I model, R1 is read over temperature, SoC and the size of the current instead of temperature and SoC; every other table and the frozen filter settings stay as in v1.0. The rules were fixed in `docs/decisions.md` before any result existed: R1 is fitted once per HPPC discharge pulse in the windows of the S1 fit, the S1 gate applies, and the model is adopted only under the rule S6 used (1.28, 1.29). R1 falls with the pulse current at every temperature, little at 40 degC and by more than half at -20 degC:
+
+<!-- results:model_fit_r1i:begin -->
+
+**R1 per pulse**
+
+Per usable HPPC discharge pulse, R1 in the window of fit (a) (the pulse and its 40 s rest, one free constant) with R0 and tau1 held at the level's fit (a) values (docs/decisions.md 1.28). Medians over the levels; v1.0 R1 is the level fit of S1. D1 is the smallest current and also the only pulse that follows the move and its 1 h rest, so a current effect and a history effect on D1 cannot be told apart. Left out: pulses with R1 at or below 0. Every pulse fit is in `results/fit_pulses_r1i.csv`.
+
+| T (degC) | v1.0 R1 (mOhm) | D1 I (A) | D1 R1 (mOhm) | D2 I (A) | D2 R1 (mOhm) | D3 I (A) | D3 R1 (mOhm) | D4 I (A) | D4 R1 (mOhm) | pulses used | left out |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 40 | 6.08 | 3.00 | 6.44 | 6.00 | 6.26 | 12.00 | 6.08 | 18.00 | 5.78 | 41 | 0 |
+| 25 | 6.78 | 3.00 | 8.45 | 6.00 | 7.93 | 12.00 | 6.98 | 18.00 | 6.33 | 42 | 0 |
+| 10 | 8.85 | 2.90 | 11.78 | 5.80 | 10.45 | 11.60 | 8.90 | 17.40 | 8.29 | 40 | 0 |
+| 0 | 11.56 | 3.00 | 15.75 | 6.00 | 14.49 | 12.00 | 11.88 | 18.00 | 10.23 | 35 | 0 |
+| -10 | 21.52 | 1.50 | 33.48 | 3.00 | 30.09 | 6.00 | 23.96 | 12.00 | 14.92 | 36 | 0 |
+| -20 | 60.81 | 0.75 | 98.77 | 1.50 | 86.62 | 3.00 | 66.50 | 6.00 | 41.38 | 34 | 0 |
+
+<!-- results:model_fit_r1i:end -->
+
+![R1 against the pulse current](results/plots/s7/r1_current.png)
+
+The 2RC-I model passes the gate and the adoption rule, so it is adopted (`docs/decisions.md` 1.31):
+
+<!-- results:model_compare_r1i:begin -->
+
+**Open loop**
+
+The US06 RMSE and the RMSE pooled over every drive run, model minus measured voltage (docs/decisions.md 1.25).
+
+| T (degC) | US06 2RC (mV) | US06 2RC-I (mV) | pooled 2RC (mV) | pooled 2RC-I (mV) |
+|---|---|---|---|---|
+| 40 | 20.90 | 20.56 | 13.95 | 13.88 |
+| 25 | 29.79 | 29.75 | 17.40 | 17.48 |
+| 10 | 40.68 | 40.87 | 24.81 | 24.09 |
+| 0 | 59.47 | 60.31 | 38.30 | 36.31 |
+| -10 | 73.74 | 77.75 | 63.38 | 57.51 |
+| -20 | 104.58 | 104.85 | 87.61 | 79.29 |
+
+**Experiment 1**
+
+SoC RMSE with the correct initial SoC. The mean decides the verdict (docs/decisions.md 1.29); the median and the number of runs whose RMSE is lower with 2RC-I show how the change spreads over the runs.
+
+| T (degC) | evaluation runs | mean 2RC (pp) | mean 2RC-I (pp) | mean change (pp) | median 2RC (pp) | median 2RC-I (pp) | runs lower with 2RC-I |
+|---|---|---|---|---|---|---|---|
+| 40 | 7 | 0.79 | 0.74 | -0.04 | 0.73 | 0.72 | 6 of 7 |
+| 25 | 10 | 0.87 | 0.86 | -0.01 | 0.87 | 0.87 | 7 of 10 |
+| 10 | 11 | 1.18 | 1.21 | +0.03 | 1.14 | 1.11 | 9 of 11 |
+| 0 | 11 | 2.04 | 1.74 | -0.29 | 1.87 | 1.66 | 10 of 11 |
+| -10 | 11 | 3.43 | 3.21 | -0.22 | 2.83 | 3.00 | 9 of 11 |
+| -20 | 12 | 3.70 | 3.24 | -0.46 | 3.00 | 2.99 | 8 of 12 |
+
+**Experiments 2 to 4**
+
+Experiment 4: mean SoC RMSE with the current offset. Reached: evaluation runs whose error stays within +-2 pp from some time on, 2RC / 2RC-I.
+
+| T (degC) | exp4 2RC (pp) | exp4 2RC-I (pp) | exp2 reached | exp3 low reached | exp3 high reached |
+|---|---|---|---|---|---|
+| 40 | 1.17 | 1.14 | 6 / 6 | 6 / 6 | 6 / 6 |
+| 25 | 1.21 | 1.19 | 9 / 9 | 9 / 9 | 9 / 9 |
+| 10 | 1.33 | 1.24 | 11 / 11 | 11 / 11 | 11 / 11 |
+| 0 | 2.22 | 1.69 | 11 / 11 | 11 / 11 | 11 / 11 |
+| -10 | 3.57 | 3.30 | 4 / 4 | 3 / 3 | 3 / 3 |
+| -20 | 3.85 | 3.95 | 6 / 5 | 4 / 4 | 5 / 4 |
+
+**Adoption verdict**
+
+Rule (docs/decisions.md 1.29): the experiment-1 mean SoC RMSE is lower than the 2RC value at 4 or more of the six temperatures and higher at none by more than 0.10 pp.
+
+Lower at 5 of 6 temperatures; higher by more than 0.10 pp at: none. **ADOPTED.**
+
+<!-- results:model_compare_r1i:end -->
+
+![2RC and 2RC-I against temperature](results/plots/s7/model_compare_r1i.png)
+
+The gain is a cold one. At 0 to -20 degC the experiment-1 mean falls by 0.2 to 0.5 pp; at the warmer temperatures it moves by a few hundredths. Most runs end lower at every temperature, but in the cold part of the mean gain comes from a few runs that improve a lot, Mix 8 and Mix 4 among them, which open under load; the cold medians barely move. US06, the cycle with the highest currents, gets worse from 10 degC down, with its error roughly doubled (`docs/decisions.md` 1.31, `results/ekf_results_r1i.csv`), so the 2RC-I model is better on average, not for every load. An independent reimplementation reproduced the fit, the table and the filter runs. The C library is not ported yet: the R1 table over current adds about 12 kB, and the port gets its own decision first (1.30).
+
 ## C port
 
 **API** (`c/include/ekf.h`). The caller owns one `ekf_t` per cell and one `ekf_cfg_t` with the noise settings and a pointer to the parameter tables. The library allocates nothing and keeps no state of its own.
@@ -714,11 +794,12 @@ CI has not yet run on GitHub: the repository has no remote at the time of writin
 - This is a personal project. It validates offline on public data from one new cell.
 - Not run on target hardware: the C library is cross-compiled only. It is not checked against MISRA C or ISO 26262.
 - No SOH or SOP estimation, and no Simulink model.
+- The 2RC-I model of S7 reads R1 at the current but holds it below the smallest HPPC pulse current, 3 A at 40 to 0 degC, where drive cycles run often. Its smallest pulse is always the first after a 1 h rest, so a current effect and a history effect cannot be told apart there (`docs/decisions.md` 1.28). It lowers the mean SoC error in the cold but makes US06, the cycle with the highest currents, worse from 10 degC down (1.31). It runs in the Python reference only; the C library runs the 2RC model.
 - The model has no hysteresis and no ageing or capacity fade, and it takes coulombic efficiency as 1. The C/20 charge put back more Ah than the discharge removed at every temperature except -20 degC, where it put back less (the charge / discharge column of the capacity table). The cause is unexplained.
 - The cell aged over the campaign, which ran 25, 40, 10, 0, -10 and -20 degC in that order. It also lost capacity inside the 25 degC block (the two 25 degC 1C runs in the capacity table). One Q_ref, from the freshest cell, is used at every temperature. Missing and off-temperature 1C tests are marked in `results/capacity.md`.
 - The reference SoC is itself coulomb counting, on the cycler's Ah counter. The baseline counts the logged current; the two agree closely (the coulomb-counting table of experiment 1, `docs/model.md` C13). The cycler's stated accuracy is 0.1 % of full scale, so a real sensor offset in the data would be invisible to this comparison.
 - The OCV table is the C/20 discharge branch, corrected onto the HPPC 1 h rest voltages. The correction rests on the few rest points of each temperature and is held flat beyond the first and last of them. The cold rests have not fully relaxed after 1 h, which leaves a small bias in those points (`docs/decisions.md` 1.1, 1.12). The charge half of the C/20 test is not used, because the two halves do not share an Ah axis.
-- The 2RC fit assumes two separable branches: R0, R1 and tau1 from the discharge pulses, R2 and tau2 from the 1 h rests, with V2 = 0 at the start of each move. A third branch fitted from the same pulses made the US06 voltage worse at most temperatures (S6), so the model keeps no time constant between the fast and the slow branch, although the drive cycles ask for one of 20 to 50 s (`docs/decisions.md` 1.25). A second fit of the middle branch alone, on the HPPC pulse trains, failed the US06 gate too (1.27). Charge pulses are never fitted, so regen uses discharge parameters. The EKF Jacobians leave out dR0/dSoC and the SoC dependence of the RC parameters (`docs/decisions.md` 1.12, `docs/model.md` Eq. 7, Eq. 8).
+- The 2RC fit assumes two separable branches: R0, R1 and tau1 from the discharge pulses, R2 and tau2 from the 1 h rests, with V2 = 0 at the start of each move. A third branch fitted from the same pulses made the US06 voltage worse at most temperatures (S6), so the model keeps no time constant between the fast and the slow branch, although the drive cycles ask for one of 20 to 50 s (`docs/decisions.md` 1.25). A second fit of the middle branch alone, on the HPPC pulse trains, failed the US06 gate too (1.27). Charge pulses are never fitted, so regen uses discharge parameters, in the 2RC-I model of S7 too. The EKF Jacobians leave out dR0/dSoC and the SoC dependence of the RC parameters (`docs/decisions.md` 1.12, `docs/model.md` Eq. 7, Eq. 8).
 - The 25 degC open-loop voltage error passes the sanity limit by a thin margin (the gate line under the model-fit table).
 - The noise settings were tuned on one cycle at one temperature. The eight mixes are built from segments of the four standard cycles, so the tuning cycle and the evaluation runs share segments (`docs/decisions.md` 1.11).
 - Errors grow in the cold. Experiment 1 errors are clearly larger at 0, -10 and -20 degC than at 40, 25 and 10 degC, and at -10 and -20 degC many runs of experiments 2 and 3 never settle inside the band.
