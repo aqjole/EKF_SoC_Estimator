@@ -45,12 +45,13 @@ def load_params_ri():
     return read_r1_current(Params.from_csv(PARAMS_CSV), R1_CURRENT_CSV)
 
 
-def process_run_ri(spec):
-    """The scored rows of one run on the 2RC-I model; its traces are computed and saved first unless fresh."""
-    traces_path = RUNS_DIR / f"{spec.folder}__{spec.path.stem}.npz"
-    if not is_fresh([traces_path], [spec.path, R1_CURRENT_CSV, *DEPENDENCIES]):
+def process_run(load_params, runs_dir, inputs, spec):
+    """The scored rows of one run on the model load_params() returns; its traces in runs_dir are computed and saved
+    first unless they are newer than the run, `inputs` (the model's own files) and the code they depend on."""
+    traces_path = runs_dir / f"{spec.folder}__{spec.path.stem}.npz"
+    if not is_fresh([traces_path], [spec.path, *inputs, *DEPENDENCIES]):
         run = load_run(spec.path)
-        cases = experiment_runs(run, load_params_ri(), EkfConfig.from_json(CONFIG_JSON))
+        cases = experiment_runs(run, load_params(), EkfConfig.from_json(CONFIG_JSON))
         save_traces(traces_path, run.t, run.v, soc_ref(run), cases)
     return score_run(spec, *load_traces(traces_path))
 
@@ -68,6 +69,11 @@ def per_temperature(results):
                        "runs": len(exp1), "exp2": reached("exp2"), "exp3_low": reached("exp3_low"),
                        "exp3_high": reached("exp3_high")}
     return table
+
+
+def exp1_means(table):
+    """Temperature to the experiment-1 mean SoC RMSE of a per_temperature table."""
+    return {temp: table[temp]["exp1"] for temp in T_GRID_DEGC}
 
 
 def verdict(old, new):
@@ -128,7 +134,8 @@ def compare_text(old, new, open_loop):
 def main():
     specs = evaluation_runs(RAW_DIR)
     with Pool() as pool:
-        scored = pool.map(process_run_ri, specs, chunksize=1)
+        inputs = [R1_CURRENT_CSV, REPO_DIR / "python" / "compare_r1i.py"]
+        scored = pool.map(partial(process_run, load_params_ri, RUNS_DIR, inputs), specs, chunksize=1)
     pd.DataFrame([row for run_rows in scored for row in run_rows]).to_csv(RESULTS_RI_CSV, index=False,
                                                                            float_format="%.4f")
     print(f"wrote {RESULTS_RI_CSV.relative_to(REPO_DIR)}")
@@ -143,7 +150,8 @@ def main():
     old = per_temperature(pd.read_csv(RESULTS_CSV))
     new = per_temperature(pd.read_csv(RESULTS_RI_CSV))
     write_text(COMPARE_MD, compare_text(old, new, open_loop))
-    plot_model_compare(old, new, open_loop, COMPARE_PNG)
+    pooled = lambda column: {temp: open_loop[temp][column] for temp in T_GRID_DEGC}
+    plot_model_compare([("2RC", pooled(2), exp1_means(old)), ("2RC-I", pooled(3), exp1_means(new))], COMPARE_PNG)
     print(f"wrote {COMPARE_MD.relative_to(REPO_DIR)}")
     print(compare_text(old, new, open_loop).splitlines()[-1])
 

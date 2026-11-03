@@ -129,6 +129,8 @@ class Params:
     r3, tau3  RC branch 3 (middle) of the 3RC model, None in a 2RC Params
     i_grid, r1_current  the current axis in A (ascending) and the R1 table over (T, SoC, |I|) of the 2RC-I
               model (S7), shape (n_t, n_soc, n_i); None otherwise. When present, R1 is read from it (Eq. 4b).
+    r1_current_discharge_only  True in the 2RC-Id model (S8, docs/decisions.md 1.33): a negative held current
+              reads R1 from the r1 table (Eq. 4) instead of the table over current.
     Every other table has shape (n_t, n_soc). The arrays are copied to float64 on creation.
     """
 
@@ -145,6 +147,7 @@ class Params:
     tau3: np.ndarray | None = None
     i_grid: np.ndarray | None = None
     r1_current: np.ndarray | None = None
+    r1_current_discharge_only: bool = False
 
     def __post_init__(self):
         """Convert to float64 arrays and check the axes and table shapes, so a bad table fails at once."""
@@ -177,6 +180,13 @@ class Params:
             if self.r1_current.shape != expected_shape + (len(self.i_grid),):
                 raise ValueError(f"r1_current has shape {self.r1_current.shape}, expected "
                                  f"{expected_shape + (len(self.i_grid),)}")
+        if self.r1_current_discharge_only and self.r1_current is None:
+            raise ValueError("r1_current_discharge_only needs an R1 table over current")
+
+    def reads_r1_over_current(self, current):
+        """True if R1 at this held current comes from the table over current (Eq. 4b): in the 2RC-I model at
+        every current, in the 2RC-Id model unless the current is negative (docs/decisions.md 1.33)."""
+        return self.r1_current is not None and not (self.r1_current_discharge_only and current < 0.0)
 
     def r1_slices(self):
         """The R1 table over current as one (T, SoC) list of lists per current node, or None (Eq. 4b)."""
@@ -301,7 +311,7 @@ def simulate_open_loop(params, i, temp, soc, dt):
         r_tau = [(interp2(r_table, t_grid, soc_grid, cell_temp, cell_soc),
                   interp2(tau_table, t_grid, soc_grid, cell_temp, cell_soc))
                  for r_table, tau_table in branch_tables]
-        if r1_slices is not None:
+        if params.reads_r1_over_current(currents[k]):
             r1 = interp_current(r1_slices, t_grid, soc_grid, i_grid, cell_temp, cell_soc, currents[k])
             r_tau[0] = (r1, r_tau[0][1])
 

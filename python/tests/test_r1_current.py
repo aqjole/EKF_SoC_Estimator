@@ -77,3 +77,31 @@ def test_window_r1_recovers_a_known_r1_with_a_free_constant():
     z = 0.004 - true_r1 * rc_voltage(current, dt, 1.0, tau1)
     r1, rmse_mv = window_r1(current, dt, z, tau1)
     assert np.isclose(r1, true_r1, rtol=1e-12) and rmse_mv < 1e-9
+
+
+def test_the_2rc_id_filter_reads_the_r1_table_under_a_negative_current_only():
+    """2RC-Id (decisions 1.33) with every slice at half the r1 table: the branch input is the 2RC one at -3 A held
+    and half of it at +3 A held."""
+    params_2rc = Params.from_csv(PARAMS_CSV)
+    params_rd = replace(with_current_axis(params_2rc, (0.5,) * len(I_GRID_A)), r1_current_discharge_only=True)
+    cfg = EkfConfig(q_soc=1e-7, q_v=1e-6, r=0.01)
+    ratios = []
+    for current in (-3.0, 3.0):
+        v1 = []
+        for params in (params_2rc, params_rd):
+            ekf = Ekf(params, cfg, soc0=0.8)
+            ekf.predict(current, 25.0, 1.0)
+            v1.append(float(ekf.x[1]))
+        ratios.append(v1[1] / v1[0])
+    assert np.allclose(ratios, [1.0, 0.5], rtol=1e-12)
+
+
+def test_the_2rc_id_open_loop_voltage_is_the_2rc_one_when_every_current_is_negative():
+    params_2rc = Params.from_csv(PARAMS_CSV)
+    params_rd = replace(with_current_axis(params_2rc, (0.5,) * len(I_GRID_A)), r1_current_discharge_only=True)
+    rng = np.random.default_rng(2)
+    n = 400
+    current, dt = rng.uniform(-6.0, -0.1, n), np.full(n, 0.1)
+    temp, soc = np.full(n, -12.0), np.linspace(0.5, 0.52, n)
+    v_2rc = simulate_open_loop(params_2rc, current, temp, soc, dt)
+    assert np.array_equal(simulate_open_loop(params_rd, current, temp, soc, dt), v_2rc)

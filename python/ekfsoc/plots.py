@@ -24,6 +24,7 @@ TEMP_COLORS = dict(zip(T_GRID_DEGC, ("#2a78d6", "#eb6834", "#1baf7a", "#eda100",
 MEASURED_COLOR = "#2a78d6"
 MODEL_COLOR = "#eb6834"
 ESTIMATE_COLORS = (MODEL_COLOR, "#1baf7a")
+MODEL_COLORS = (MEASURED_COLOR, MODEL_COLOR, "#1baf7a")
 INK_COLOR = "#52514e"
 GRID_COLOR = "#e1e0d9"
 DOTS = {"linestyle": "none", "marker": "o", "markersize": 3.5}
@@ -238,18 +239,16 @@ def plot_r1_current(pulses, path):
     save(fig, path)
 
 
-def plot_model_compare(old, new, open_loop, path):
-    """model_compare_r1i.png: the pooled open-loop RMSE and the experiment-1 mean SoC RMSE against temperature,
-    2RC and 2RC-I (S7, docs/decisions.md 1.29). `old` and `new` map temperature to a dict with "exp1";
-    open_loop maps temperature to (US06 2RC, US06 2RC-I, pooled 2RC, pooled 2RC-I)."""
-    temps = sorted(old)
+def plot_model_compare(models, path):
+    """model_compare_r1i.png (S7, docs/decisions.md 1.29) and model_compare_r1d.png (S8, 1.33): the pooled
+    open-loop RMSE and the experiment-1 mean SoC RMSE against temperature, one line per model. `models` is a
+    list of (label, pooled, exp1), with pooled and exp1 mapping temperature to mV and pp; colours go in model order."""
+    temps = sorted(models[0][1])
     fig, (left, right) = plt.subplots(1, 2, figsize=(10, 4))
-    for axis, values, label in ((left, [(open_loop[t][2], open_loop[t][3]) for t in temps],
-                                 "open-loop RMSE over every drive run (mV)"),
-                                (right, [(old[t]["exp1"], new[t]["exp1"]) for t in temps],
-                                 "experiment 1, mean SoC RMSE (pp)")):
-        axis.plot(temps, [pair[0] for pair in values], color=MEASURED_COLOR, marker="o", label="2RC")
-        axis.plot(temps, [pair[1] for pair in values], color=MODEL_COLOR, marker="o", label="2RC-I")
+    for axis, column, label in ((left, 1, "open-loop RMSE over every drive run (mV)"),
+                                (right, 2, "experiment 1, mean SoC RMSE (pp)")):
+        for model, color in zip(models, MODEL_COLORS):
+            axis.plot(temps, [model[column][t] for t in temps], color=color, marker="o", label=model[0])
         axis.set_xticks(temps)
         axis.set_xlabel("temperature (degC)")
         axis.set_ylabel(label)
