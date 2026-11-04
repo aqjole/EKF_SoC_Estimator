@@ -2,9 +2,9 @@
 
 PYTHON := .venv/bin/python
 
-.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d tune ekf c equiv arm sensitivity octave readme readme-check
+.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c tune ekf c equiv arm sensitivity octave readme readme-check
 
-all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d readme
+all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c readme
 
 # Fetch the LG 18650HG2 .mat files into data/raw/ and verify their sha256.
 data:
@@ -48,6 +48,17 @@ ekf-r1i:
 # traces in results/runs/r1d/.
 ekf-r1d:
 	$(PYTHON) python/compare_r1d.py
+
+# S8 step B: the charge-side R1 of the 2RC-Ic model on the HPPC charge pulses (docs/decisions.md 1.35; needs fit and
+# fit-r1i). Writes results/fit_pulses_r1c.csv, r1_charge.csv, model_fit_r1c.md and plots/s8/r1_charge.png.
+fit-r1c:
+	$(PYTHON) python/fit_r1_charge.py
+
+# S8 step B: experiments 1 to 4 on the 2RC-Ic model and the guards of 1.32 (docs/decisions.md 1.35; needs ekf, ekf-r1i,
+# ekf-r1d and fit-r1c). Writes results/ekf_results_r1c.csv, model_compare_r1c.md and plots/s8/model_compare_r1c.png;
+# traces in results/runs/r1c/.
+ekf-r1c:
+	$(PYTHON) python/compare_r1c.py
 
 # S2: tune the EKF noise settings on the tuning cycle and freeze them (not part of "all": the frozen values are committed).
 # Writes results/tuning.md, results/ekf_config.json and section 1.15 of docs/decisions.md.

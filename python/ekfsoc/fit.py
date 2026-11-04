@@ -123,15 +123,16 @@ def pulse_windows(run, pulses, r0, ocv_table):
     z = V - OCV(SoC_ref) + R0 * I, the RC drops with a free constant per window (module docstring). The S7 fit
     of R1 over current uses the same windows (docs/decisions.md 1.28).
     """
-    temp_degc = run.meta["nominal_temp_degc"]
     soc = soc_ref(run)
-    windows = []
-    for pulse in pulses:
-        rows = slice(pulse.rows.start, pulse.rest_rows.stop)
-        ocv = np.array([ocv_at(ocv_table, temp_degc, s) for s in soc[rows]])
-        z = run.v[rows] - ocv + r0 * run.i[rows]
-        windows.append((run.i[rows], run.dt[rows], z))
-    return windows
+    return [window(run, soc, slice(pulse.rows.start, pulse.rest_rows.stop), r0, ocv_table) for pulse in pulses]
+
+
+def window(run, soc, rows, r0, ocv_table):
+    """(current, dt, z) of one window of fit (a) over the rows given, with soc the run's reference SoC."""
+    temp_degc = run.meta["nominal_temp_degc"]
+    ocv = np.array([ocv_at(ocv_table, temp_degc, s) for s in soc[rows]])
+    z = run.v[rows] - ocv + r0 * run.i[rows]
+    return run.i[rows], run.dt[rows], z
 
 
 def fit_level_fast(run, level, ocv_table, tau_bounds=FIT_BOUNDS["2rc"]["fast"]):

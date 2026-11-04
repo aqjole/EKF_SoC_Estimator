@@ -1,4 +1,5 @@
-"""results/r1_current.csv: the R1 table over current of the 2RC-I model (S7, docs/decisions.md 1.28).
+"""results/r1_current.csv and results/r1_charge.csv: the R1 tables over current of the 2RC-I model (S7,
+docs/decisions.md 1.28) and of the charge side of the 2RC-Ic model (S8, 1.35).
 
 One row per (T, I, SoC), T-major, then current, then SoC. The T and SoC axes are those of results/params.csv,
 so the table is added to a 2RC Params read from that file. Numbers have 6 significant digits, as there.
@@ -13,20 +14,37 @@ import numpy as np
 COLUMNS = ("T_degC", "I_A", "soc", "R1_ohm")
 
 
-def write_r1_current(params, path):
-    """Write the R1 table over current of a 2RC-I Params (params.i_grid, params.r1_current)."""
+def write_r1_table(params, i_grid, table, path):
+    """Write one R1 table over (T, SoC, I), shape (n_t, n_soc, n_i), on the T and SoC axes of params."""
     with open(path, "w", newline="") as handle:
         writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(COLUMNS)
         for j, temp in enumerate(params.t_grid):
-            for q, current in enumerate(params.i_grid):
+            for q, current in enumerate(i_grid):
                 for m, soc in enumerate(params.soc_grid):
-                    cells = (temp, current, soc, params.r1_current[j, m, q])
+                    cells = (temp, current, soc, table[j, m, q])
                     writer.writerow([f"{cell:.6g}" for cell in cells])
 
 
+def write_r1_current(params, path):
+    """Write the R1 table over current of a 2RC-I Params (params.i_grid, params.r1_current)."""
+    write_r1_table(params, params.i_grid, params.r1_current, path)
+
+
 def read_r1_current(params, path):
-    """Return `params` (a 2RC Params) with the R1 table over current of `path` added.
+    """Return `params` (a 2RC Params) with the R1 table over current of `path` added (the 2RC-I model)."""
+    i_grid, table = read_r1_table(params, path)
+    return replace(params, i_grid=i_grid, r1_current=table)
+
+
+def read_r1_charge(params, path):
+    """Return `params` (a 2RC-I Params) with the charge-side R1 table of `path` added (the 2RC-Ic model)."""
+    i_grid, table = read_r1_table(params, path)
+    return replace(params, i_grid_charge=i_grid, r1_charge=table)
+
+
+def read_r1_table(params, path):
+    """(current axis, table of shape (n_t, n_soc, n_i)) of an R1 table file on the T and SoC axes of params.
 
     Raises ValueError if the header, the block structure or the T and SoC axes do not match.
     """
@@ -47,4 +65,4 @@ def read_r1_current(params, path):
                  and np.all(blocks[:, :, :, 2] == params.soc_grid[None, None, :]))
     if not same_axes:
         raise ValueError(f"{path}: the T, I and SoC columns do not form the grid of the 2RC tables")
-    return replace(params, i_grid=i_grid, r1_current=blocks[:, :, :, 3].transpose(0, 2, 1))
+    return i_grid, blocks[:, :, :, 3].transpose(0, 2, 1)

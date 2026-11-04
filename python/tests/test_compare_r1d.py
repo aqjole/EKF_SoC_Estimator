@@ -5,11 +5,12 @@ import numpy as np
 import pandas as pd
 
 import compare_r1d
+import s8_compare
 
 
 def test_every_current_falls_in_exactly_one_band():
     current = np.concatenate([np.linspace(-20.0, 20.0, 40001), [-0.05, 0.05, 1.5, 3.0, 6.0]])
-    hits = sum(in_band(current).astype(int) for _, in_band in compare_r1d.BANDS)
+    hits = sum(in_band(current).astype(int) for _, in_band in s8_compare.BANDS)
     assert np.all(hits == 1)
 
 
@@ -26,3 +27,11 @@ def test_step_b_needs_a_drop_of_at_least_the_margin_at_every_test_temperature():
     new = us06_results({10: 2.5, 0: 2.8, -10: 5.5, -20: 4.91})
     passes, _ = compare_r1d.b_test({"2RC-I": old, "2RC-Id": new})
     assert not passes
+
+
+def test_a_guard_within_the_rounding_band_is_decided_by_the_unrounded_value():
+    """Decisions 1.35: the CSV row stands unless its margin is below 1e-4; then the unrounded row decides."""
+    csv_rows = [["3. run increase", "csv", True, 5e-5], ["4. largest cycle increase", "csv", True, 0.2]]
+    unrounded_rows = [["3. run increase", "raw", False, 2e-5], ["4. largest cycle increase", "raw", False, 0.2]]
+    decided = s8_compare.decided_guards(csv_rows, unrounded_rows)
+    assert [row[2] for row in decided] == [False, True]

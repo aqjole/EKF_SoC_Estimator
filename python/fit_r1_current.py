@@ -42,18 +42,25 @@ PULSE_COLUMNS = ("T_degC", "level", "soc_pulses", "pulse", "I_A", "R1_ohm", "use
                  "R0_level_ohm", "tau1_level_s", "R1_level_ohm")
 
 
-def window_r1(current, dt, z, tau1):
+def window_r1(current, dt, z, tau1, weights=None):
     """(R1 in Ohm, RMSE in mV) of one window of fit (a) with tau1 held.
 
     z = c - R1 * u - (slow part), with u the voltage of a 1 Ohm branch (Eq. 1), so after removing the window
     means z' = -R1 * u' and R1 is the least-squares slope of one line; no iteration, no start value.
+    With weights (the dt-weighted sensitivity of decisions 1.35), means, slope and RMSE are weighted.
     """
     u = rc_voltage(current, dt, 1.0, tau1)
-    u_centred = u - u.mean()
-    z_centred = z - z.mean()
-    r1 = -float(np.sum(z_centred * u_centred) / np.sum(u_centred ** 2))
+    if weights is None:
+        u_centred = u - u.mean()
+        z_centred = z - z.mean()
+        r1 = -float(np.sum(z_centred * u_centred) / np.sum(u_centred ** 2))
+        residual = z_centred + r1 * u_centred
+        return r1, 1000.0 * float(np.sqrt(np.mean(residual ** 2)))
+    u_centred = u - np.average(u, weights=weights)
+    z_centred = z - np.average(z, weights=weights)
+    r1 = -float(np.sum(weights * z_centred * u_centred) / np.sum(weights * u_centred ** 2))
     residual = z_centred + r1 * u_centred
-    return r1, 1000.0 * float(np.sqrt(np.mean(residual ** 2)))
+    return r1, 1000.0 * float(np.sqrt(np.average(residual ** 2, weights=weights)))
 
 
 def fit_level_pulses(run, level, ocv_table, temp):
@@ -71,22 +78,22 @@ def fit_level_pulses(run, level, ocv_table, temp):
     return rows
 
 
-def level_nodes(pulse_rows):
+def level_nodes(pulse_rows, nodes):
     """R1 of one level on the current nodes: linear in current between its used pulses, held beyond them."""
     currents, values = zip(*sorted((row["I_A"], row["R1_ohm"]) for row in pulse_rows if row["used"]))
-    return np.interp(I_GRID_A, currents, values)
+    return np.interp(nodes, currents, values)
 
 
-def r1_table(pulse_rows):
-    """The R1 table over (T, SoC, I), shape (n_t, n_soc, n_i), from the pulse fits."""
+def r1_table(pulse_rows, nodes=I_GRID_A):
+    """The R1 table over (T, SoC, I), shape (n_t, n_soc, n_i), from the pulse fits (decisions 1.28, 1.35)."""
     slices = []
     for temp in T_GRID_DEGC:
         level_rows = []
         for k in sorted({row["level"] for row in pulse_rows if row["T_degC"] == temp}):
             rows = [row for row in pulse_rows if row["T_degC"] == temp and row["level"] == k]
             if any(row["used"] for row in rows):
-                level_rows.append({"soc_pulses": rows[0]["soc_pulses"], **dict(enumerate(level_nodes(rows)))})
-        slices.append(np.stack([resample(level_rows, "soc_pulses", q) for q in range(len(I_GRID_A))], axis=1))
+                level_rows.append({"soc_pulses": rows[0]["soc_pulses"], **dict(enumerate(level_nodes(rows, nodes)))})
+        slices.append(np.stack([resample(level_rows, "soc_pulses", q) for q in range(len(nodes))], axis=1))
     return np.array(slices)
 
 

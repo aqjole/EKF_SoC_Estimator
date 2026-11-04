@@ -7,7 +7,7 @@ import numpy as np
 
 from ekfsoc.ekf import Ekf, EkfConfig
 from ekfsoc.fit import rc_voltage
-from ekfsoc.model import Params, interp2, interp_current, simulate_open_loop
+from ekfsoc.model import Params, R1Reader, interp2, interp_current, simulate_open_loop
 from ekfsoc.r1_current import read_r1_current, write_r1_current
 from export_params import PARAMS_CSV
 from fit_r1_current import I_GRID_A, window_r1
@@ -105,3 +105,21 @@ def test_the_2rc_id_open_loop_voltage_is_the_2rc_one_when_every_current_is_negat
     temp, soc = np.full(n, -12.0), np.linspace(0.5, 0.52, n)
     v_2rc = simulate_open_loop(params_2rc, current, temp, soc, dt)
     assert np.array_equal(simulate_open_loop(params_rd, current, temp, soc, dt), v_2rc)
+
+
+def test_the_2rc_ic_reader_takes_the_charge_table_under_a_negative_current_only():
+    """2RC-Ic (decisions 1.35): discharge slices at the r1 table, charge slices at twice it."""
+    params_2rc = Params.from_csv(PARAMS_CSV)
+    params_rc = replace(with_current_axis(params_2rc, (1.0,) * len(I_GRID_A)), i_grid_charge=(0.375, 6.0),
+                        r1_charge=np.stack([2.0 * params_2rc.r1] * 2, axis=2))
+    read_r1 = R1Reader(params_rc)
+    base = interp2(params_2rc.r1.tolist(), params_2rc.t_grid.tolist(), params_2rc.soc_grid.tolist(), -3.0, 0.6)
+    assert np.allclose([read_r1(-3.0, 0.6, -2.0), read_r1(-3.0, 0.6, 2.0)], [2.0 * base, base], rtol=1e-12)
+
+
+def test_window_r1_with_equal_weights_is_the_unweighted_fit():
+    dt = np.full(300, 0.1)
+    current = np.where(np.arange(300) < 100, -3.0, 0.0)
+    z = 0.002 - 0.009 * rc_voltage(current, dt, 1.0, 2.0) + 1e-4 * np.sin(np.arange(300))
+    assert np.isclose(window_r1(current, dt, z, 2.0, weights=np.full(300, 0.7))[0], window_r1(current, dt, z, 2.0)[0],
+                      rtol=1e-12)

@@ -115,6 +115,41 @@ def interp_current(slices, t_grid, soc_grid, i_grid, temp, soc, current):
     return float((1.0 - weight_i) * low + weight_i * high)
 
 
+def current_slices(table):
+    """A table over (T, SoC, I) as one (T, SoC) list of lists per current node, or None (Eq. 4b)."""
+    if table is None:
+        return None
+    return [table[:, :, q].tolist() for q in range(table.shape[2])]
+
+
+class R1Reader:
+    """R1 at (T, SoC) and the current held over the step, in every model (Eq. 4, Eq. 4b).
+
+    2RC: the r1 table. 2RC-I (docs/decisions.md 1.28): the table over current. 2RC-Id (1.33): the r1 table
+    under a negative current. 2RC-Ic (1.35): the charge-side table over current under a negative current.
+    The tables are held as plain lists, which makes the lookups in the per-sample loops fast.
+    """
+
+    def __init__(self, params):
+        self.t_grid = params.t_grid.tolist()
+        self.soc_grid = params.soc_grid.tolist()
+        self.r1 = params.r1.tolist()
+        self.discharge = None if params.r1_current is None else (current_slices(params.r1_current),
+                                                                  params.i_grid.tolist())
+        self.charge = None if params.r1_charge is None else (current_slices(params.r1_charge),
+                                                              params.i_grid_charge.tolist())
+        self.discharge_only = params.r1_current_discharge_only
+
+    def __call__(self, temp, soc, current):
+        if current < 0.0 and self.charge is not None:
+            slices, i_grid = self.charge
+        elif self.discharge is not None and not (self.discharge_only and current < 0.0):
+            slices, i_grid = self.discharge
+        else:
+            return interp2(self.r1, self.t_grid, self.soc_grid, temp, soc)
+        return interp_current(slices, self.t_grid, self.soc_grid, i_grid, temp, soc, current)
+
+
 @dataclass(eq=False)
 class Params:
     """The two axes and the parameter tables of the model (docs/model.md C15, Symbols).
@@ -131,6 +166,8 @@ class Params:
               model (S7), shape (n_t, n_soc, n_i); None otherwise. When present, R1 is read from it (Eq. 4b).
     r1_current_discharge_only  True in the 2RC-Id model (S8, docs/decisions.md 1.33): a negative held current
               reads R1 from the r1 table (Eq. 4) instead of the table over current.
+    i_grid_charge, r1_charge  the charge-side current axis and R1 table over (T, SoC, |I|) of the 2RC-Ic model
+              (S8, docs/decisions.md 1.35), read under a negative held current; None otherwise.
     Every other table has shape (n_t, n_soc). The arrays are copied to float64 on creation.
     """
 
@@ -148,6 +185,8 @@ class Params:
     i_grid: np.ndarray | None = None
     r1_current: np.ndarray | None = None
     r1_current_discharge_only: bool = False
+    i_grid_charge: np.ndarray | None = None
+    r1_charge: np.ndarray | None = None
 
     def __post_init__(self):
         """Convert to float64 arrays and check the axes and table shapes, so a bad table fails at once."""
@@ -170,29 +209,30 @@ class Params:
                 raise ValueError(f"table {name} has shape {table.shape}, expected {expected_shape}")
             setattr(self, name, table)
 
-        if (self.i_grid is None) != (self.r1_current is None):
-            raise ValueError("i_grid and r1_current must be given together")
-        if self.i_grid is not None:
-            self.i_grid = np.array(self.i_grid, dtype=np.float64)
-            if self.i_grid.ndim != 1 or len(self.i_grid) < 2 or not np.all(np.diff(self.i_grid) > 0.0):
-                raise ValueError("i_grid must be a strictly ascending axis with at least 2 nodes")
-            self.r1_current = np.array(self.r1_current, dtype=np.float64)
-            if self.r1_current.shape != expected_shape + (len(self.i_grid),):
-                raise ValueError(f"r1_current has shape {self.r1_current.shape}, expected "
-                                 f"{expected_shape + (len(self.i_grid),)}")
-        if self.r1_current_discharge_only and self.r1_current is None:
-            raise ValueError("r1_current_discharge_only needs an R1 table over current")
+        for grid_name, table_name in (("i_grid", "r1_current"), ("i_grid_charge", "r1_charge")):
+            self.check_current_table(grid_name, table_name, expected_shape)
+        if (self.r1_current_discharge_only or self.r1_charge is not None) and self.r1_current is None:
+            raise ValueError("the 2RC-Id and 2RC-Ic models need the R1 table over current of 2RC-I")
 
-    def reads_r1_over_current(self, current):
-        """True if R1 at this held current comes from the table over current (Eq. 4b): in the 2RC-I model at
-        every current, in the 2RC-Id model unless the current is negative (docs/decisions.md 1.33)."""
-        return self.r1_current is not None and not (self.r1_current_discharge_only and current < 0.0)
+    def check_current_table(self, grid_name, table_name, expected_shape):
+        """Convert and check one R1 table over current and its axis (Eq. 4b); both are None or both given."""
+        grid, table = getattr(self, grid_name), getattr(self, table_name)
+        if (grid is None) != (table is None):
+            raise ValueError(f"{grid_name} and {table_name} must be given together")
+        if grid is None:
+            return
+        grid = np.array(grid, dtype=np.float64)
+        if grid.ndim != 1 or len(grid) < 2 or not np.all(np.diff(grid) > 0.0):
+            raise ValueError(f"{grid_name} must be a strictly ascending axis with at least 2 nodes")
+        table = np.array(table, dtype=np.float64)
+        if table.shape != expected_shape + (len(grid),):
+            raise ValueError(f"{table_name} has shape {table.shape}, expected {expected_shape + (len(grid),)}")
+        setattr(self, grid_name, grid)
+        setattr(self, table_name, table)
 
     def r1_slices(self):
         """The R1 table over current as one (T, SoC) list of lists per current node, or None (Eq. 4b)."""
-        if self.r1_current is None:
-            return None
-        return [self.r1_current[:, :, q].tolist() for q in range(len(self.i_grid))]
+        return current_slices(self.r1_current)
 
     @property
     def table_names(self):
@@ -273,8 +313,8 @@ def simulate_open_loop(params, i, temp, soc, dt):
 
     Plain per-sample loop over the branches of params (two or three). Every V_i = 0 at k = 0 (the
     model starts relaxed). For each row k:
-      1. Look up ocv, r0 and each branch's R_i, tau_i at (temp[k], soc[k]) with interp2 (Eq. 4). In the
-         2RC-I model R1 is read at |i[k]| as well, the current held over the next step (Eq. 4b).
+      1. Look up ocv, r0 and each branch's R_i, tau_i at (temp[k], soc[k]) with interp2 (Eq. 4). R1 is read
+         by R1Reader, which in the models of S7 and S8 also reads i[k], the current held over the next step.
       2. Terminal voltage (Eq. 2): v_model[k] = ocv - V1 - V2 (- V3) - r0 * i[k], subtracted in branch order.
       3. Move the RC states on to row k+1 with rc_step (Eq. 1), under the zero-order hold the
          loader rules fix (docs/model.md C11): the current of row k is held over the step dt[k+1],
@@ -298,8 +338,7 @@ def simulate_open_loop(params, i, temp, soc, dt):
     r0_table = params.r0.tolist()
     branch_tables = [(getattr(params, r_name).tolist(), getattr(params, tau_name).tolist())
                      for r_name, tau_name in params.branches]
-    r1_slices = params.r1_slices()
-    i_grid = None if r1_slices is None else params.i_grid.tolist()
+    read_r1 = R1Reader(params)
 
     v_model = np.zeros(n)
     v_branch = [0.0] * len(branch_tables)
@@ -311,9 +350,7 @@ def simulate_open_loop(params, i, temp, soc, dt):
         r_tau = [(interp2(r_table, t_grid, soc_grid, cell_temp, cell_soc),
                   interp2(tau_table, t_grid, soc_grid, cell_temp, cell_soc))
                  for r_table, tau_table in branch_tables]
-        if params.reads_r1_over_current(currents[k]):
-            r1 = interp_current(r1_slices, t_grid, soc_grid, i_grid, cell_temp, cell_soc, currents[k])
-            r_tau[0] = (r1, r_tau[0][1])
+        r_tau[0] = (read_r1(cell_temp, cell_soc, currents[k]), r_tau[0][1])  # Eq. 4 or Eq. 4b, by model
 
         v_terminal = ocv
         for v_i in v_branch:

@@ -18,13 +18,14 @@ from matplotlib.lines import Line2D
 
 from ekfsoc.constants import T_GRID_DEGC
 from ekfsoc.fit import FITTED_TABLES
+from ekfsoc.model import R1Reader
 
 
 TEMP_COLORS = dict(zip(T_GRID_DEGC, ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300")))
 MEASURED_COLOR = "#2a78d6"
 MODEL_COLOR = "#eb6834"
 ESTIMATE_COLORS = (MODEL_COLOR, "#1baf7a")
-MODEL_COLORS = (MEASURED_COLOR, MODEL_COLOR, "#1baf7a")
+MODEL_COLORS = (MEASURED_COLOR, MODEL_COLOR, "#1baf7a", "#eda100")
 INK_COLOR = "#52514e"
 GRID_COLOR = "#e1e0d9"
 DOTS = {"linestyle": "none", "marker": "o", "markersize": 3.5}
@@ -239,8 +240,31 @@ def plot_r1_current(pulses, path):
     save(fig, path)
 
 
+def plot_r1_charge(params, path, soc=0.5):
+    """r1_charge.png: R1 against current at one SoC, per temperature, from the tables of a 2RC-Ic Params (S8,
+    docs/decisions.md 1.35): the charge-side table (solid) next to the 2RC-I discharge table (dashed), on their nodes.
+
+    The tables are read at one SoC, not as medians over pulse numbers, because the charge pulses in the fit differ
+    by level and a median over them would mix SoC.
+    """
+    read_r1 = R1Reader(params)
+    fig, axis = plt.subplots(figsize=(6.5, 4.5))
+    for temp, color in TEMP_COLORS.items():
+        for nodes, sign, style in ((params.i_grid_charge, -1.0, "-"), (params.i_grid, 1.0, "--")):
+            values = [1000.0 * read_r1(float(temp), soc, sign * current) for current in nodes]
+            axis.plot(nodes, values, color=color, linestyle=style, marker="o", markersize=3, linewidth=1.0)
+    axis.set_xscale("log")
+    axis.set_xticks([0.375, 0.75, 1.5, 3, 6, 12, 18], labels=["0.375", "0.75", "1.5", "3", "6", "12", "18"])
+    axis.set_xlabel("|current| (A)")
+    axis.set_ylabel(f"R1 (mOhm) at SoC {soc:.1f}")
+    styles = [Line2D([], [], color=INK_COLOR, linestyle="-", label="charge (2RC-Ic)"),
+              Line2D([], [], color=INK_COLOR, linestyle="--", label="discharge (2RC-I)")]
+    axis.legend(handles=temperature_keys() + styles, frameon=False, fontsize=8)
+    save(fig, path)
+
+
 def plot_model_compare(models, path):
-    """model_compare_r1i.png (S7, docs/decisions.md 1.29) and model_compare_r1d.png (S8, 1.33): the pooled
+    """model_compare_r1i.png (S7, docs/decisions.md 1.29) and model_compare_r1d.png and model_compare_r1c.png (S8, 1.33, 1.35): the pooled
     open-loop RMSE and the experiment-1 mean SoC RMSE against temperature, one line per model. `models` is a
     list of (label, pooled, exp1), with pooled and exp1 mapping temperature to mV and pp; colours go in model order."""
     temps = sorted(models[0][1])

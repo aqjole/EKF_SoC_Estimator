@@ -1,6 +1,6 @@
 # Plots
 
-Every figure here is written by a repo script; none is saved by hand. The fixed list and the reasons are in `docs/decisions.md` 1.14 (S5: 1.18 to 1.20; S6 to S8: 1.21 to 1.33).
+Every figure here is written by a repo script; none is saved by hand. The fixed list and the reasons are in `docs/decisions.md` 1.14 (S5: 1.18 to 1.20; S6 to S8: 1.21 to 1.35).
 
 | Folder | Written by | Files |
 |---|---|---|
@@ -10,6 +10,6 @@ Every figure here is written by a repo script; none is saved by hand. The fixed 
 | `s5/` | `python/sensitivity.py` (`make sensitivity`), `python/compare_octave.py` (`make octave`) | `sensitivity_capacity.png`, `sensitivity_rate.png`, `equivalence_octave_25degC.png` |
 | `s6/` | `python/fit_3rc.py` (`make fit-3rc`), `python/fit_3rc_rest.py` (`make fit-3rc-rest`) | `params_3rc.png`, `params_3rc_rest.png` |
 | `s7/` | `python/fit_r1_current.py` (`make fit-r1i`), `python/compare_r1i.py` (`make ekf-r1i`) | `r1_current.png`, `model_compare_r1i.png` |
-| `s8/` | `python/compare_r1d.py` (`make ekf-r1d`) | `model_compare_r1d.png` |
+| `s8/` | `python/compare_r1d.py` (`make ekf-r1d`), `python/fit_r1_charge.py` (`make fit-r1c`), `python/compare_r1c.py` (`make ekf-r1c`) | `model_compare_r1d.png`, `r1_charge.png`, `model_compare_r1c.png` |
 
 Per-run traces for every evaluation run are not committed; `run_all.py` writes them to `results/runs/plots/` (gitignored).
