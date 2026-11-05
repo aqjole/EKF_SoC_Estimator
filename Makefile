@@ -99,10 +99,10 @@ sensitivity:
 octave:
 	$(PYTHON) python/compare_octave.py
 
-# S4: copy the results tables from results/*.md into README.md between its marker comments.
+# S4: copy the results tables from results/*.md into README.md and docs/results.md between their marker comments.
 readme:
 	$(PYTHON) python/update_readme.py
 
-# S4: fail if README.md is out of sync with results/*.md (the check CI runs).
+# S4: fail if README.md or docs/results.md is out of sync with results/*.md (the check CI runs).
 readme-check:
 	$(PYTHON) python/update_readme.py --check

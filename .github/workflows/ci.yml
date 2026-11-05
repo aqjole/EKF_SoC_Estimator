@@ -24,7 +24,7 @@ jobs:
         run: |
           python python/export_params.py
           git diff --exit-code c/src/ekf_params.c c/include/ekf_params.h
-      - name: README in sync
+      - name: README and docs/results.md in sync
         run: python python/update_readme.py --check
 
   c-host:

@@ -1,15 +1,15 @@
-"""Copy the results tables from results/*.md into README.md, between marker comments.
+"""Copy the results tables from results/*.md into README.md and docs/results.md, between marker comments.
 
-Every key in SOURCES has a marker pair in README.md, `<!-- results:<key>:begin -->` and
-`<!-- results:<key>:end -->`, and the text between the two is replaced by the sections SOURCES names for
-that key, copied verbatim. A section is the text under a heading line, up to the next heading of the same
+Every key in a document's sources has a marker pair in that document, `<!-- results:<key>:begin -->` and
+`<!-- results:<key>:end -->`, and the text between the two is replaced by the sections the document's sources
+name for that key, copied verbatim. A section is the text under a heading line, up to the next heading of the same
 or higher level. A heading path picks each heading inside the section of the one before it, because
 results/ekf_summary.md repeats the same sub-headings under every experiment. Each copied section starts
 with its heading path in bold, and a heading inside it becomes a bold line, so the copy never adds a
-heading to the README outline. Running the script twice changes nothing.
+heading to the document's outline. Running the script twice changes nothing.
 
 Usage: python python/update_readme.py [--check]
---check writes nothing and exits non-zero when README.md is out of sync (CI and make readme-check).
+--check writes nothing and exits non-zero when a document is out of sync (CI and make readme-check).
 """
 
 import argparse
@@ -19,7 +19,12 @@ import sys
 from ekfsoc.constants import REPO_DIR
 
 # (marker key, results file, heading path): a key with several entries gets their sections in this order.
-SOURCES = [
+README_SOURCES = [
+    ("summary_exp1", "results/model_compare_r1i.md", ("Experiment 1",)),
+    ("summary_equivalence", "results/equivalence.md", ("Result",)),
+]
+
+RESULTS_SOURCES = [
     ("capacity", "results/capacity.md", ("C/20 and 1C capacities per folder",)),
     ("model_fit", "results/model_fit.md", ("Open-loop voltage error on US06",)),
     ("ocv_correction", "results/params.md", ("OCV correction from the HPPC rest voltages",)),
@@ -59,7 +64,13 @@ SOURCES = [
     ("model_compare_r1i", "results/model_compare_r1i.md", ("Experiment 1",)),
     ("model_compare_r1i", "results/model_compare_r1i.md", ("Experiments 2 to 4",)),
     ("model_compare_r1i", "results/model_compare_r1i.md", ("Adoption verdict",)),
+    ("s8_us06", "results/model_compare_r1c.md", ("Experiment 1", "US06")),
+    ("s8_step_a", "results/model_compare_r1d.md", ("Guards and adoption verdict",)),
+    ("s8_step_b", "results/model_compare_r1c.md", ("Guards and adoption verdict",)),
 ]
+
+# Each document, relative to the repo root, with the sections copied into it.
+DOCS = {"README.md": README_SOURCES, "docs/results.md": RESULTS_SOURCES}
 
 HEADING = re.compile(r"(#{1,6}) (.+)")
 
@@ -93,51 +104,52 @@ def render(repo_dir, file, path):
     return f"**{' / '.join(path)}**\n\n{text}"
 
 
-def fill(readme, key, content):
-    """Return readme with the text between the key's markers replaced by content."""
+def fill(text, key, content, name):
+    """Return text (the document called name) with the part between the key's markers replaced by content."""
     begin = f"<!-- results:{key}:begin -->"
     end = f"<!-- results:{key}:end -->"
-    i = readme.find(begin)
-    j = readme.find(end)
+    i = text.find(begin)
+    j = text.find(end)
     if i < 0 or j < i:
-        raise SystemExit(f"update_readme: README.md has no marker pair '{begin}' ... '{end}'")
-    return readme[:i + len(begin)] + "\n\n" + content + "\n\n" + readme[j:]
+        raise SystemExit(f"update_readme: {name} has no marker pair '{begin}' ... '{end}'")
+    return text[:i + len(begin)] + "\n\n" + content + "\n\n" + text[j:]
 
 
-def updated(readme, repo_dir, sources):
-    """Return readme with every key of sources filled from its results sections."""
+def updated(text, repo_dir, sources, name):
+    """Return text (the document called name) with every key of sources filled from its results sections."""
     sections = {}
     for key, file, path in sources:
         sections.setdefault(key, []).append(render(repo_dir, file, path))
     for key, parts in sections.items():
-        readme = fill(readme, key, "\n\n".join(parts))
-    return readme
+        text = fill(text, key, "\n\n".join(parts), name)
+    return text
 
 
-def run(repo_dir, sources, check):
-    """Update repo_dir/README.md, or with check only compare it; return the exit code."""
-    readme_path = repo_dir / "README.md"
-    readme = readme_path.read_text()
-    new = updated(readme, repo_dir, sources)
-    if check:
-        if new != readme:
-            print("update_readme: README.md is out of sync with results/; run 'make readme'", file=sys.stderr)
-            return 1
-        print("README.md is in sync with results/")
-        return 0
-    if new != readme:
-        readme_path.write_text(new)
-        print("wrote README.md")
-    else:
-        print("README.md unchanged")
+def run(repo_dir, docs, check):
+    """Update every document of docs, or with check only compare them; return the exit code."""
+    stale = []
+    for name, sources in docs.items():
+        path = repo_dir / name
+        text = path.read_text()
+        new = updated(text, repo_dir, sources, name)
+        if new != text:
+            stale.append(name)
+            if not check:
+                path.write_text(new)
+                print(f"wrote {name}")
+    if check and stale:
+        print(f"update_readme: {', '.join(stale)} out of sync with results/; run 'make readme'", file=sys.stderr)
+        return 1
+    if check or not stale:
+        print(f"{', '.join(docs)}: in sync with results/")
     return 0
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--check", action="store_true", help="exit non-zero if README.md is out of sync")
+    parser.add_argument("--check", action="store_true", help="exit non-zero if README.md or docs/results.md is out of sync")
     args = parser.parse_args()
-    sys.exit(run(REPO_DIR, SOURCES, args.check))
+    sys.exit(run(REPO_DIR, DOCS, args.check))
 
 
 if __name__ == "__main__":
