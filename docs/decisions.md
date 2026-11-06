@@ -499,6 +499,14 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
 - Code check: an independent implementation, sharing only the loader, the table type and the open-loop simulation, reproduced the four factors to 1e-6, `results/r1_low.csv` to its rounding, the experiment-1 RMSE of 2RC-Il and 2RC-I on US06 at -20 degC and Mix 8 at -10 and -20 degC to four decimals, the S1 gate and every guard; the refactors of `r1_table` and `s8_compare.py` give identical tables and report lines. Every earlier result regenerates byte for byte, and the earlier traces are array-identical.
 - Next under 1.37: step D's entry, or a record that it does not run.
 
+### 1.39 S8: closed after steps A to C; step D is not run
+
+**S8 is closed with three negative results, steps A (1.34), B (1.36) and C (1.38). Step D is not run. 2RC-I stays the adopted model of the Python reference, the C port of 1.30 is not started, and S8 is tagged v1.4. No result file changes.**
+
+- Reason: the owner chose to close the stage on 2026-11-06, before any step D code, tuning or result existed, so its outcome could not have shaped the choice. Each of steps A to C recovered US06 in the cold only in part and each cost Mix 8 and the -20 degC runs beyond the guards of 1.32. Step D changes the frozen noise settings of 1.15 by design, and any tuning it needs would draw on the same repeatedly inspected 62 runs (1.32) or on the one tuning cycle, so its result would add little evidence for its cost.
+- Step D, recorded as future work: the rate of the voltage update and noise settings that depend on conditions (temperature, current, SoC). Its entry would first fix the covariance policy, its bounds and the runs any tuning may use (1.32).
+- This entry is the record that 1.32 and 1.37 ask for when a later step does not run.
+
 ## 2. Dataset facts confirmed in S0
 
 | claim (readme, or the spec's S0 checks) | verdict | evidence |

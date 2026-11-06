@@ -811,7 +811,7 @@ Guards recomputed from unrounded values: 2. rule of 1.22 (unrounded margin 0.00e
 
 ![2RC, 2RC-I and 2RC-Il against temperature](../results/plots/s8/model_compare_r1l.png)
 
-2RC-I stays the adopted model. None of the three R1 changes recovers US06 in the cold without costing Mix 8 and the -20 degC runs beyond the guards. The fits, the per-cycle tables and the open-loop error by current band are in `results/model_fit_r1c.md`, `results/model_fit_r1l.md`, `results/model_compare_r1c.md` and `results/model_compare_r1l.md`.
+2RC-I stays the adopted model. None of the three R1 changes recovers US06 in the cold without costing Mix 8 and the -20 degC runs beyond the guards. S8 is closed after these three steps (`decisions.md` 1.39); step D, noise settings that depend on conditions, was not run and is left as future work. The fits, the per-cycle tables and the open-loop error by current band are in `results/model_fit_r1c.md`, `results/model_fit_r1l.md`, `results/model_compare_r1c.md` and `results/model_compare_r1l.md`.
 
 ## C port
 
