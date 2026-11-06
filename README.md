@@ -80,6 +80,7 @@ The full set, with conventions and symbols, is in [`docs/model.md`](docs/model.m
 - **S6, a third RC branch: negative result.** Fitted twice, each time under rules fixed before the fit; both fits made the voltage error on US06 (the most aggressive standard drive cycle) worse at most temperatures, so the 2RC model stays. [Results](docs/results.md#s6-a-third-rc-branch-negative-result)
 - **S7, R1 that depends on the current: adopted.** The 2RC-I model lowers the SoC error in the cold and is adopted in the Python reference; it makes US06, the cycle with the highest currents, worse from 10 degC down. [Results](docs/results.md#s7-r1-that-depends-on-current-adopted)
 - **S8, R1 by the sign of the current and at low current: three negative results.** Two ways to read R1 under regen (the charging current of regenerative braking) and one low-current R1 fitted on data outside the evaluation set, to undo that US06 regression; each fixed US06 in part but broke guards on other cycles (limits, fixed in advance, on how much any run or cycle may get worse), so 2RC-I stays and the stage is closed. [Results](docs/results.md#s8-r1-by-the-sign-of-the-current-and-at-low-current-three-negative-results)
+- **S9, slow-branch resistances fitted on drive data.** 3RC-D lowered open-loop voltage RMSE and experiment-1 mean SoC RMSE at all six temperatures on the standard cycles. The worst-run guard rejected it after US06 at -10 degC rose from 6.25 to 6.40 pp. [Results](docs/results.md#s9-slow-branch-resistances-fitted-on-drive-data)
 
 ## Dataset
 
@@ -98,7 +99,7 @@ make readme-check  # fail if README.md or docs/results.md is out of sync with re
 .venv/bin/python -m pytest python/tests -q   # unit tests; those needing the raw data skip without it
 ```
 
-Every target, what it writes and the extra tools some need (the Arm toolchain, Octave) are listed in [`docs/results.md`](docs/results.md#how-to-run-every-target).
+Every target, what it writes and the extra tools some need (the Arm toolchain, Octave) are listed in [`docs/results.md`](docs/results.md#how-to-run-every-target). To reproduce S9 using the earlier outputs, run `make fit-3rcd` and then `make ekf-3rcd`.
 
 ## Limitations
 
@@ -108,6 +109,7 @@ Every target, what it writes and the extra tools some need (the Arm toolchain, O
 - The cell aged over the campaign, which ran 25, 40, 10, 0, -10 and -20 degC in that order, and lost capacity inside the 25 degC block too; one Q_ref is used at every temperature (`results/capacity.md`).
 - The reference SoC is itself coulomb counting, on the cycler's Ah counter, so the coulomb-counting baseline on the logged current agrees with it closely by construction. With the cycler's stated accuracy of 0.1 % of full scale, a real current-sensor offset in the data would not show.
 - The noise settings were tuned on one cycle at one temperature, and the evaluation runs share segments with it, because the mixes are built from segments of the standard cycles (`docs/decisions.md` 1.11). S7 and S8 compared models on the same 62 runs that every stage since S2 has looked at, so those comparisons are on a repeatedly inspected set (1.32).
+- S9 held the 23 standard-cycle runs out of the final parameter fit. Prior diagnostics and the low-SoC boundary choice used those runs, and they share segments with the 40 Mix runs used for calibration.
 - Errors grow in the cold: at -10 and -20 degC many runs of experiments 2 and 3 never settle inside the 2 pp band. The cycler also caps the cold currents, so the cold drive cycles are lighter loads than the warm ones. With the current offset of experiment 4, four cold runs (Mix 8 at -10 and -20 degC, HWFET and Mix 4 at -20 degC) have a larger SoC RMSE than coulomb counting, and US06 at -10 degC ends with a slightly larger error (`results/ekf_results.csv`).
 - The adopted 2RC-I model runs in the Python reference only; the C library runs the 2RC model. 2RC-I holds R1 flat below its smallest pulse current (about 3 A at 40 to 0 degC, where drive cycles often run), and it makes US06 worse from 10 degC down; none of the three fixes tried in S8 passed its guards.
 

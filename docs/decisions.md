@@ -599,6 +599,15 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
 - The comparison with the 2RC model of v1.0 is shown for the reader and decides nothing, as in 1.32.
 - An outcome entry records the verdict before the README changes. If adopted, the README section reports the held-out numbers and names the calibration set; if not, it reports the negative result with the same tables.
 
+### 1.43 S9 outcome: the worst-run guard rejects 3RC-D
+
+**3RC-D passed the S1 gate at 23.13 mV on 25 degC US06 (2RC-I: 29.75 mV). Five of the six adoption guards passed. Guard 5 rejected 3RC-D because the worst experiment-1 SoC RMSE increased from 6.2547 to 6.3977 pp, both on US06 at -10 degC. The adopted Python model is 2RC-I.**
+
+- The 40-run joint fit converged with first-order optimality 5.82e-12 and rank 46 of 46. The full-rate linear prediction matched the unrounded simulator within 3.11e-15 V. The -20 degC node at SoC 0.1 had 0.0201 weighted cost rows of support and used the incumbent values. Two R2 scales reached the lower bound, at 40 degC and SoC 0.4 and at 10 degC and SoC 0.1.
+- Pooled open-loop RMSE on the 23 standard runs fell at every temperature. At -20 degC it fell from 76.31 to 47.11 mV. On the 25 degC gate run, the evaluation-window RMSE fell from 22.14 to 15.96 mV and the tail RMSE fell from 53.81 to 44.29 mV. The fit report gives the separate in-sample and leave-one-Mix-run-out results.
+- The experiment-1 mean on the standard runs fell by 0.37, 0.27, 0.35, 0.22, 0.95 and 0.18 pp at 40, 25, 10, 0, -10 and -20 degC. Every standard cycle's mean fell. The largest individual increase was +0.3633 pp on US06 at -20 degC, inside guard 3's +0.50 pp limit. The experiment-4 means fell at every temperature, and all experiment-2 and experiment-3 reached counts met guard 6.
+- This verdict uses the frozen fit and adoption rule. The standard runs were held out of coefficient fitting and had already informed diagnostics and the low-SoC boundary choice. They share segments with the Mix runs. The fit and evaluation reports are `results/model_fit_3rcd.md` and `results/model_compare_3rcd.md`.
+
 ## 2. Dataset facts confirmed in S0
 
 | claim (readme, or the spec's S0 checks) | verdict | evidence |
