@@ -155,7 +155,7 @@ Each convention gives the rule in bold, then the reason, then the evidence.
 
 ## Equations
 
-The equations of S1, numbered for citation in the Python and C code (a comment reads "docs/model.md Eq. 1"). Symbols are those of the table above. Index k counts the rows a run keeps after the loader rules, `dt(k) = t(k) - t(k-1)` (C8, C9), and I is the loader-sign current, positive on discharge (C2). R0, R_i, tau_i and OCV are not constants: each is a table over (T, SoC) read with Eq. 4. The equations are written for n RC branches: n = 2 is the 2RC model of v1.0, n = 3 the 3RC model of S6 (docs/decisions.md 1.21). Sums and lists over the branches run in the order i = 1, 2, 3, so with n = 2 every expression is the v1.0 one, operation for operation. Python (`python/ekfsoc/model.py`) and the C port repeat these equations with the same operation order.
+The equations of S1, numbered for citation in the Python and C code (a comment reads "docs/model.md Eq. 1"). Symbols are those of the table above. Index k counts the rows a run keeps after the loader rules, `dt(k) = t(k) - t(k-1)` (C8, C9), and I is the loader-sign current, positive on discharge (C2). R0, R_i, tau_i and OCV are not constants: each is a table over (T, SoC) read with Eq. 4. The equations are written for n RC branches: n = 2 is the 2RC model of v1.0, n = 3 the 3RC model of S6 (docs/decisions.md 1.21) and the 3RC-D model of S9 (docs/decisions.md 1.41). Sums and lists over the branches run in the order i = 1, 2, 3, so with n = 2 every expression is the v1.0 one, operation for operation. Python (`python/ekfsoc/model.py`) and the C port repeat these equations with the same operation order.
 
 ### Eq. 1. The RC branches, exact zero-order hold
 
@@ -169,6 +169,7 @@ V_i(k)  = a_i(k) · V_i(k-1) + R_i · (1 - a_i(k)) · I(k-1)
 - In the 2RC-Id model of S8 step A (docs/decisions.md 1.33), R1 is read as in the 2RC-I model when I(k-1) > 0, and with Eq. 4 from the v1.0 R1 table at (T(k-1), SoC(k-1)) when I(k-1) < 0. At I(k-1) = 0 the branch input R1 · I(k-1) is zero, so the table does not matter.
 - In the 2RC-Ic model of S8 step B (docs/decisions.md 1.35), R1 is read as in the 2RC-I model when I(k-1) > 0, and with Eq. 4b from the charge-side table at (T(k-1), SoC(k-1), |I(k-1)|) when I(k-1) < 0.
 - In the 2RC-Il model of S8 step C (docs/decisions.md 1.37), R1 is read exactly as in the 2RC-I model, at |I(k-1)| for either sign, from the table of `results/r1_low.csv`.
+- In the 3RC-D model of S9 (docs/decisions.md 1.41), n = 3. R1 is read exactly as in the 2RC-I model. R2 and R3 are read with Eq. 4 from `results/params_3rcd.csv`, where R2 is the v1.0 table times the fitted scale and R3 is the fitted table; tau3 is 45 s at every grid point, and tau1 and tau2 are the v1.0 tables.
 - Where it comes from: branch i is a resistor R_i in parallel with a capacitor C_i = tau_i / R_i, so dV_i/dt = -V_i / tau_i + R_i · I / tau_i. With I constant over the step, the solution over dt is Eq. 1 exactly. It is not an Euler step, so it holds for any dt, from the 0.1 s logging step to the 1.147 to 2.143 s steps at cycle boundaries (C11).
 - Limits: dt = 0 gives a_i = 1 and leaves V_i unchanged. A long step gives a_i -> 0 and V_i -> R_i · I(k-1), the steady value of a constant current.
 - Start: V_i(0) = 0 for every branch. The open-loop check starts the branches relaxed; C13 lists the runs that open under load.
@@ -266,6 +267,7 @@ x-   = F · x(k-1) + B · I(k-1)
 - Row by row: `SoC- = SoC(k-1) - I(k-1) · dt / (3600 · Q_ref)` is Eq. 3 with η = 1, and `Vi- = a_i · Vi(k-1) + R_i · (1 - a_i) · I(k-1)` is Eq. 1.
 - R_i and tau_i are read with Eq. 4 at the previous posterior SoC, SoC(k-1), and at T(k). Eq. 1 reads T(k-1); the filter takes one temperature per sample, so predict and update of a step use the same one.
 - In the 2RC-I model, R1 is read with Eq. 4b at |I(k-1)| as well, the current held over the step. The current is an input, so this changes the entry R1 · (1 - a1) of B and nothing in F, H or the noise settings. The 2RC-Id and 2RC-Ic models choose the R1 table by the sign of I(k-1) as under Eq. 1, with the same effect on B only; the 2RC-Il model reads its own table as the 2RC-I model does.
+- The 3RC-D model is the n = 3 process model with R1 read as in the 2RC-I model and R2, R3 and tau3 from its own tables (Eq. 1). F, H and the noise settings have the n = 3 form of S6: q_v applies to V3 as to V1 and V2.
 - The current is held over the whole step, including the cycle-boundary steps of up to 2.143 s, with no special gap code (C11).
 - SoC is not limited in predict. The limit is applied in update (Eq. 10), and a prior outside 0 to 1 is clamped by the lookups of Eq. 4.
 
