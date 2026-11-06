@@ -25,7 +25,8 @@ from ekfsoc.plots import plot_model_compare
 from export_params import PARAMS_CSV, write_text
 from fit_r1_current import R1_CURRENT_CSV
 from run_all import RESULTS_CSV
-from s8_compare import comparison_lines, guard_rows, guard_table, open_loop_numbers, us06_exp1
+from s8_compare import (comparison_lines, guard_rows, guard_table, negative_share_lines, open_loop_numbers,
+                        us06_exp1)
 
 
 RUNS_DIR = REPO_DIR / "results" / "runs" / "r1d"
@@ -69,7 +70,8 @@ def compare_text(results, tables, open_loop, bands, ratios):
         "(tuning cycle excluded). These 62 runs have been inspected in every stage since S2, so this is a comparison "
         "on a repeatedly inspected set, not a confirmation (1.32).", "",
     ]
-    lines += comparison_lines(results, tables, open_loop, bands, ratios, MODELS, "2RC-Id", "2RC-I")
+    lines += comparison_lines(results, tables, open_loop, bands, MODELS, "2RC-Id", "2RC-I")
+    lines += negative_share_lines(bands, ratios, "2RC-Id")
     lines += ["", "## Guards and adoption verdict", "",
               "The guards of docs/decisions.md 1.32, 2RC-Id against the incumbent 2RC-I. For step A the incumbent is "
               "2RC-I, the model S8 starts from, so the stage-budget check is the same comparison. Values are those of "

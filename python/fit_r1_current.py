@@ -84,15 +84,18 @@ def level_nodes(pulse_rows, nodes):
     return np.interp(nodes, currents, values)
 
 
-def r1_table(pulse_rows, nodes=I_GRID_A):
-    """The R1 table over (T, SoC, I), shape (n_t, n_soc, n_i), from the pulse fits (decisions 1.28, 1.35)."""
+def r1_table(pulse_rows, nodes=I_GRID_A, level_values=level_nodes):
+    """The R1 table over (T, SoC, I), shape (n_t, n_soc, n_i), from the pulse fits (decisions 1.28, 1.35).
+
+    level_values(rows, nodes) gives one level's R1 on the nodes; step C (decisions 1.37) passes a scaled one.
+    """
     slices = []
     for temp in T_GRID_DEGC:
         level_rows = []
         for k in sorted({row["level"] for row in pulse_rows if row["T_degC"] == temp}):
             rows = [row for row in pulse_rows if row["T_degC"] == temp and row["level"] == k]
             if any(row["used"] for row in rows):
-                level_rows.append({"soc_pulses": rows[0]["soc_pulses"], **dict(enumerate(level_nodes(rows, nodes)))})
+                level_rows.append({"soc_pulses": rows[0]["soc_pulses"], **dict(enumerate(level_values(rows, nodes)))})
         slices.append(np.stack([resample(level_rows, "soc_pulses", q) for q in range(len(nodes))], axis=1))
     return np.array(slices)
 

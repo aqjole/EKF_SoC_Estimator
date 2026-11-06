@@ -1,5 +1,5 @@
 """Shared parts of the S8 comparisons (docs/decisions.md 1.32 to 1.35): the open-loop numbers per model, the guards of
-1.32 and the report tables, used by compare_r1d.py (step A) and compare_r1c.py (step B).
+1.32 and the report tables, used by compare_r1d.py (step A), compare_r1c.py (step B) and compare_r1l.py (step C).
 
 A model is named by its label ("2RC", "2RC-I", "2RC-Id", "2RC-Ic"); results maps a label to its results frame (the
 columns of results/ekf_results.csv), tables maps it to compare_r1i.per_temperature of that frame.
@@ -121,8 +121,8 @@ def decided_guards(csv_guards, unrounded_guards):
     return rows
 
 
-def comparison_lines(results, tables, open_loop, bands, ratios, models, candidate, incumbent):
-    """The report sections from "## Open loop" to the band tables, for the models in table order."""
+def comparison_lines(results, tables, open_loop, bands, models, candidate, incumbent):
+    """The report sections from "## Open loop" to the band table, for the models in table order."""
     runs = {model: exp1_by_run(results[model]) for model in models}
     us06 = {model: us06_exp1(results[model]) for model in models}
     open_rows = [[str(temp)] + [f"{open_loop[temp][model][0]:.2f}" for model in models]
@@ -148,8 +148,6 @@ def comparison_lines(results, tables, open_loop, bands, ratios, models, candidat
                           + [f"{means[candidate] - means[incumbent]:+.2f}"])
     band_rows = [[str(temp), name] + [f"{bands[temp][model][index]:+.1f}" for model in models]
                  for temp in T_GRID_DEGC for index, (name, _) in enumerate(BANDS)]
-    share_rows = [[str(temp), f"{100.0 * bands[temp]['held_negative']:.1f}", f"{ratios[temp]:.2f}"]
-                  for temp in T_GRID_DEGC]
 
     lines = ["## Open loop", "",
              "The US06 RMSE and the RMSE pooled over every drive run, model minus measured voltage (docs/decisions.md "
@@ -175,9 +173,17 @@ def comparison_lines(results, tables, open_loop, bands, ratios, models, candidat
               "voltage sample (docs/decisions.md 1.33). The branch states carry over between rows, so a band's error "
               "also holds what the rows before it left in the branches.", ""]
     lines += md_table(["T (degC)", "band (A)"] + [f"{model} (mV)" for model in models], band_rows)
-    lines += ["", f"Steps whose held current is negative (the steps where {candidate} switches R1), and the R1 ratio "
-              f"of docs/decisions.md 1.32: the median 2RC-I R1 at {RATIO_CURRENT_A} A over the grid SoC "
-              f"{RATIO_SOC[0]} to {RATIO_SOC[1]}, divided by the median v1.0 R1 there.", ""]
+    return lines
+
+
+def negative_share_lines(bands, ratios, candidate):
+    """Lines of the US06 share of steps with a negative held current (where steps A and B switch R1) and the R1
+    ratio of decisions 1.32."""
+    share_rows = [[str(temp), f"{100.0 * bands[temp]['held_negative']:.1f}", f"{ratios[temp]:.2f}"]
+                  for temp in T_GRID_DEGC]
+    lines = ["", f"Steps whose held current is negative (the steps where {candidate} switches R1), and the R1 ratio "
+             f"of docs/decisions.md 1.32: the median 2RC-I R1 at {RATIO_CURRENT_A} A over the grid SoC "
+             f"{RATIO_SOC[0]} to {RATIO_SOC[1]}, divided by the median v1.0 R1 there.", ""]
     lines += md_table(["T (degC)", "US06 steps with held I < 0 (%)", "R1 ratio"], share_rows)
     return lines
 

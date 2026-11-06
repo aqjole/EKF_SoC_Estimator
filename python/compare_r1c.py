@@ -29,7 +29,8 @@ from export_params import PARAMS_CSV, write_text
 from fit_r1_charge import R1_CHARGE_CSV
 from fit_r1_current import R1_CURRENT_CSV
 from run_all import RESULTS_CSV
-from s8_compare import RECOMPUTE_WITHIN, comparison_lines, decided_guards, guard_rows, guard_table, open_loop_numbers
+from s8_compare import (RECOMPUTE_WITHIN, comparison_lines, decided_guards, guard_rows, guard_table,
+                        negative_share_lines, open_loop_numbers)
 
 
 RUNS_DIR = REPO_DIR / "results" / "runs" / "r1c"
@@ -63,7 +64,8 @@ def compare_text(results, tables, open_loop, bands, ratios, guards):
         "statistics are over the evaluation runs (tuning cycle excluded). These 62 runs have been inspected in every "
         "stage since S2, so this is a comparison on a repeatedly inspected set, not a confirmation (1.32).", "",
     ]
-    lines += comparison_lines(results, tables, open_loop, bands, ratios, MODELS, CANDIDATE, INCUMBENT)
+    lines += comparison_lines(results, tables, open_loop, bands, MODELS, CANDIDATE, INCUMBENT)
+    lines += negative_share_lines(bands, ratios, CANDIDATE)
     lines += ["", "## Guards and adoption verdict", "",
               f"The guards of docs/decisions.md 1.32, {CANDIDATE} against the incumbent {INCUMBENT}, which is also the "
               "model S8 starts from, so the stage-budget check is the same comparison. Values are those of the results "
