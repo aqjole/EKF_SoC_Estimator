@@ -487,6 +487,18 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
 - Byte identity: with the step C code every earlier result and trace, those of steps A and B included, regenerates byte for byte.
 - If 2RC-Il is adopted, it is the incumbent for step D; if not, 2RC-I stays. Either way step D's entry, or a record that it does not run, comes next.
 
+### 1.38 S8 step C: outcome, 2RC-Il is not adopted
+
+**Under 1.32 and 1.37 the 2RC-Il model passes the S1 gate (open-loop US06 RMSE 29.75 mV at 25 degC) but fails the rule of 1.22 against 2RC-I (experiment-1 mean lower at one of six temperatures, and higher by more than 0.10 pp at -20 degC) and guards 3, 4 and 5 (`results/model_compare_r1l.md`). It is not adopted, and 2RC-I stays the adopted model and the incumbent.**
+
+- The fit (`results/model_fit_r1l.md`): r = 0.912 / 0.967 / 0.835 / 0.797 at 10 / 0 / -10 / -20 degC, all inside (0, 2]. On the PausCycl files, each model with its own offset, the open-loop RMSE goes from 7.43 to 7.30, 10.91 to 10.92, 18.10 to 17.00 and 30.28 to 28.24 mV. The 40 and 25 degC slices equal the 2RC-I table. Over every drive run the pooled open-loop RMSE changes by +0.0 / +0.1 / +1.2 / +0.4 / +0.6 / -0.3 % at 40 to -20 degC.
+- Experiment 1: the mean changes by +0.0000 / +0.0017 / +0.0147 / +0.0581 / -0.0018 / +0.2745 pp at 40 to -20 degC (unrounded). The 40 degC change is 0 by construction (1.37), which triggers the recompute of guard 2 under 1.35; an unchanged mean does not count as lower, and the verdict does not depend on it. US06 changes by -0.16, -0.06 and -0.91 pp at 10, 0 and -10 degC and by +0.99 pp at -20 degC.
+- What fails. Guard 3: Mix 8 at -10 degC (+1.01 pp), US06 at -20 degC (+0.99), Mix 8 at -20 degC (+0.94) and LA92 at -20 degC (+0.74). Guard 4: the Mix 8 cycle mean (+0.47 pp). Guard 5: the worst run, Mix 6 at -20 degC, 6.47 pp against 6.34 pp. Guard 6 passes: the largest experiment-4 increase is +0.09 pp (-10 degC), the -20 degC experiment-4 mean falls from 3.95 to 3.24 pp, and no reached count is lower.
+- Reading: an R1 fitted lower at low current on data outside the evaluation set fits that data better in the cold, but not the drive cycles' open-loop voltage, and it raises the SoC error on most evaluation runs. So the flat hold of 1.28 below the smallest pulse is not what limits 2RC-I on the drive cycles. With steps A and B, none of the three R1 changes S8 tried recovers US06 in the cold without costing Mix 8 and the -20 degC runs beyond the guards. The PausCycl files cover SoC 1.0 to about 0.87 only, and the factor is applied at every SoC (1.37); whether that explains part of the miss is not tested.
+- Report wording, fixed after the review and before this entry: the US06 share column of `results/model_compare_r1l.md` counts steps with a held |I| from 0.05 A up to the temperature's second pulse current, as 1.37 defines it, instead of every bit-level change in the R1 read; the introduction states the ramp and the regen read; the report says why guard 2 was recomputed. No number that decides changed.
+- Code check: an independent implementation, sharing only the loader, the table type and the open-loop simulation, reproduced the four factors to 1e-6, `results/r1_low.csv` to its rounding, the experiment-1 RMSE of 2RC-Il and 2RC-I on US06 at -20 degC and Mix 8 at -10 and -20 degC to four decimals, the S1 gate and every guard; the refactors of `r1_table` and `s8_compare.py` give identical tables and report lines. Every earlier result regenerates byte for byte, and the earlier traces are array-identical.
+- Next under 1.37: step D's entry, or a record that it does not run.
+
 ## 2. Dataset facts confirmed in S0
 
 | claim (readme, or the spec's S0 checks) | verdict | evidence |

@@ -70,6 +70,8 @@ make all         # every stage below, in order
 | `make ekf-r1d` | S8 | runs experiments 1 to 4 on the 2RC-Id model (v1.0 R1 under regen) and writes the comparison with the guards and the verdict; needs `make ekf` and `make ekf-r1i` | `results/ekf_results_r1d.csv`, `results/model_compare_r1d.md`, `results/plots/s8/model_compare_r1d.png` |
 | `make fit-r1c` | S8 | fits a charge-side R1 per HPPC charge pulse and builds its table over current, then runs the 2RC-Ic model open loop on US06; needs `make fit` and `make fit-r1i` | `results/fit_pulses_r1c.csv`, `results/r1_charge.csv`, `results/model_fit_r1c.md`, `results/plots/s8/r1_charge.png` |
 | `make ekf-r1c` | S8 | runs experiments 1 to 4 on the 2RC-Ic model and writes the four-model comparison with the guards and the verdict; needs `make ekf`, `make ekf-r1i`, `make ekf-r1d` and `make fit-r1c` | `results/ekf_results_r1c.csv`, `results/model_compare_r1c.md`, `results/plots/s8/model_compare_r1c.png` |
+| `make fit-r1l` | S8 | fits one low-current R1 factor per temperature on the PausCycl files and builds the 2RC-Il table, then runs it open loop on US06 and on every drive run; needs `make fit` and `make fit-r1i` | `results/r1_low.csv`, `results/model_fit_r1l.md` |
+| `make ekf-r1l` | S8 | runs experiments 1 to 4 on the 2RC-Il model and writes the comparison with the guards and the verdict; needs `make ekf`, `make ekf-r1i` and `make fit-r1l` | `results/ekf_results_r1l.csv`, `results/model_compare_r1l.md`, `results/plots/s8/model_compare_r1l.png` |
 | `make readme` | S4 | copies the results tables into `README.md` and this file | `README.md`, `docs/results.md` |
 | `make readme-check` | S4 | fails if `README.md` or this file is out of sync with `results/` | |
 
@@ -706,12 +708,13 @@ Lower at 5 of 6 temperatures; higher by more than 0.10 pp at: none. **ADOPTED.**
 
 The gain is a cold one. At 0 to -20 degC the experiment-1 mean falls by 0.2 to 0.5 pp; at the warmer temperatures it moves by a few hundredths. Most runs end lower at every temperature, but in the cold part of the mean gain comes from a few runs that improve a lot, Mix 8 and Mix 4 among them, which open under load; the cold medians barely move. US06, the cycle with the highest currents, gets worse from 10 degC down, with its error roughly doubled (`docs/decisions.md` 1.31, `results/ekf_results_r1i.csv`), so the 2RC-I model is better on average, not for every load. An independent reimplementation reproduced the fit, the table and the filter runs. The C library is not ported yet: the R1 table over current adds about 12 kB, and the port gets its own decision first (1.30).
 
-### S8: R1 by the sign of the current (two negative results)
+### S8: R1 by the sign of the current and at low current (three negative results)
 
 S8 asked why the 2RC-I model makes US06 worse from 10 degC down. Under regen the model reads R1 from the discharge table at the size of the current, and at low current that value is well above the v1.0 R1 (about 1.3 times at 25 degC and 2 times at -10 degC at 1.5 A, `results/model_compare_r1d.md`). The rules were fixed in `docs/decisions.md` 1.32 before any S8 result existed: a new model must pass the S1 gate, the rule of S6 and S7, and four guards against 2RC-I. No single run or cycle may get worse beyond a fixed limit, the worst run may not rise, and the experiment-4 mean and the experiment 2 and 3 reached counts may not get worse beyond theirs. These 62 runs have been inspected in every stage since S2, so S8 is a comparison on a repeatedly inspected set, not a confirmation.
 
 - **Step A, 2RC-Id** (1.33, 1.34): the v1.0 R1 under regen, nothing refitted. US06 comes back to about the 2RC values at 0 to -20 degC (about half way at 10 degC), but Mix 8 at 0 to -20 degC and Mix 6 at -20 degC get worse beyond the limit, the worst run rises, and fewer -20 degC runs reach the 2 pp band. Not adopted.
 - **Step B, 2RC-Ic** (1.35, 1.36): a charge-side R1 fitted on the HPPC charge pulses. US06 recovers only at -20 degC, while LA92 and Mix 8 in the cold, the worst run and the -20 degC reached counts get worse. Its open-loop voltage error under regen is closer to zero than 2RC-Id's at 10 and 0 degC, yet its US06 SoC error stays near 2RC-I there, so the regen voltage error does not predict the US06 SoC error. Not adopted. In the US06 table below, the change column is 2RC-Ic minus 2RC-I.
+- **Step C, 2RC-Il** (1.37, 1.38): R1 at and below the smallest discharge pulse current scaled by one factor per temperature, fitted on the PausCycl files, which are not in the evaluation set. The fitted R1 there is 3 to 20 % lower than 2RC-I's, and it fits those files better in the cold, but not the drive cycles' open-loop voltage. US06 improves at 10 to -10 degC but gets worse at -20 degC, and Mix 8, LA92 and the worst run get worse; the experiment-1 mean is lower at only one temperature. Not adopted. The second US06 table below has 2RC, 2RC-I and 2RC-Il, its change column 2RC-Il minus 2RC-I.
 
 <!-- results:s8_us06:begin -->
 
@@ -772,7 +775,43 @@ Guards recomputed from unrounded values: none.
 
 <!-- results:s8_step_b:end -->
 
-2RC-I stays the adopted model. The charge-R1 fit, the per-cycle table and the open-loop error by current band are in `results/model_fit_r1c.md` and `results/model_compare_r1c.md`. Step C of the plan, R1 below the smallest discharge pulse current, has not run.
+<!-- results:s8_step_c:begin -->
+
+**Experiment 1 / US06**
+
+Experiment-1 SoC RMSE of the US06 run.
+
+| T (degC) | 2RC (pp) | 2RC-I (pp) | 2RC-Il (pp) | change (pp) |
+|---|---|---|---|---|
+| 40 | 1.04 | 0.98 | 0.98 | +0.00 |
+| 25 | 1.05 | 1.02 | 1.02 | -0.00 |
+| 10 | 1.18 | 2.28 | 2.12 | -0.16 |
+| 0 | 1.13 | 2.99 | 2.94 | -0.06 |
+| -10 | 3.23 | 6.25 | 5.34 | -0.91 |
+| -20 | 2.75 | 5.36 | 6.34 | +0.99 |
+
+**Guards and adoption verdict**
+
+The guards of docs/decisions.md 1.32, 2RC-Il against the incumbent 2RC-I, which is also the model S8 starts from, so the stage-budget check is the same comparison. Values are those of the results CSVs (4 decimals); a guard whose value lies within 0.0001 of its limit is recomputed from unrounded values, which decide (1.35).
+
+| guard | value | result |
+|---|---|---|
+| 1. S1 gate | US06 at 25 degC: 29.7545 mV (limit 30) | pass |
+| 2. rule of 1.22 | lower at 1 of 6; higher by more than 0.10 pp at -20 degC (recomputed from unrounded values) | FAIL |
+| 3. run increase | largest +1.0142 pp; above the limit of +0.50: Mix 8 at -10 degC +1.0142, US06 at -20 degC +0.9855, Mix 8 at -20 degC +0.9425, LA92 at -20 degC +0.7413 | FAIL |
+| 4. largest cycle increase | +0.4739 pp (Mix 8, limit +0.25) | FAIL |
+| 5. worst run | 6.4687 pp against 6.3441 pp | FAIL |
+| 6. experiments 2 to 4 | largest exp4 increase +0.0895 pp (limit +0.10); fewer reached: none | pass |
+
+Guards recomputed from unrounded values: 2. rule of 1.22 (unrounded margin 0.00e+00). Guard 2 is recomputed whenever a temperature's change is exactly 0, as at 40 degC by construction; an unchanged mean does not count as lower (1.37).
+
+**NOT ADOPTED.**
+
+<!-- results:s8_step_c:end -->
+
+![2RC, 2RC-I and 2RC-Il against temperature](../results/plots/s8/model_compare_r1l.png)
+
+2RC-I stays the adopted model. None of the three R1 changes recovers US06 in the cold without costing Mix 8 and the -20 degC runs beyond the guards. The fits, the per-cycle tables and the open-loop error by current band are in `results/model_fit_r1c.md`, `results/model_fit_r1l.md`, `results/model_compare_r1c.md` and `results/model_compare_r1l.md`.
 
 ## C port
 
@@ -841,7 +880,7 @@ CI runs on every push to GitHub.
 - The cell aged over the campaign, which ran 25, 40, 10, 0, -10 and -20 degC in that order. It also lost capacity inside the 25 degC block (the two 25 degC 1C runs in the capacity table). One Q_ref, from the freshest cell, is used at every temperature. Missing and off-temperature 1C tests are marked in `results/capacity.md`.
 - The reference SoC is itself coulomb counting, on the cycler's Ah counter. The baseline counts the logged current; the two agree closely (the coulomb-counting table of experiment 1, `docs/model.md` C13). The cycler's stated accuracy is 0.1 % of full scale, so a real sensor offset in the data would be invisible to this comparison.
 - The OCV table is the C/20 discharge branch, corrected onto the HPPC 1 h rest voltages. The correction rests on the few rest points of each temperature and is held flat beyond the first and last of them. The cold rests have not fully relaxed after 1 h, which leaves a small bias in those points (`docs/decisions.md` 1.1, 1.12). The charge half of the C/20 test is not used, because the two halves do not share an Ah axis.
-- The 2RC fit assumes two separable branches: R0, R1 and tau1 from the discharge pulses, R2 and tau2 from the 1 h rests, with V2 = 0 at the start of each move. A third branch fitted from the same pulses made the US06 voltage worse at most temperatures (S6), so the model keeps no time constant between the fast and the slow branch, although the drive cycles ask for one of 20 to 50 s (`docs/decisions.md` 1.25). A second fit of the middle branch alone, on the HPPC pulse trains, failed the US06 gate too (1.27). Charge pulses are fitted only for the 2RC-Ic model of S8, which is not adopted, so regen uses discharge parameters in the adopted model too. The EKF Jacobians leave out dR0/dSoC and the SoC dependence of the RC parameters (`docs/decisions.md` 1.12, `docs/model.md` Eq. 7, Eq. 8).
+- The 2RC fit assumes two separable branches: R0, R1 and tau1 from the discharge pulses, R2 and tau2 from the 1 h rests, with V2 = 0 at the start of each move. A third branch fitted from the same pulses made the US06 voltage worse at most temperatures (S6), so the model keeps no time constant between the fast and the slow branch, although the drive cycles ask for one of 20 to 50 s (`docs/decisions.md` 1.25). A second fit of the middle branch alone, on the HPPC pulse trains, failed the US06 gate too (1.27). Charge pulses are fitted only for the 2RC-Ic model of S8, which is not adopted, so regen uses discharge parameters in the adopted model too; the low-current R1 of the 2RC-Il model of S8, fitted on the PausCycl files, is not adopted either. The EKF Jacobians leave out dR0/dSoC and the SoC dependence of the RC parameters (`docs/decisions.md` 1.12, `docs/model.md` Eq. 7, Eq. 8).
 - The 25 degC open-loop voltage error passes the sanity limit by a thin margin (the gate line under the model-fit table).
 - The noise settings were tuned on one cycle at one temperature. The eight mixes are built from segments of the four standard cycles, so the tuning cycle and the evaluation runs share segments (`docs/decisions.md` 1.11).
 - Errors grow in the cold. Experiment 1 errors are clearly larger at 0, -10 and -20 degC than at 40, 25 and 10 degC, and at -10 and -20 degC many runs of experiments 2 and 3 never settle inside the +-2 pp band.

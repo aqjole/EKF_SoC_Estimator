@@ -67,6 +67,8 @@ RESULTS_SOURCES = [
     ("s8_us06", "results/model_compare_r1c.md", ("Experiment 1", "US06")),
     ("s8_step_a", "results/model_compare_r1d.md", ("Guards and adoption verdict",)),
     ("s8_step_b", "results/model_compare_r1c.md", ("Guards and adoption verdict",)),
+    ("s8_step_c", "results/model_compare_r1l.md", ("Experiment 1", "US06")),
+    ("s8_step_c", "results/model_compare_r1l.md", ("Guards and adoption verdict",)),
 ]
 
 # Each document, relative to the repo root, with the sections copied into it.
