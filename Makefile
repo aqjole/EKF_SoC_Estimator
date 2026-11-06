@@ -2,9 +2,9 @@
 
 PYTHON := .venv/bin/python
 
-.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l tune ekf c equiv arm sensitivity octave readme readme-check
+.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd tune ekf c equiv arm sensitivity octave readme readme-check
 
-all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l readme
+all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd readme
 
 # Fetch the LG 18650HG2 .mat files into data/raw/ and verify their sha256.
 data:
@@ -70,6 +70,14 @@ fit-r1l:
 # results/runs/r1l/.
 ekf-r1l:
 	$(PYTHON) python/compare_r1l.py
+
+# S9: fit 3RC-D on the Mix runs and score open loop (needs fit and fit-r1i).
+fit-3rcd:
+	$(PYTHON) python/fit_3rcd.py
+
+# S9: compare the frozen EKF on the two splits after the S1 gate (needs ekf, ekf-r1i and fit-3rcd).
+ekf-3rcd:
+	$(PYTHON) python/compare_3rcd.py
 
 # S2: tune the EKF noise settings on the tuning cycle and freeze them (not part of "all": the frozen values are committed).
 # Writes results/tuning.md, results/ekf_config.json and section 1.15 of docs/decisions.md.
