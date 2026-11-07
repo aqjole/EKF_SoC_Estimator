@@ -608,6 +608,59 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
 - The experiment-1 mean on the standard runs fell by 0.37, 0.27, 0.35, 0.22, 0.95 and 0.18 pp at 40, 25, 10, 0, -10 and -20 degC. Every standard cycle's mean fell. The largest individual increase was +0.3633 pp on US06 at -20 degC, inside guard 3's +0.50 pp limit. The experiment-4 means fell at every temperature, and all experiment-2 and experiment-3 reached counts met guard 6.
 - This verdict uses the frozen fit and adoption rule. The standard runs were held out of coefficient fitting and had already informed diagnostics and the low-SoC boundary choice. They share segments with the Mix runs. The fit and evaluation reports are `results/model_fit_3rcd.md` and `results/model_compare_3rcd.md`.
 
+### 1.44 S10 protocol for 3RC-D0
+
+S10 tests whether replacing current-dependent R1 with the v1.0 R1 lookup lets
+the drive-fitted middle branch account for polarization with fewer cold US06
+regressions. Compared with the S9 fit, the single change is its starting model,
+from 2RC-I to v1.0 2RC. The S9 fit and verdict remain historical results.
+
+- Baseline revision: `9afe1e559c09b403776ce22e517150b7b5b02fb7` (v1.5).
+  The S10 report records SHA-256 hashes of the frozen parameters, config and
+  comparison evidence and generates run membership from `evaluation_runs`
+  and `drive_split`. Reference SoC, Q_ref, current sign, timestamps, exclusions,
+  and integration and window rules follow 1.5, 1.15 and 1.40.
+- The 40 Mix runs, including the S2 tuning run, remain the calibration set.
+  The 23 standard runs are a previously inspected regression suite. They
+  informed earlier choices and share segments with the Mix runs, including
+  the leave-one-run-out folds. The data describe one cell in one campaign.
+- Diagnose before fitting. Reproduce the regen-only R1 substitution (2RC-Id,
+  1.33) in experiment 1 on US06 at 0, -10 and -20 degC and reproduce the
+  S9 open-loop pooled window gain on the Mix runs at those temperatures.
+  Proceed only if the former reduces SoC RMSE by at least 0.10 pp at all
+  three (the 1.33 criterion) and the latter lowers voltage RMSE at all
+  three. These separate checks support testing their interaction. The
+  diagnostic also compares residuals, innovations and SoC error, checks
+  same-row versus one-row-late ohmic steps, and measures the omitted
+  Jacobian terms along the unchanged 2RC-I experiment-1 trajectories on
+  US06 and Mix 1 at all temperatures. Measurement ratios are reported only
+  where the stored OCV slope is at least 0.05 V per unit SoC in magnitude.
+- Use the same fit code and settings as 1.41. Keep OCV, the stored OCV
+  slope, R0, tau1 and tau2. Use v1.0 R1 for both current signs. Refit R3 and
+  the R2 scale once with the S9 nodes, bounds, support threshold, taper,
+  cost rows, weights, fixed 45 s tau3 and BVLS. Recompute support in the
+  40 prescribed leave-one-Mix-run-out diagnostic fits. Verify full-rate
+  linearity and score the serialized tables. Apply the S1 gate before
+  running any candidate EKF experiments.
+- Apply all six guards of 1.40 against 2RC-I on the 23 standard runs, with
+  the near-limit rule of 1.35. Guard 5 compares the two maxima across
+  those runs. The v1.0 2RC, 3RC-D and the diagnostic substitution (S9
+  R2/R3 with v1.0 R1 for both signs, no refit) are reporting comparators.
+  Use frozen S2 noise and Jacobians throughout. Peak SoC error,
+  convergence time, and the S5 capacity and sampling perturbations on
+  standard runs are diagnostics with no additional adoption thresholds.
+- Outputs: `results/accuracy_diagnostics.md`,
+  `results/accuracy_residual_bins.csv`, `results/model_fit_3rcd0.md`,
+  `results/fit_nodes_3rcd0.csv`, `results/params_3rcd0.csv`,
+  `results/model_compare_3rcd0.md`, and, if the voltage gate passes,
+  `results/ekf_results_3rcd0.csv`, `results/sensitivity_3rcd0.csv` and
+  traces under `results/runs/3rcd0/`. Plots go in `results/plots/s10/`.
+  A failed gate closes this candidate. Record the outcome before updating
+  the README. Reserve v1.6 for the closed S10 stage.
+- Jacobian and noise variants, HPPC continuity and hysteresis require
+  separate prior decisions. Port to C under a separate entry if 3RC-D0
+  is adopted.
+
 ## 2. Dataset facts confirmed in S0
 
 | claim (readme, or the spec's S0 checks) | verdict | evidence |
