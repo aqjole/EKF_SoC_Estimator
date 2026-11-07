@@ -74,6 +74,10 @@ make all         # every stage below, in order
 | `make ekf-r1l` | S8 | runs experiments 1 to 4 on the 2RC-Il model and writes the comparison with the guards and the verdict; needs `make ekf`, `make ekf-r1i` and `make fit-r1l` | `results/ekf_results_r1l.csv`, `results/model_compare_r1l.md`, `results/plots/s8/model_compare_r1l.png` |
 | `make fit-3rcd` | S9 | fits R3 and the R2 scale on the 40 Mix runs, then scores the exported model open loop on both splits and the US06 gate. Needs `make fit` and `make fit-r1i` | `results/fit_nodes_3rcd.csv`, `results/params_3rcd.csv`, `results/model_fit_3rcd.md`, `results/plots/s9/params_3rcd.png` |
 | `make ekf-3rcd` | S9 | runs experiments 1 to 4 with the frozen noise settings after the S1 gate passes and decides adoption on the 23 standard-cycle runs. Needs `make ekf`, `make ekf-r1i` and `make fit-3rcd` | `results/ekf_results_3rcd.csv`, `results/model_compare_3rcd.md`, `results/plots/s9/model_compare_3rcd.png` |
+| `make accuracy` | S10 | runs the fit and evaluation followed by the separate diagnosis under decisions 1.44 and 1.47 | the following three targets |
+| `make diagnose-accuracy` | S10 | checks residuals and timing and measures local Jacobian terms on all 63 incumbent experiment-1 trajectories | `results/accuracy_diagnostics.md`, `results/accuracy_residual_bins.csv`, `results/accuracy_jacobian.csv`, `results/plots/s10/accuracy_residuals.png` |
+| `make fit-3rcd0` | S10 | fits the S9 parameterization using v1.0 R1 and the frozen inputs | `results/params_3rcd0.csv`, `results/fit_nodes_3rcd0.csv`, `results/model_fit_3rcd0.md`, `results/plots/s10/params_3rcd0.png` |
+| `make ekf-3rcd0` | S10 | applies the S1 gate, runs the frozen experiments and guards, and scores the unfitted S9 R1 substitution and sensitivity | `results/ekf_results_3rcd0.csv`, `results/model_compare_3rcd0.md`, `results/sensitivity_3rcd0.csv`, `results/plots/s10/model_compare_3rcd0.png` |
 | `make readme` | S4 | copies the results tables into `README.md` and this file | `README.md`, `docs/results.md` |
 | `make readme-check` | S4 | fails if `README.md` or this file is out of sync with `results/` | |
 
@@ -930,6 +934,159 @@ Guard inputs from unrounded traces. SoC changes are in pp and temperatures follo
 ![Open-loop voltage and SoC RMSE on the standard and Mix runs](../results/plots/s9/model_compare_3rcd.png)
 
 The [fit report](../results/model_fit_3rcd.md) gives the fitted nodes, solver checks and leave-one-Mix-run-out voltage errors. The [comparison report](../results/model_compare_3rcd.md) includes the in-sample Mix results. See also the [fitted node plot](../results/plots/s9/params_3rcd.png).
+
+### S10 · Drive-fitted third branch with v1.0 R1
+
+S10 tests the interaction between current-dependent R1 and the drive-fitted slow
+branches under decision 1.44. The 40 Mix runs calibrate the new coefficients.
+The 23 standard runs are a previously inspected regression suite and share
+segments with the Mix runs. The adoption comparator is 2RC-I.
+
+<!-- results:s10_results:begin -->
+
+**US06 voltage gate**
+
+**PASS.** 3RC-D0 full-run RMSE at 25 degC is 23.2362515344 mV (limit 30 mV).
+
+US06 voltage RMSE in mV. Scores use the reloaded tables.
+
+| T (degC) | Scope | 2RC | 2RC-I | 3RC-D | 3RC-D0 | S9 R1 substitution |
+|---|---|---|---|---|---|---|
+| 40 | Full | 20.8982 | 20.5608 | 17.2904 | 17.9720 | 17.6607 |
+| 40 | Window | 18.3128 | 17.8452 | 12.4010 | 12.4723 | 12.9899 |
+| 40 | Tail | 31.5136 | 31.5453 | 33.1011 | 35.2404 | 33.1298 |
+| 25 | Full | 29.7883 | 29.7533 | 23.1312 | 23.2363 | 23.2488 |
+| 25 | Window | 22.1998 | 22.1409 | 15.9554 | 15.7318 | 16.1292 |
+| 25 | Tail | 53.8003 | 53.8058 | 44.2946 | 45.0301 | 44.3490 |
+| 10 | Full | 40.6783 | 40.8732 | 21.3203 | 20.8989 | 19.9090 |
+| 10 | Window | 40.6783 | 40.8732 | 21.3203 | 20.8989 | 19.9090 |
+| 10 | Tail | n/a | n/a | n/a | n/a | n/a |
+| 0 | Full | 59.4654 | 60.3110 | 35.0350 | 34.5890 | 31.6125 |
+| 0 | Window | 59.4654 | 60.3110 | 35.0350 | 34.5890 | 31.6125 |
+| 0 | Tail | n/a | n/a | n/a | n/a | n/a |
+| -10 | Full | 73.7450 | 77.7488 | 63.5928 | 65.4448 | 55.5902 |
+| -10 | Window | 73.7450 | 77.7488 | 63.5928 | 65.4448 | 55.5902 |
+| -10 | Tail | n/a | n/a | n/a | n/a | n/a |
+| -20 | Full | 104.5780 | 104.8528 | 76.7435 | 85.8563 | 68.2001 |
+| -20 | Window | 104.5780 | 104.8528 | 76.7435 | 85.8563 | 68.2001 |
+| -20 | Tail | n/a | n/a | n/a | n/a | n/a |
+
+**Standard regression runs**
+
+Experiment-1 SoC RMSE in pp. The S9 R1 substitution is an experiment-1 diagnostic.
+
+| T (degC) | runs | 2RC mean | 2RC-I mean | 3RC-D mean | 3RC-D0 mean | S9 R1 substitution mean | 2RC median | 2RC-I median | 3RC-D median | 3RC-D0 median | S9 R1 substitution median |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 40 | 4 | 0.843 | 0.793 | 0.424 | 0.465 | 0.484 | 0.802 | 0.770 | 0.400 | 0.452 | 0.455 |
+| 25 | 3 | 0.869 | 0.859 | 0.584 | 0.608 | 0.598 | 0.880 | 0.866 | 0.698 | 0.707 | 0.675 |
+| 10 | 4 | 1.205 | 1.437 | 1.088 | 0.861 | 0.880 | 1.113 | 1.265 | 1.127 | 0.788 | 0.835 |
+| 0 | 4 | 1.661 | 1.904 | 1.686 | 1.229 | 1.305 | 1.425 | 1.695 | 1.323 | 1.188 | 1.283 |
+| -10 | 4 | 3.043 | 3.639 | 2.694 | 1.418 | 1.572 | 3.025 | 3.056 | 1.621 | 1.334 | 1.619 |
+| -20 | 4 | 2.881 | 3.065 | 2.881 | 1.216 | 1.674 | 2.918 | 2.557 | 2.081 | 1.140 | 1.687 |
+
+Experiment-4 mean SoC RMSE in pp. Reached counts follow 2RC / 2RC-I / 3RC-D / 3RC-D0.
+
+| T (degC) | 2RC exp4 | 2RC-I exp4 | 3RC-D exp4 | 3RC-D0 exp4 | exp2 reached | exp3 low reached | exp3 high reached |
+|---|---|---|---|---|---|---|---|
+| 40 | 1.190 | 1.152 | 0.761 | 0.795 | 3 / 3 / 4 / 4 | 3 / 3 / 4 / 4 | 3 / 3 / 4 / 4 |
+| 25 | 1.252 | 1.250 | 0.809 | 0.844 | 3 / 3 / 3 / 3 | 3 / 3 / 3 / 3 | 3 / 3 / 3 / 3 |
+| 10 | 1.334 | 1.464 | 1.339 | 1.074 | 4 / 4 / 4 / 4 | 4 / 4 / 4 / 4 | 4 / 4 / 4 / 4 |
+| 0 | 1.913 | 1.831 | 1.808 | 1.719 | 4 / 4 / 4 / 4 | 4 / 4 / 4 / 4 | 4 / 4 / 4 / 4 |
+| -10 | 3.105 | 3.400 | 2.442 | 2.032 | 3 / 3 / 3 / 3 | 2 / 2 / 3 / 3 | 2 / 2 / 3 / 3 |
+| -20 | 3.436 | 3.321 | 2.742 | 1.958 | 2 / 2 / 4 / 4 | 0 / 1 / 3 / 3 | 2 / 1 / 4 / 3 |
+
+**Experiment 1 by standard cycle**
+
+| Cycle | 2RC (pp) | 2RC-I (pp) | 3RC-D (pp) | 3RC-D0 (pp) | S9 R1 substitution (pp) |
+|---|---|---|---|---|---|
+| HWFET | 2.2604 | 1.7695 | 1.0105 | 0.7570 | 1.2856 |
+| LA92 | 1.5225 | 1.4045 | 1.0898 | 0.7533 | 0.8932 |
+| UDDS | 1.7213 | 1.6296 | 1.2762 | 1.1498 | 1.2855 |
+| US06 | 1.7290 | 3.1468 | 2.9328 | 1.2292 | 0.9930 |
+
+**US06 experiment 1**
+
+| Folder | Cycle | 2RC (pp) | 2RC-I (pp) | 3RC-D (pp) | 3RC-D0 (pp) | S9 R1 substitution (pp) |
+|---|---|---|---|---|---|---|
+| 40degC | US06 | 1.0405 | 0.9777 | 0.4169 | 0.5082 | 0.4684 |
+| 25degC | US06 | 1.0462 | 1.0183 | 0.7399 | 0.7871 | 0.6753 |
+| 10degC | US06 | 1.1828 | 2.2807 | 1.4134 | 0.7265 | 0.4874 |
+| 0degC | US06 | 1.1304 | 2.9916 | 2.9079 | 1.5259 | 1.1634 |
+| n10degC | US06 | 3.2252 | 6.2547 | 6.3977 | 2.3883 | 2.0288 |
+| n20degC | US06 | 2.7491 | 5.3576 | 5.7209 | 1.4393 | 1.1349 |
+
+**Experiment 1 by run**
+
+| Folder | Cycle | 2RC (pp) | 2RC-I (pp) | 3RC-D (pp) | 3RC-D0 (pp) | S9 R1 substitution (pp) |
+|---|---|---|---|---|---|---|
+| 40degC | UDDS | 0.8086 | 0.8116 | 0.6077 | 0.6093 | 0.6083 |
+| 40degC | HWFET | 0.7961 | 0.6532 | 0.2868 | 0.3467 | 0.4407 |
+| 40degC | LA92 | 0.7285 | 0.7276 | 0.3831 | 0.3958 | 0.4190 |
+| 40degC | US06 | 1.0405 | 0.9777 | 0.4169 | 0.5082 | 0.4684 |
+| 25degC | UDDS | 0.8801 | 0.8656 | 0.6978 | 0.7070 | 0.7341 |
+| 25degC | LA92 | 0.6802 | 0.6939 | 0.3157 | 0.3294 | 0.3857 |
+| 25degC | US06 | 1.0462 | 1.0183 | 0.7399 | 0.7871 | 0.6753 |
+| 10degC | UDDS | 1.0422 | 0.9488 | 0.8405 | 0.8486 | 0.9209 |
+| 10degC | HWFET | 0.9618 | 0.9371 | 0.6377 | 0.5446 | 0.7487 |
+| 10degC | LA92 | 1.6314 | 1.5809 | 1.4621 | 1.3235 | 1.3636 |
+| 10degC | US06 | 1.1828 | 2.2807 | 1.4134 | 0.7265 | 0.4874 |
+| 0degC | UDDS | 1.4977 | 1.3104 | 1.1899 | 1.2453 | 1.3804 |
+| 0degC | HWFET | 2.6663 | 2.0790 | 1.3523 | 1.1307 | 1.4927 |
+| 0degC | LA92 | 1.3513 | 1.2369 | 1.2945 | 1.0143 | 1.1854 |
+| 0degC | US06 | 1.1304 | 2.9916 | 2.9079 | 1.5259 | 1.1634 |
+| n10degC | UDDS | 2.8252 | 2.7224 | 1.9179 | 1.6355 | 1.8305 |
+| n10degC | HWFET | 3.7917 | 3.3888 | 1.1354 | 1.0324 | 1.4082 |
+| n10degC | LA92 | 2.3299 | 2.1916 | 1.3239 | 0.6156 | 1.0199 |
+| n10degC | US06 | 3.2252 | 6.2547 | 6.3977 | 2.3883 | 2.0288 |
+| n20degC | UDDS | 3.2740 | 3.1185 | 2.4031 | 1.8533 | 2.2389 |
+| n20degC | HWFET | 3.0863 | 1.7893 | 1.6404 | 0.7307 | 2.3380 |
+| n20degC | LA92 | 2.4139 | 1.9963 | 1.7594 | 0.8413 | 0.9854 |
+| n20degC | US06 | 2.7491 | 5.3576 | 5.7209 | 1.4393 | 1.1349 |
+
+**Guards and adoption verdict**
+
+The S1 gate uses the full-precision full-run voltage RMSE. The SoC guards use CSV precision except near a limit, where they are recomputed from unrounded traces under decision 1.35. Guard 5 compares the maximum over all 23 standard runs for each model.
+
+| guard | value | result |
+|---|---|---|
+| 1. S1 gate | US06 at 25 degC: 23.2363 mV (limit 30) | pass |
+| 2. rule of 1.22 | lower at 6 of 6; higher by more than 0.10 pp at none | pass |
+| 3. run increase | largest -0.0651 pp; above the limit of +0.50: none | pass |
+| 4. largest cycle increase | -0.4797 pp (UDDS, limit +0.25) | pass |
+| 5. worst run | 2.3883 pp against 6.2547 pp | pass |
+| 6. experiments 2 to 4 | largest exp4 increase -0.1121 pp (limit +0.10); fewer reached: none | pass |
+
+Guard inputs from unrounded traces. SoC changes are in pp and temperatures follow the table order above.
+
+| guard | unrounded values |
+|---|---|
+| 1 | 23.2362515344 mV |
+| 2 | -0.327501570361 / -0.251425519076 / -0.576091974792 / -0.675415197033 / -2.22146847568 / -1.84927112782 |
+| 3 | Largest run increase -0.0650712095378 |
+| 4 | HWFET -1.01245621114, LA92 -0.651240561222, UDDS -0.479702599956, US06 -1.9175549862 |
+| 5 | Worst run 6.25470078654 to 2.38825302507 |
+| 6 | Experiment 4 changes -0.357455309378 / -0.405803147574 / -0.389876157603 / -0.112115130874 / -1.3677909331 / -1.36305181382 |
+
+**ADOPTED.**
+
+<!-- results:s10_results:end -->
+
+The [residual diagnosis](../results/accuracy_diagnostics.md) records run
+membership, input hashes, timing and Jacobian measurements for all 63 incumbent
+experiment-1 runs.
+The [fit report](../results/model_fit_3rcd0.md) gives solver checks, fitted nodes,
+both splits' voltage scores and the 40 diagnostic Mix folds. The
+[comparison report](../results/model_compare_3rcd0.md) also gives the Mix
+in-sample scores and the standard-run peak error, convergence and sensitivity
+diagnostics.
+
+The 3RC-D0 model recovered the cold non-US06 gains that were at risk when
+removing current-dependent R1. It improved every standard run versus 2RC-I.
+The unfitted R1 substitution had lower US06 SoC RMSE at all six temperatures,
+with a higher mean across the full standard suite. The substitution was scored
+in experiment 1 for diagnosis. [Decision 1.47](decisions.md#147-s10-review-expands-the-diagnosis-and-defers-deployment)
+
+![S10 comparison](../results/plots/s10/model_compare_3rcd0.png)
 
 ## C port
 

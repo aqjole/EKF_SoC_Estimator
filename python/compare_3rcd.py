@@ -73,13 +73,13 @@ def temperature_lines(tables, pooled):
     ]
 
 
-def guard_details(unrounded, tables, gate):
+def guard_details(unrounded, tables, gate, candidate=CANDIDATE):
     old = exp1_by_run(unrounded[INCUMBENT])
-    new = exp1_by_run(unrounded[CANDIDATE])
+    new = exp1_by_run(unrounded[candidate])
     change = new["rmse_pp"] - old["rmse_pp"]
     cycle = new.groupby("cycle")["rmse_pp"].mean() - old.groupby("cycle")["rmse_pp"].mean()
-    exp1 = [tables[CANDIDATE][t]["exp1"] - tables[INCUMBENT][t]["exp1"] for t in T_GRID_DEGC]
-    exp4 = [tables[CANDIDATE][t]["exp4"] - tables[INCUMBENT][t]["exp4"] for t in T_GRID_DEGC]
+    exp1 = [tables[candidate][t]["exp1"] - tables[INCUMBENT][t]["exp1"] for t in T_GRID_DEGC]
+    exp4 = [tables[candidate][t]["exp4"] - tables[INCUMBENT][t]["exp4"] for t in T_GRID_DEGC]
     return [
         "Guard inputs from unrounded traces. SoC changes are in pp and temperatures follow the table order above.", "",
         *md_table(["guard", "unrounded values"], [
@@ -93,20 +93,28 @@ def guard_details(unrounded, tables, gate):
     ]
 
 
+def experiment1_cycle_rows(runs, models):
+    cycle = {model: runs[model].groupby("cycle")["rmse_pp"].mean() for model in models}
+    return [[name, *[f"{cycle[model][name]:.4f}" for model in models]] for name in cycle[models[0]].index]
+
+
+def experiment1_run_rows(runs, models):
+    return [[key[0], row["cycle"], *[f"{runs[model].loc[key, 'rmse_pp']:.4f}" for model in models]]
+            for key, row in runs[INCUMBENT].iterrows()]
+
+
 def comparison_text(standard, tables, pooled, mix_tables, mix_pooled, guards, raw_details):
     runs = {model: exp1_by_run(standard[model]) for model in MODELS}
-    cycle = {model: frame.groupby("cycle")["rmse_pp"].mean() for model, frame in runs.items()}
     return "\n".join([
         "# 3RC-D comparison (S9)", "", "Written by `python/compare_3rcd.py` (`make ekf-3rcd`).", "",
         DISCLOSURE, "", "All models use the frozen S2 noise settings. The adoption guards compare 3RC-D with 2RC-I.", "",
         "## Standard cycles", "", *temperature_lines(tables, pooled), "",
         "### Experiment 1 by standard cycle", "",
         *md_table(["Cycle", *[f"{model} (pp)" for model in MODELS]],
-                  [[name, *[f"{cycle[model][name]:.4f}" for model in MODELS]] for name in cycle[INCUMBENT].index]),
+                  experiment1_cycle_rows(runs, MODELS)),
         "", "### Experiment 1 by run", "",
         *md_table(["Folder", "Cycle", *[f"{model} (pp)" for model in MODELS]],
-                  [[key[0], row["cycle"], *[f"{runs[model].loc[key, 'rmse_pp']:.4f}" for model in MODELS]]
-                   for key, row in runs[INCUMBENT].iterrows()]),
+                  experiment1_run_rows(runs, MODELS)),
         "", "## Calibration runs (in-sample)", "",
         *temperature_lines(mix_tables, mix_pooled),
         "", "## Guards and adoption verdict", "",

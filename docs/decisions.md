@@ -713,6 +713,38 @@ diagnostic reports of 1.44 for coefficients, support and ablations.
   Report target timing only if a target is available. Board-specific
   deployment budgets require the board and cell count.
 
+### 1.47 S10 review expands the diagnosis and defers deployment
+
+The chronology follows the repository history. Commit `9faf315` recorded
+1.44 before the original diagnostic and 3RC-D0 fit. The original diagnostic
+passed its recorded check and replayed US06 and Mix 1 at each temperature.
+Commit `1626159` recorded adoption from the six computed guards and specified
+a C contract. A C prototype reached host unit tests before the review changed
+the sequence. Its work is shelved pending completion of the experiments.
+
+The revised diagnosis replays the unchanged 2RC-I experiment 1 on every
+selected run and compares each SoC estimate and prior voltage with the
+ordinary runner. Its report summarizes the omitted Jacobian terms by split,
+temperature and window. `results/accuracy_jacobian.csv` holds the per-run
+summaries. The expanded diagnostic is independent of the 3RC-D0 fit and
+evaluation. Decision 1.44 records the rule used for the original execution.
+The completed candidate, its six adoption guards and the outcome in 1.45
+carry forward. Reproduction uses the same fit without requiring a diagnosis
+report first.
+
+Removing the current-dependent R1 risked giving up the cold non-US06 gains
+of S7. In this evaluation, 3RC-D0 improved all 23 standard runs versus
+2RC-I. On the same runs it averaged 0.9817 pp in experiment 1. The unfitted
+S9 R1 substitution averaged 1.1069 pp, with a lower maximum of 2.3380 pp
+and a lower US06 mean of 0.9930 pp versus 1.2292 pp for 3RC-D0. The substitution
+remains an experiment-1 diagnostic. The fit's aggregate gains and the
+substitution's US06 gains help separate the effect of changing R1 from
+the effect of refitting the slow branches.
+
+Any Jacobian, noise or model extension experiment needs its own quantitative
+decision before variants run. Revisit the C contract once the estimator
+experiments select the model for deployment. Release tag v1.6 remains reserved.
+
 ## 2. Dataset facts confirmed in S0
 
 | claim (readme, or the spec's S0 checks) | verdict | evidence |

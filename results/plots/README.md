@@ -1,6 +1,6 @@
 # Plots
 
-Every figure here is written by a repo script; none is saved by hand. The fixed list and the reasons are in `docs/decisions.md` 1.14 (S5: 1.18 to 1.20; S6 to S9: 1.21 to 1.42).
+Every figure here is written by a repo script; none is saved by hand. The fixed list and the reasons are in `docs/decisions.md` 1.14 (S5: 1.18 to 1.20; S6 to S10 follow 1.21 to 1.44).
 
 | Folder | Written by | Files |
 |---|---|---|
@@ -12,5 +12,6 @@ Every figure here is written by a repo script; none is saved by hand. The fixed 
 | `s7/` | `python/fit_r1_current.py` (`make fit-r1i`), `python/compare_r1i.py` (`make ekf-r1i`) | `r1_current.png`, `model_compare_r1i.png` |
 | `s8/` | `python/compare_r1d.py` (`make ekf-r1d`), `python/fit_r1_charge.py` (`make fit-r1c`), `python/compare_r1c.py` (`make ekf-r1c`), `python/compare_r1l.py` (`make ekf-r1l`) | `model_compare_r1d.png`, `r1_charge.png`, `model_compare_r1c.png`, `model_compare_r1l.png` |
 | `s9/` | `python/fit_3rcd.py` (`make fit-3rcd`), `python/compare_3rcd.py` (`make ekf-3rcd`) | `params_3rcd.png`, `model_compare_3rcd.png` |
+| `s10/` | `python/diagnose_accuracy.py`, `python/fit_3rcd0.py`, `python/compare_3rcd0.py` | `accuracy_residuals.png`, `params_3rcd0.png`, `model_compare_3rcd0.png` |
 
 Per-run traces for every evaluation run are not committed; `run_all.py` writes them to `results/runs/plots/` (gitignored).

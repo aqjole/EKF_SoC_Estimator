@@ -72,6 +72,9 @@ RESULTS_SOURCES = [
     ("s9_results", "results/model_fit_3rcd.md", ("US06 gate",)),
     ("s9_results", "results/model_compare_3rcd.md", ("Standard cycles",)),
     ("s9_results", "results/model_compare_3rcd.md", ("Guards and adoption verdict",)),
+    ("s10_results", "results/model_fit_3rcd0.md", ("US06 voltage gate",)),
+    ("s10_results", "results/model_compare_3rcd0.md", ("Standard regression runs",)),
+    ("s10_results", "results/model_compare_3rcd0.md", ("Guards and adoption verdict",)),
 ]
 
 # Each document, relative to the repo root, with the sections copied into it.

@@ -170,6 +170,7 @@ V_i(k)  = a_i(k) · V_i(k-1) + R_i · (1 - a_i(k)) · I(k-1)
 - In the 2RC-Ic model of S8 step B (docs/decisions.md 1.35), R1 is read as in the 2RC-I model when I(k-1) > 0, and with Eq. 4b from the charge-side table at (T(k-1), SoC(k-1), |I(k-1)|) when I(k-1) < 0.
 - In the 2RC-Il model of S8 step C (docs/decisions.md 1.37), R1 is read exactly as in the 2RC-I model, at |I(k-1)| for either sign, from the table of `results/r1_low.csv`.
 - In the 3RC-D model of S9 (docs/decisions.md 1.41), n = 3. R1 is read exactly as in the 2RC-I model. R2 and R3 are read with Eq. 4 from `results/params_3rcd.csv`, where R2 is the v1.0 table times the fitted scale and R3 is the fitted table; tau3 is 45 s at every grid point, and tau1 and tau2 are the v1.0 tables.
+- In the 3RC-D0 model of S10 (decision 1.44), n = 3. R1 uses the v1.0 (T, SoC) lookup for both current signs. R2 and R3 use the independently fitted tables in `results/params_3rcd0.csv`. Their parameterization, the fixed 45 s tau3, and tau1 and tau2 follow S9. The S9 R1 substitution reads `results/params_3rcd.csv` without its current-axis R1 table and is a diagnostic comparator.
 - Where it comes from: branch i is a resistor R_i in parallel with a capacitor C_i = tau_i / R_i, so dV_i/dt = -V_i / tau_i + R_i · I / tau_i. With I constant over the step, the solution over dt is Eq. 1 exactly. It is not an Euler step, so it holds for any dt, from the 0.1 s logging step to the 1.147 to 2.143 s steps at cycle boundaries (C11).
 - Limits: dt = 0 gives a_i = 1 and leaves V_i unchanged. A long step gives a_i -> 0 and V_i -> R_i · I(k-1), the steady value of a constant current.
 - Start: V_i(0) = 0 for every branch. The open-loop check starts the branches relaxed; C13 lists the runs that open under load.
@@ -321,3 +322,27 @@ P    = (I - K · H) · P- · (I - K · H)^T + K · R · K^T
 
 - In exact arithmetic this P is symmetric and positive semi-definite for any K, while the short form `(I - K · H) · P-` equals it only for the optimal gain of Eq. 9. The Joseph form keeps P valid when K is rounded, in particular in the float build of the C port.
 - The code forms `(I - K · H)` once, then `(I - K · H) · P-`, then multiplies by `(I - K · H)^T` and adds `R · K · K^T`.
+
+### S10 diagnostic partial derivatives
+
+The diagnostic replays the legacy experiment-1 filter and measures the terms omitted
+from its Jacobians. It retains the stored central-difference OCV slope in Eq. 8.
+For a branch at a fixed previous state, current and temperature, differentiating
+Eq. 6 gives
+
+```
+da_i/dSoC = a_i * dt / tau_i^2 * d(tau_i)/dSoC
+d(V_i_next)/dSoC = da_i/dSoC * (V_i - R_i * I_held)
+                  + (1 - a_i) * I_held * d(R_i)/dSoC
+```
+
+The omitted measurement term is `-I * dR0/dSoC`. The lookup partial derivatives
+use the active bilinear cell, with the cell starting at an interior knot in
+grid order and the last cell at the final knot. SoC derivatives outside the
+clamped SoC axis are zero. Temperature clamping retains the boundary row's
+SoC derivative. Eq. 4b's current weights are held fixed for its R1 derivative.
+
+The covariance diagnostic compares one-step propagation from the same posterior
+P with and without the additional SoC column of F. The nonlinear state propagation,
+measurement update and covariance used by the filter continue to follow
+Eqs. 6–11. At dt = 0 the added process partials are zero.

@@ -1,5 +1,6 @@
 """Fit the two 3RC-D tables on the Mix runs (docs/decisions.md 1.40 and 1.41)."""
 
+import csv
 from dataclasses import dataclass, replace
 
 import matplotlib.pyplot as plt
@@ -209,7 +210,7 @@ def node_rows(base, values, bound, support):
     return rows
 
 
-def plot_nodes(base, values):
+def plot_nodes(base, values, path=PLOTS / "params_3rcd.png"):
     fig, axes = plt.subplots(1, 2, figsize=(9, 4), layout="constrained")
     r3, scale_delta = np.split(values, 2)
     for ax, table, anchor, label in zip(axes, (r3 * 1000, 1 + scale_delta), (0, 1), ("R3 (mΩ)", "R2 scale")):
@@ -218,22 +219,29 @@ def plot_nodes(base, values):
         ax.set(xlabel="SoC", ylabel=label)
         ax.grid(alpha=0.25)
     axes[1].legend(ncol=2, fontsize=8)
-    PLOTS.mkdir(parents=True, exist_ok=True)
-    fig.savefig(PLOTS / "params_3rcd.png", dpi=150)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=150)
     plt.close(fig)
 
 
-def fit_report(rows, headers, fit, largest, folds, in_sample, held_out, us06):
+def fit_checks(fit, largest):
     singular = fit.unbounded_sol[3]
+    condition = singular[0] / singular[-1] if singular[-1] else np.inf
+    return [
+        f"BVLS status {fit.status}. Success {fit.success}. First-order optimality {fit.optimality:.3g}.",
+        f"Design matrix rank {fit.unbounded_sol[2]} of {len(singular)}. Condition number {condition:.3g}.",
+        f"Largest full-rate difference from the linear prediction over all Mix runs {largest:.3g} V "
+        "(limit 1e-9 V).",
+    ]
+
+
+def fit_report(rows, headers, fit, largest, folds, in_sample, held_out, us06):
     gate = us06[GATE_TEMP_DEGC][0][1]
     lines = [
         "# 3RC-D fit on the Mix runs (S9)", "",
         "Written by `python/fit_3rcd.py` (`make fit-3rcd`).", "", DISCLOSURE, "",
         "## Fit and checks", "",
-        f"BVLS status {fit.status}. Success {fit.success}. First-order optimality {fit.optimality:.3g}.",
-        f"Design matrix rank {fit.unbounded_sol[2]} of {len(singular)}. Condition number {singular[0] / singular[-1]:.3g}.",
-        f"Largest full-rate difference from the linear prediction over all Mix runs {largest:.3g} V "
-        "(limit 1e-9 V).", "",
+        *fit_checks(fit, largest), "",
         "A bound flag of -1 marks the lower bound, +1 the upper bound and 0 no active solver bound.", "",
         *md_table(headers, rows), "",
         "## Open-loop voltage", "",
@@ -257,26 +265,33 @@ def fit_report(rows, headers, fit, largest, folds, in_sample, held_out, us06):
     return "\n".join(lines) + "\n"
 
 
-def main():
-    import csv
-
-    base = load_params_ri()
+def calibrate_mix(base, mix):
+    """Run the full calibration and its prescribed Mix folds."""
     basis = basis_tables(base)
-    mix, standard = drive_split(evaluation_runs(RAW_DIR))
     print("Building the 40 Mix run regressors", flush=True)
     calibration = [prepare_mix(base, basis, spec) for spec in mix]
     values, bound, fit, support = solve_mix(calibration)
     print("Checking full-rate linearity and scoring the 40 Mix folds", flush=True)
     largest, folds = check_and_cross_validate(base, basis, calibration, values)
-    del calibration
+    return make_params(base, basis, values), values, bound, fit, support, largest, folds
 
+
+def write_nodes(path, base, values, bound, support):
     headers = ["T_degC", "soc", "R3_ohm", "s", "support", "fitted", "R3_bound", "s_bound"]
     rows = node_rows(base, values, bound, support)
-    with NODES_CSV.open("w", newline="") as handle:
+    with path.open("w", newline="") as handle:
         writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(headers)
         writer.writerows(rows)
-    make_params(base, basis, values).to_csv(PARAMS_3RCD_CSV)
+    return headers, rows
+
+
+def main():
+    base = load_params_ri()
+    mix, standard = drive_split(evaluation_runs(RAW_DIR))
+    params, values, bound, fit, support, largest, folds = calibrate_mix(base, mix)
+    headers, rows = write_nodes(NODES_CSV, base, values, bound, support)
+    params.to_csv(PARAMS_3RCD_CSV)
     print("Scoring the exported tables on the Mix and standard runs", flush=True)
     models = (base, load_params_3rcd())
     in_sample, _ = score_open_loop(models, mix)

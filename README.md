@@ -2,13 +2,15 @@
 
 [![ci](https://github.com/aqjole/EKF_SoC_Estimator/actions/workflows/ci.yml/badge.svg)](https://github.com/aqjole/EKF_SoC_Estimator/actions/workflows/ci.yml)
 
-State-of-charge (SoC) estimation for a Li-ion cell with a 2RC equivalent-circuit model and an Extended Kalman Filter (EKF). A Python reference is fitted and validated offline on the public LG 18650HG2 dataset at six temperatures, from 40 to -20 degC, and the same filter is ported to C99 for embedded targets and checked against the Python reference run by run (the C port runs the 2RC model of the first release, v1.0; the later 2RC-I model is Python only). Each later model change was tried under rules written down before its results existed, and is reported whether it helped or not.
+State-of-charge (SoC) estimation for a Li-ion cell with an equivalent-circuit model and an Extended Kalman Filter (EKF). The Python reference was evaluated offline on the public LG 18650HG2 dataset at six temperatures, from 40 to -20 degC. Its S10 model is 3RC-D0, with a drive-fitted middle branch and v1.0 R1. The embedded C99 library reproduces the v1.0 2RC model.
 
 ## Results at a glance
 
 The filter runs four experiments on every drive-cycle run: (1) the correct initial SoC, (2) an initial SoC 20 pp too low, (3) a restart mid-run at 50 % or 90 % SoC when the reference is 70 %, and (4) a +0.2 A current-sensor offset. Errors are SoC RMSE in percentage points (pp) of SoC.
 
-Experiment 1, per temperature, for the v1.0 2RC model and the adopted 2RC-I model (R1 depends on the current):
+3RC-D0 passed all six S10 guards. It lowered experiment-1 mean SoC RMSE from 2.00 to 0.98 pp across the 23 standard runs and lowered the worst run from 6.25 to 2.39 pp. The 40 Mix runs supplied the calibration data and share drive segments with the standard suite. [S10 results](docs/results.md#s10--drive-fitted-third-branch-with-v10-r1)
+
+The historical S7 comparison shows experiment 1 per temperature for v1.0 2RC and 2RC-I (R1 depends on current).
 
 <!-- results:summary_exp1:begin -->
 
@@ -59,9 +61,9 @@ On a Cortex-M4F in float32 the library takes 19,388 B of flash, 17,432 B of it t
 
 <p align="center"><img src="docs/model.svg" alt="2RC equivalent circuit: OCV source, R0, R1 parallel C1, R2 parallel C2, terminal voltage V" width="620"></p>
 
-**Model.** The cell is an open-circuit voltage OCV(SoC, T) in series with an ohmic resistance R0 and two RC branches, a fast one (R1, C1) and a slow one (R2, C2). The current I is positive on discharge. Every parameter is a table over temperature and SoC, read with clamped bilinear interpolation. The OCV comes from the C/20 discharge, corrected onto the HPPC rest voltages; R0 and the RC branches come from the HPPC pulses and rests (`docs/decisions.md` 1.1, 1.2, 1.12).
+**Model.** In v1.0, the cell is an open-circuit voltage OCV(SoC, T) in series with an ohmic resistance R0 and two RC branches, a fast one (R1, C1) and a slow one (R2, C2). The current I is positive on discharge. Every parameter is a table over temperature and SoC, read with clamped bilinear interpolation. The OCV comes from the C/20 discharge, corrected onto the HPPC rest voltages; R0 and the RC branches come from the HPPC pulses and rests (`docs/decisions.md` 1.1, 1.2, 1.12). The 3RC-D0 model adds a 45 s middle branch and fits R3 and a scale on R2 on the 40 Mix runs.
 
-**Filter.** The EKF state is x = [SoC, V1, V2]. The input is the measured current, the measurement is the terminal voltage, and the measured cell temperature selects the table values. Each sample runs a predict step and an update step. The noise settings were tuned once, on one drive cycle (Mix 1 at 25 degC), and frozen (`docs/decisions.md` 1.3, 1.15). When an update pushes SoC outside [0, 1], the whole state is projected onto the bound along the covariance, not truncated (`docs/decisions.md` 1.16).
+**Filter.** The 2RC state is x = [SoC, V1, V2]. The 3RC-D0 state adds V3. The input is the measured current, the measurement is the terminal voltage, and the measured cell temperature selects the table values. Each sample runs a predict step and an update step. The noise settings were tuned once, on one drive cycle (Mix 1 at 25 degC), and frozen (`docs/decisions.md` 1.3, 1.15). When an update pushes SoC outside [0, 1], the whole state is projected onto the bound along the covariance, not truncated (`docs/decisions.md` 1.16).
 
 **Reference SoC.** The reference is coulomb counting on the cycler's own Ah counter from the full charge at the start of each test. Q_ref is the 25 degC C/20 discharge capacity, one value for every temperature (`docs/decisions.md` 1.6, `docs/model.md` C13). The plain coulomb-counting baseline integrates the logged current instead, as a BMS would.
 
@@ -70,9 +72,9 @@ On a Cortex-M4F in float32 the library takes 19,388 B of flash, 17,432 B of it t
 The two model equations, with `a_i = exp(-dt / tau_i)` and the current held over each step:
 
 - RC branches: `V_i(k) = a_i V_i(k-1) + R_i (1 - a_i) I(k-1)`
-- terminal voltage: `V = OCV(SoC, T) - V1 - V2 - R0(SoC, T) I`
+- terminal voltage: subtract the branch voltages and `R0(SoC, T) I` from `OCV(SoC, T)`
 
-The full set, with conventions and symbols, is in [`docs/model.md`](docs/model.md); every decision that affects a result is in [`docs/decisions.md`](docs/decisions.md), written before that result was produced.
+The full equations and conventions are in [`docs/model.md`](docs/model.md). Experiment protocols and outcomes are in [`docs/decisions.md`](docs/decisions.md).
 
 ## What was tried after v1.0
 
@@ -81,6 +83,7 @@ The full set, with conventions and symbols, is in [`docs/model.md`](docs/model.m
 - **S7, R1 that depends on the current: adopted.** The 2RC-I model lowers the SoC error in the cold and is adopted in the Python reference; it makes US06, the cycle with the highest currents, worse from 10 degC down. [Results](docs/results.md#s7-r1-that-depends-on-current-adopted)
 - **S8, R1 by the sign of the current and at low current: three negative results.** Two ways to read R1 under regen (the charging current of regenerative braking) and one low-current R1 fitted on data outside the evaluation set, to undo that US06 regression; each fixed US06 in part but broke guards on other cycles (limits, fixed in advance, on how much any run or cycle may get worse), so 2RC-I stays and the stage is closed. [Results](docs/results.md#s8-r1-by-the-sign-of-the-current-and-at-low-current-three-negative-results)
 - **S9, slow-branch resistances fitted on drive data.** 3RC-D lowered open-loop voltage RMSE and experiment-1 mean SoC RMSE at all six temperatures on the standard cycles. The worst-run guard rejected it after US06 at -10 degC rose from 6.25 to 6.40 pp. [Results](docs/results.md#s9-slow-branch-resistances-fitted-on-drive-data)
+- **S10, drive-fitted third branch with v1.0 R1.** 3RC-D0 improved experiment-1 SoC RMSE on every standard run versus 2RC-I. The unfitted S9 R1 substitution scored better on US06 and had a higher overall mean. [Comparison](results/model_compare_3rcd0.md)
 
 ## Dataset
 
@@ -99,7 +102,7 @@ make readme-check  # fail if README.md or docs/results.md is out of sync with re
 .venv/bin/python -m pytest python/tests -q   # unit tests; those needing the raw data skip without it
 ```
 
-Every target, what it writes and the extra tools some need (the Arm toolchain, Octave) are listed in [`docs/results.md`](docs/results.md#how-to-run-every-target). To reproduce S9 using the earlier outputs, run `make fit-3rcd` and then `make ekf-3rcd`.
+Every target, what it writes and the extra tools some need (the Arm toolchain, Octave) are listed in [`docs/results.md`](docs/results.md#how-to-run-every-target). To reproduce S9 using the earlier outputs, run `make fit-3rcd` and then `make ekf-3rcd`. Run `make accuracy` for the S10 fit, evaluation and separate diagnosis.
 
 ## Limitations
 
@@ -109,9 +112,9 @@ Every target, what it writes and the extra tools some need (the Arm toolchain, O
 - The cell aged over the campaign, which ran 25, 40, 10, 0, -10 and -20 degC in that order, and lost capacity inside the 25 degC block too; one Q_ref is used at every temperature (`results/capacity.md`).
 - The reference SoC is itself coulomb counting, on the cycler's Ah counter, so the coulomb-counting baseline on the logged current agrees with it closely by construction. With the cycler's stated accuracy of 0.1 % of full scale, a real current-sensor offset in the data would not show.
 - The noise settings were tuned on one cycle at one temperature, and the evaluation runs share segments with it, because the mixes are built from segments of the standard cycles (`docs/decisions.md` 1.11). S7 and S8 compared models on the same 62 runs that every stage since S2 has looked at, so those comparisons are on a repeatedly inspected set (1.32).
-- S9 held the 23 standard-cycle runs out of the final parameter fit. Prior diagnostics and the low-SoC boundary choice used those runs, and they share segments with the 40 Mix runs used for calibration.
+- S9 and S10 used 23 previously inspected standard runs for regression checks. They share segments with the 40 Mix runs used for calibration.
 - Errors grow in the cold: at -10 and -20 degC many runs of experiments 2 and 3 never settle inside the 2 pp band. The cycler also caps the cold currents, so the cold drive cycles are lighter loads than the warm ones. With the current offset of experiment 4, four cold runs (Mix 8 at -10 and -20 degC, HWFET and Mix 4 at -20 degC) have a larger SoC RMSE than coulomb counting, and US06 at -10 degC ends with a slightly larger error (`results/ekf_results.csv`).
-- The adopted 2RC-I model runs in the Python reference only; the C library runs the 2RC model. 2RC-I holds R1 flat below its smallest pulse current (about 3 A at 40 to 0 degC, where drive cycles often run), and it makes US06 worse from 10 degC down; none of the three fixes tried in S8 passed its guards.
+- The S7 2RC-I model held R1 flat below its smallest pulse current and made US06 worse from 10 degC down. The S10 experiment replaces its current-axis lookup with v1.0 R1 and refits the slow branches.
 
 The full list, with the fit and OCV assumptions, is in [`docs/results.md`](docs/results.md#limitations-in-full).
 

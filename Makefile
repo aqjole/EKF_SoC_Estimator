@@ -2,9 +2,11 @@
 
 PYTHON := .venv/bin/python
 
-.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd tune ekf c equiv arm sensitivity octave readme readme-check
+.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd accuracy diagnose-accuracy fit-3rcd0 ekf-3rcd0 tune ekf c equiv arm sensitivity octave readme readme-check
 
-all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd readme
+all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd
+	$(MAKE) accuracy
+	$(MAKE) readme
 
 # Fetch the LG 18650HG2 .mat files into data/raw/ and verify their sha256.
 data:
@@ -78,6 +80,21 @@ fit-3rcd:
 # S9: compare the frozen EKF on the two splits after the S1 gate (needs ekf, ekf-r1i and fit-3rcd).
 ekf-3rcd:
 	$(PYTHON) python/compare_3rcd.py
+
+# S10: fit and evaluate against frozen 2RC-I. Diagnosis is separate (decisions 1.44 and 1.47).
+accuracy:
+	$(MAKE) fit-3rcd0
+	$(MAKE) ekf-3rcd0
+	$(MAKE) diagnose-accuracy
+
+diagnose-accuracy:
+	$(PYTHON) python/diagnose_accuracy.py
+
+fit-3rcd0:
+	$(PYTHON) python/fit_3rcd0.py
+
+ekf-3rcd0:
+	$(PYTHON) python/compare_3rcd0.py
 
 # S2: tune the EKF noise settings on the tuning cycle and freeze them (not part of "all": the frozen values are committed).
 # Writes results/tuning.md, results/ekf_config.json and section 1.15 of docs/decisions.md.
