@@ -207,6 +207,7 @@ Special handling (SoC0 is the reference SoC at the first row used; rule details 
 - `results/plots/s8/` (S8, written by `python/compare_r1d.py`, `make ekf-r1d`): `model_compare_r1d.png`, the open-loop RMSE and the experiment-1 mean SoC RMSE against temperature, 2RC, 2RC-I and 2RC-Id (1.33). Step B adds `r1_charge.png`, the charge-side R1 against current per temperature next to the 2RC-I discharge R1 (`python/fit_r1_charge.py`, `make fit-r1c`), and `model_compare_r1c.png`, as `model_compare_r1d.png` with 2RC-Ic added (`python/compare_r1c.py`, `make ekf-r1c`) (1.35). Step C adds `model_compare_r1l.png`, the same columns for 2RC, 2RC-I and 2RC-Il (`python/compare_r1l.py`, `make ekf-r1l`) (1.37).
 - `results/plots/s6/` (S6, written by `python/fit_3rc.py`, `make fit-3rc`, and `python/compare_models.py`, `make compare-models`): `params_3rc.png`, R0 to tau3 against SoC as `params.png` of S1, with R3 and tau3 added (1.21); `model_compare.png`, the open-loop RMSE and the experiment-1 mean SoC RMSE against temperature, 2RC and 3RC (1.22).
 - `results/plots/s9/` (S9, written by `python/fit_3rcd.py`, `make fit-3rcd`, and `python/compare_3rcd.py`, `make ekf-3rcd`): `params_3rcd.png`, R3 and the R2 scale against SoC, one line per temperature, the fitted nodes marked (1.41); `model_compare_3rcd.png`, the open-loop RMSE and the experiment-1 mean SoC RMSE against temperature for 2RC, 2RC-I and 3RC-D, the held-out runs and the calibration runs in separate panels (1.42).
+- `results/plots/s10/` (S10, decision 1.44) contains `accuracy_residuals.png` from `make diagnose-accuracy`, `params_3rcd0.png` from `make fit-3rcd0`, and, after a voltage-gate pass, `model_compare_3rcd0.png` from `make ekf-3rcd0`.
 - Plot files are PNG, matplotlib Agg backend, metadata stripped so a regeneration is byte-identical where matplotlib allows it. The README of `results/plots/` repeats this list.
 
 ### 1.15 EKF noise settings (S2, frozen)
@@ -615,7 +616,7 @@ the drive-fitted middle branch account for polarization with fewer cold US06
 regressions. Compared with the S9 fit, the single change is its starting model,
 from 2RC-I to v1.0 2RC. The S9 fit and verdict remain historical results.
 
-- Baseline revision: `9afe1e559c09b403776ce22e517150b7b5b02fb7` (v1.5).
+- The baseline is revision `9afe1e559c09b403776ce22e517150b7b5b02fb7` (v1.5).
   The S10 report records SHA-256 hashes of the frozen parameters, config and
   comparison evidence and generates run membership from `evaluation_runs`
   and `drive_split`. Reference SoC, Q_ref, current sign, timestamps, exclusions,
@@ -649,7 +650,7 @@ from 2RC-I to v1.0 2RC. The S9 fit and verdict remain historical results.
   Use frozen S2 noise and Jacobians throughout. Peak SoC error,
   convergence time, and the S5 capacity and sampling perturbations on
   standard runs are diagnostics with no additional adoption thresholds.
-- Outputs: `results/accuracy_diagnostics.md`,
+- Generated outputs are `results/accuracy_diagnostics.md`,
   `results/accuracy_residual_bins.csv`, `results/model_fit_3rcd0.md`,
   `results/fit_nodes_3rcd0.csv`, `results/params_3rcd0.csv`,
   `results/model_compare_3rcd0.md`, and, if the voltage gate passes,
@@ -660,6 +661,57 @@ from 2RC-I to v1.0 2RC. The S9 fit and verdict remain historical results.
 - Jacobian and noise variants, HPPC continuity and hysteresis require
   separate prior decisions. Port to C under a separate entry if 3RC-D0
   is adopted.
+
+### 1.45 S10 outcome for 3RC-D0
+
+3RC-D0 passed all six guards and becomes the adopted Python model. Its
+full-run 25 degC US06 voltage RMSE was 23.2363 mV. Every standard run
+improved in experiment 1. The worst experiment-1 RMSE fell from 6.2547
+to 2.3883 pp, both on US06 at -10 degC. Temperature means fell by
+0.33, 0.25, 0.58, 0.68, 2.22 and 1.85 pp from 40 to -20 degC.
+Experiment-4 means fell at every temperature and all reached counts met
+guard 6. The experiment measures performance on this cell and regression
+suite. It supports the R1 interaction hypothesis without isolating its
+physical cause.
+
+The joint fit had rank 46 of 46 and condition number 1.58e3. Its full-rate
+linearity error was 3.55e-15 V. The -20 degC, 0.1 SoC node was unsupported.
+Two R2 scales reached their lower bound. See the fit, comparison and
+diagnostic reports of 1.44 for coefficients, support and ablations.
+
+### 1.46 S10 C99 port of 3RC-D0
+
+- Build the adopted model with `-DEKF_USE_3RCD0=ON` in CMake. The default
+  2RC build keeps the v1.0 API layout, tables and arithmetic. The selected
+  build fixes the state dimension at compile time and allocates no dynamic
+  storage. Float is the default and `-DEKF_USE_DOUBLE=ON` is the reference
+  comparison build.
+- Export immutable tables from `results/params_3rcd0.csv` to a separate
+  source and header. R1 uses Eq. 4 for both signs. Export the shared tau3
+  value as one constant after verifying every table entry equals 45 s.
+  Use state order [SoC, V1, V2, V3]. In Eqs. 6 and 7 the diagonal F, B and
+  Q extend by one entry. In Eq. 8 subtract branch voltages in index order
+  before the ohmic drop and extend H with -1. The Joseph update and SoC
+  projection keep their existing operation order, with the sums traversed
+  from state 0 through state 3. At restart all branch voltages are zero,
+  each branch starts with the S2 branch variance, and the initial sample
+  updates at dt = 0. The measurement uses its own current and predict
+  uses the held current. The C temperature clamp and error returns stay
+  part of the interface.
+- Generate four-state Python vectors for the C unit tests. Exercise table
+  bounds, nonfinite inputs, negative and zero dt, projection and restart.
+  Compare float and double C with the saved Python traces for experiments
+  1, 2, 3 low, 3 high, 3 reference and 4 on all 63 runs. Compare every
+  processed row, including tails, at limits of 0.1 pp and 0.001 pp on
+  maximum absolute SoC difference. Use S2 noise, Python initial conditions,
+  the experiment-4 current offset, and dt = 0 at each restart.
+- Generate `results/equivalence_3rcd0.md` and
+  `results/equivalence_3rcd0.csv` for equivalence, and
+  `results/c_footprint_3rcd0.md` for Cortex-M4 object sections, per-cell
+  state and compiler-reported static stack frames. Use the S3 hard-float
+  build settings plus `-fstack-usage` and check for double helpers.
+  Report target timing only if a target is available. Board-specific
+  deployment budgets require the board and cell count.
 
 ## 2. Dataset facts confirmed in S0
 
