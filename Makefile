@@ -2,12 +2,15 @@
 
 PYTHON := .venv/bin/python
 
-.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd accuracy diagnose-accuracy fit-3rcd0 ekf-3rcd0 tune-3rcd0 ekf-3rcd0n diagnose-regen tune ekf c equiv arm sensitivity octave readme readme-check
+.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd accuracy diagnose-accuracy fit-3rcd0 ekf-3rcd0 tune-3rcd0 ekf-3rcd0n diagnose-regen c-3rcd0 equiv-3rcd0 arm-3rcd0 tune ekf c equiv arm sensitivity octave readme readme-check
 
 all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd
 	$(MAKE) accuracy
 	$(MAKE) ekf-3rcd0n
 	$(MAKE) diagnose-regen
+	$(MAKE) c-3rcd0
+	$(MAKE) equiv-3rcd0
+	$(MAKE) arm-3rcd0
 	$(MAKE) readme
 
 # Fetch the LG 18650HG2 .mat files into data/raw/ and verify their sha256.
@@ -109,6 +112,26 @@ ekf-3rcd0n:
 # S11 B: the regen rows at the 4.2 V limit, read from the stored traces of every model (decision 1.48).
 diagnose-regen:
 	$(PYTHON) python/diagnose_regen.py
+
+# S11 close (decision 1.54): regenerate the 3RC-D0 C tables and test vectors, build the float and the double
+# library with -DEKF_USE_3RCD0=ON and run the unit tests in both.
+c-3rcd0:
+	$(PYTHON) python/export_3rcd0.py
+	cmake -S c -B c/build/3rcd0-float -DEKF_USE_3RCD0=ON -DEKF_USE_DOUBLE=OFF
+	cmake --build c/build/3rcd0-float
+	ctest --test-dir c/build/3rcd0-float --output-on-failure
+	cmake -S c -B c/build/3rcd0-double -DEKF_USE_3RCD0=ON -DEKF_USE_DOUBLE=ON
+	cmake --build c/build/3rcd0-double
+	ctest --test-dir c/build/3rcd0-double --output-on-failure
+
+# S11 close: the 3RC-D0 C build against the Python traces, six experiments on all 63 runs (needs make ekf-3rcd0).
+# Writes results/equivalence_3rcd0.md and .csv; exits 1 when a build reaches its threshold.
+equiv-3rcd0:
+	$(PYTHON) python/compare_c_3rcd0.py
+
+# S11 close: Cortex-M4 sections, sizeof(ekf_t) and static stack frames of the 3RC-D0 build (needs arm-none-eabi-gcc).
+arm-3rcd0:
+	$(PYTHON) python/arm_footprint.py --model 3rcd0
 
 # S2: tune the EKF noise settings on the tuning cycle and freeze them (not part of "all": the frozen values are committed).
 # Writes results/tuning.md, results/ekf_config.json and section 1.15 of docs/decisions.md.

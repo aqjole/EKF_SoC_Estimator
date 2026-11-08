@@ -81,6 +81,9 @@ make all         # every stage below, in order
 | `make tune-3rcd0` | S11 A | searches 864 grid points and 81 refinement points on 40 Mix runs; not in `make all` | `results/tuning_3rcd0.md`, `results/ekf_config_3rcd0.json`, `results/plots/s11/tuning_3rcd0.png` |
 | `make ekf-3rcd0n` | S11 A | evaluates the settings candidate in Python on all 63 runs, eight adoption guards and wrong-start diagnostics | `results/model_compare_3rcd0n.md`, `results/ekf_results_3rcd0n.csv`, `results/plots/s11/model_compare_3rcd0n.png` |
 | `make diagnose-regen` | S11 B | finds the regen rows at the 4.2 V limit in all 63 runs and reports each model's experiment-1 SoC error change across them, from the stored traces | `results/regen_limit.md`, `results/regen_limit.csv`, `results/plots/s11/regen_limit.png` |
+| `make c-3rcd0` | S11 | regenerates the 3RC-D0 C tables and test vectors, builds float and double with `-DEKF_USE_3RCD0=ON` and runs the unit tests | `c/src/ekf_params_3rcd0.c`, `c/include/ekf_params_3rcd0.h`, `c/tests/vectors/vectors_3rcd0.h` |
+| `make equiv-3rcd0` | S11 | compares both 3RC-D0 builds with the Python traces in six experiment cases on all 63 runs | `results/equivalence_3rcd0.md`, `results/equivalence_3rcd0.csv` |
+| `make arm-3rcd0` | S11 | cross-compiles the 3RC-D0 build for a Cortex-M4 with `-fstack-usage` | `results/c_footprint_3rcd0.md` |
 | `make readme` | S4 | copies the results tables into `README.md` and this file | `README.md`, `docs/results.md` |
 | `make readme-check` | S4 | fails if `README.md` or this file is out of sync with `results/` | |
 
@@ -1211,9 +1214,9 @@ ekf_status_t ekf_step(ekf_t *e, ekf_real_t i_a, ekf_real_t v_v, ekf_real_t t_deg
 ekf_real_t   ekf_get_soc(const ekf_t *e);
 ```
 
-`ekf_step` predicts over `dt_s` with the held current, updates with the new sample, then holds its current. `dt_s = 0` means update only, as on the first sample of a run; a negative `dt_s` or a non-finite input (NaN or an infinity) is rejected and leaves the state unchanged. A temperature outside the table range is clamped and returns a warning status (`docs/decisions.md` 1.17). The parameter tables in `c/src/ekf_params.c` are generated from `results/params.csv` by `python/export_params.py`.
+`ekf_step` predicts over `dt_s` with the held current, updates with the new sample, then holds its current. `dt_s = 0` means update only, as on the first sample of a run; a negative `dt_s` or a non-finite input (NaN or an infinity) is rejected and leaves the state unchanged. A temperature outside the table range is clamped and returns a warning status (`docs/decisions.md` 1.17). The parameter tables in `c/src/ekf_params.c` are generated from `results/params.csv` by `python/export_params.py`. The 3RC-D0 tables in `c/src/ekf_params_3rcd0.c` are generated from `results/params_3rcd0.csv` by `python/export_3rcd0.py`, which refuses a third-branch time constant other than 45 s.
 
-**Builds.** `ekf_real_t` is `float` by default; `-DEKF_USE_DOUBLE=ON` makes it `double`. `-DEKF_SANITIZE=ON` adds AddressSanitizer and UndefinedBehaviorSanitizer to the host build. ctest runs the Unity unit tests (`c/tests/test_ekf.c`) and the three committed US06 fixtures in `c/tests/fixtures/`, where the C SoC must match the Python SoC within the same thresholds as the full equivalence run.
+**Builds.** `ekf_real_t` is `float` by default; `-DEKF_USE_DOUBLE=ON` makes it `double`. `-DEKF_SANITIZE=ON` adds AddressSanitizer and UndefinedBehaviorSanitizer to the host build. ctest runs the Unity unit tests (`c/tests/test_ekf.c`) and the three committed US06 fixtures in `c/tests/fixtures/`, where the C SoC must match the Python SoC within the same thresholds as the full equivalence run. `-DEKF_USE_3RCD0=ON` builds the four-state 3RC-D0 filter, the deployment model (`docs/decisions.md` 1.46, 1.54); ctest then runs the unit tests on four-state vectors, and the 2RC fixtures are not built.
 
 **Footprint.** The library is cross-compiled for a Cortex-M4 with a single-precision FPU. It is not linked or run on a target.
 
@@ -1249,11 +1252,87 @@ Result: PASS, none found.
 
 <!-- results:footprint:end -->
 
+**3RC-D0, the deployment model.** S11 adopted no change, so 3RC-D0 with the S2 settings is the model the C port deploys (`docs/decisions.md` 1.54). Its equivalence covers all six experiment cases of every run, each from its own start row, tails included.
+
+<!-- results:equivalence_3rcd0:begin -->
+
+**Result**
+
+| build | threshold (pp) | max \|delta SoC\| (pp) | worst run | largest RMS (pp) | result |
+|---|---|---|---|---|---|
+| float | 0.1 | 1.94e-02 | Mix 4, exp2 at 0 degC (590) | 3.65e-03 | PASS |
+| double | 0.001 | 5.05e-09 | Mix 1, exp3_ref at -10 degC (601) | 2.91e-09 | PASS |
+
+**Per experiment**
+
+| experiment | cases | float max (pp) | float largest RMS (pp) | double max (pp) | double largest RMS (pp) |
+|---|---|---|---|---|---|
+| exp1 | 63 | 5.91e-03 | 1.48e-03 | 5.00e-09 | 2.90e-09 |
+| exp2 | 63 | 1.94e-02 | 1.59e-03 | 5.00e-09 | 2.91e-09 |
+| exp3_low | 63 | 1.36e-02 | 2.42e-03 | 5.00e-09 | 2.90e-09 |
+| exp3_high | 63 | 2.53e-03 | 4.66e-04 | 5.00e-09 | 2.90e-09 |
+| exp3_ref | 63 | 1.73e-02 | 3.65e-03 | 5.05e-09 | 2.91e-09 |
+| exp4 | 63 | 6.51e-03 | 2.52e-03 | 5.00e-09 | 2.89e-09 |
+
+<!-- results:equivalence_3rcd0:end -->
+
+<!-- results:footprint_3rcd0:begin -->
+
+**C library footprint, 3RC-D0 (Cortex-M4, float build)**
+
+Generated by python/arm_footprint.py (make arm-3rcd0), do not edit. The library is cross-compiled only; nothing
+is linked or run on a target.
+
+- Compiler: `arm-none-eabi-gcc (Arm GNU Toolchain 15.3.Rel1 (Build arm-15.149)) 15.3.1 20260627`
+- Flags of the library objects: `-DEKF_USE_3RCD0 -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -O2 -std=c99 -fstack-usage -Wall -Wextra -Wpedantic -Werror -Wdouble-promotion`
+
+Sections of the library objects in bytes, from arm-none-eabi-size. The parameter tables are const, so they
+count in .text (flash), not in .data (RAM). The size marker object and the host tools are not counted.
+
+| object | .text | .data | .bss | total |
+|---|---:|---:|---:|---:|
+| ekf.c.obj | 2028 | 0 | 0 | 2028 |
+| ekf_params_3rcd0.c.obj | 19860 | 0 | 0 | 19860 |
+| total | 21888 | 0 | 0 | 21888 |
+
+sizeof(ekf_t) = 92 bytes: the state of one filter, which the caller owns (one per cell). Read
+with arm-none-eabi-nm -S from the object ekf_t_size_marker[sizeof(ekf_t)] (c/src/ekf_size_marker.c).
+
+**Double-precision helper check**
+
+Undefined symbols of libekf.a (arm-none-eabi-nm -u): `expf`, `memset`.
+
+Double-precision helpers searched for: `__aeabi_d*`, `__aeabi_f2d`, `__aeabi_i2d`, `__aeabi_ui2d`, `__aeabi_l2d`, `__aeabi_ul2d`.
+
+Result: PASS, none found.
+
+**Static stack frames**
+
+From `-fstack-usage` (`ekf.c.su`): the frame of each function of `ekf.c` in bytes, as the compiler
+reports it. A call nests the frames of the functions it calls; nothing here is measured on a target.
+
+| function | bytes | kind |
+|---|---:|---|
+| find_cell | 8 | static |
+| mat_mul | 24 | static |
+| mat_mul_transposed | 16 | static |
+| ekf_interp2 | 32 | static |
+| ekf_init | 0 | static |
+| ekf_predict | 376 | static |
+| ekf_limit_soc | 0 | static |
+| ekf_update | 376 | static |
+| ekf_step | 32 | static |
+| ekf_get_soc | 0 | static |
+
+<!-- results:footprint_3rcd0:end -->
+
+The largest frames belong to `ekf_predict` and `ekf_update`, each of which holds several 4 x 4 matrices; one `ekf_step` nests at most about 450 B of frames (its own 32 B, one of those two, then the interpolation and cell search).
+
 **CI** (`.github/workflows/ci.yml`) has four jobs. None of them downloads the raw data.
 
 - `python`: the unit tests; the generated C tables must match `results/params.csv`; `README.md` and this file must be in sync with `results/` (`python python/update_readme.py --check`).
-- `c-host`: the float build with ASan and UBSan and the double build, each with its unit tests and fixture equivalence.
-- `c-arm`: installs the pinned Arm GNU Toolchain (checked by sha256), cross-compiles, runs the double-precision helper check, and requires the committed `results/c_footprint.md` to match byte for byte.
+- `c-host`: the float build with ASan and UBSan and the double build, each with its unit tests and fixture equivalence; the same two builds of 3RC-D0 with their unit tests.
+- `c-arm`: installs the pinned Arm GNU Toolchain (checked by sha256), cross-compiles, runs the double-precision helper check for both models, and requires the committed `results/c_footprint.md` and `results/c_footprint_3rcd0.md` to match byte for byte.
 - `octave`: installs Ubuntu's GNU Octave and runs the Octave filter in `octave/` on the three committed fixtures against their expected SoC (`python python/compare_octave.py --fixtures`).
 
 CI runs on every push to GitHub.

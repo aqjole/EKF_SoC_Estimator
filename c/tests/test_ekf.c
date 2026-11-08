@@ -10,7 +10,11 @@
 
 #include "ekf.h"
 #include "unity.h"
+#ifdef EKF_USE_3RCD0
+#include "vectors/vectors_3rcd0.h"
+#else
 #include "vectors/vectors.h"
+#endif
 
 #ifdef EKF_USE_DOUBLE
 #define TOL_STATE 1e-12
@@ -49,19 +53,19 @@ static void load_state(ekf_t *e, const vec_state_t *state)
     memcpy(e->P, state->P, sizeof e->P);
 }
 
-static void assert_x(const ekf_real_t expected[3], const ekf_t *e, int line)
+static void assert_x(const ekf_real_t expected[EKF_N_STATE], const ekf_t *e, int line)
 {
     int i;
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < EKF_N_STATE; i++) {
         assert_close(expected[i], e->x[i], TOL_STATE, line);
     }
 }
 
-static void assert_P(const ekf_real_t expected[3][3], const ekf_t *e, int line)
+static void assert_P(const ekf_real_t expected[EKF_N_STATE][EKF_N_STATE], const ekf_t *e, int line)
 {
     int i, j;
-    for (i = 0; i < 3; i++) {
-        for (j = 0; j < 3; j++) {
+    for (i = 0; i < EKF_N_STATE; i++) {
+        for (j = 0; j < EKF_N_STATE; j++) {
             assert_close(expected[i][j], e->P[i][j], TOL_COV, line);
         }
     }
@@ -228,6 +232,20 @@ static void test_step_outside_temperature_axis_runs_at_the_clamped_temperature(v
     TEST_ASSERT_EQUAL_MEMORY(&expected, &ekf, sizeof ekf);
 }
 
+static void test_restart_resets_branch_voltages_and_covariance(void)
+{
+    ekf_t fresh;
+    ekf_init(&fresh, &cfg, EKF_R(0.7));
+    ekf_step(&ekf, I_A, V_V, T_DEGC, EKF_R(0.0));
+    ekf_step(&ekf, I_A, V_V, T_DEGC, DT_S);
+    ekf_init(&ekf, &cfg, EKF_R(0.7));
+
+    TEST_ASSERT_EQUAL_MEMORY(fresh.x, ekf.x, sizeof ekf.x);
+    TEST_ASSERT_EQUAL_MEMORY(fresh.P, ekf.P, sizeof ekf.P);
+    TEST_ASSERT_TRUE(ekf.i_held == EKF_R(0.0));
+    TEST_ASSERT_TRUE(isnan(ekf.y_hat));
+}
+
 static void test_get_soc_returns_the_soc_state(void)
 {
     ekf_step(&ekf, I_A, V_V, T_DEGC, DT_S);
@@ -255,6 +273,7 @@ int main(void)
     RUN_TEST(test_step_with_non_finite_input_leaves_state);
     RUN_TEST(test_step_outside_temperature_axis_returns_warning);
     RUN_TEST(test_step_outside_temperature_axis_runs_at_the_clamped_temperature);
+    RUN_TEST(test_restart_resets_branch_voltages_and_covariance);
     RUN_TEST(test_get_soc_returns_the_soc_state);
     return UNITY_END();
 }

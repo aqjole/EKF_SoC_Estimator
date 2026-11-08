@@ -68,22 +68,25 @@ def tool_settings(cfg, soc0):
     return [repr(value) for value in (cfg.q_soc, cfg.q_v, cfg.r, soc0)]
 
 
-def build_dir(build):
-    return C_DIR / "build" / build
+def build_dir(build, model="2rc"):
+    """c/build/float and c/build/double for the 2RC model, c/build/3rcd0-float and -double for 3RC-D0 (1.54)."""
+    return C_DIR / "build" / (build if model == "2rc" else f"{model}-{build}")
 
 
-def build_c():
-    """Configure and build the host targets of c/ in the float and the double build."""
+def build_c(model="2rc"):
+    """Configure and build the host targets of c/ in the float and the double build of one model."""
+    use_3rcd0 = "ON" if model == "3rcd0" else "OFF"
     for build, use_double in BUILDS.items():
-        subprocess.run(["cmake", "-S", C_DIR, "-B", build_dir(build), f"-DEKF_USE_DOUBLE={use_double}"],
-                       check=True, stdout=subprocess.DEVNULL)
-        subprocess.run(["cmake", "--build", build_dir(build)], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["cmake", "-S", C_DIR, "-B", build_dir(build, model), f"-DEKF_USE_DOUBLE={use_double}",
+                        f"-DEKF_USE_3RCD0={use_3rcd0}"], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["cmake", "--build", build_dir(build, model)], check=True, stdout=subprocess.DEVNULL)
 
 
-def run_c(build, inputs_path, cfg, soc0):
+def run_c(build, inputs_path, cfg, soc0, model="2rc"):
     """Run the tool of one build on an input CSV and return its SoC per row."""
     out_path = inputs_path.with_suffix(f".{build}.soc.csv")
-    subprocess.run([build_dir(build) / "ekf_run_csv", inputs_path, out_path, *tool_settings(cfg, soc0)], check=True)
+    subprocess.run([build_dir(build, model) / "ekf_run_csv", inputs_path, out_path, *tool_settings(cfg, soc0)],
+                   check=True)
     return pd.read_csv(out_path)["soc"].to_numpy()
 
 

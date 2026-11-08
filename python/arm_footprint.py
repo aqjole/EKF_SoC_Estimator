@@ -1,6 +1,8 @@
 """Stage S3 footprint: cross-compile the C library for a Cortex-M4 and write results/c_footprint.md.
 
 Run from the repo root:  .venv/bin/python python/arm_footprint.py   (or: make arm; needs arm-none-eabi-gcc on PATH)
+With --model 3rcd0 (make arm-3rcd0, decision 1.54) the four-state 3RC-D0 build is measured instead, compiled with
+-fstack-usage, and results/c_footprint_3rcd0.md also lists the static stack frame of each library function.
 
   1. c/ is configured with the toolchain file c/cmake/arm-none-eabi.cmake into c/build/arm, and only the ekf
      library is built (the spec, S3: library objects only, nothing is linked).
@@ -14,6 +16,7 @@ Run from the repo root:  .venv/bin/python python/arm_footprint.py   (or: make ar
 Standard library only, so the CI job runs it without installing the Python requirements.
 """
 
+import argparse
 import json
 import shlex
 import subprocess
@@ -24,12 +27,13 @@ from pathlib import Path
 REPO_DIR = Path(__file__).resolve().parent.parent
 C_DIR = REPO_DIR / "c"
 TOOLCHAIN_FILE = C_DIR / "cmake" / "arm-none-eabi.cmake"
-BUILD_DIR = C_DIR / "build" / "arm"
-OBJECT_DIR = BUILD_DIR / "CMakeFiles" / "ekf.dir" / "src"
-LIBRARY = BUILD_DIR / "libekf.a"
-FOOTPRINT_MD = REPO_DIR / "results" / "c_footprint.md"
 
-COUNTED_OBJECTS = ("ekf.c.obj", "ekf_params.c.obj")
+# Model -> (build folder, extra CMake options, counted objects, report, make target).
+MODELS = {
+    "2rc": ("arm", (), ("ekf.c.obj", "ekf_params.c.obj"), "c_footprint.md", "make arm"),
+    "3rcd0": ("arm-3rcd0", ("-DEKF_USE_3RCD0=ON", "-DEKF_STACK_USAGE=ON"), ("ekf.c.obj", "ekf_params_3rcd0.c.obj"),
+              "c_footprint_3rcd0.md", "make arm-3rcd0"),
+}
 MARKER_OBJECT = "ekf_size_marker.c.obj"
 DOUBLE_HELPERS = ("__aeabi_d*", "__aeabi_f2d", "__aeabi_i2d", "__aeabi_ui2d", "__aeabi_l2d", "__aeabi_ul2d")
 
@@ -39,56 +43,73 @@ def output_of(*command):
     return subprocess.run(command, check=True, capture_output=True, text=True).stdout
 
 
-def build_library():
+def build_library(build_dir, options):
     """Configure the ARM build and build the ekf library target only."""
-    subprocess.run(["cmake", "-S", str(C_DIR), "-B", str(BUILD_DIR), f"-DCMAKE_TOOLCHAIN_FILE={TOOLCHAIN_FILE}",
-                    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"], check=True)
-    subprocess.run(["cmake", "--build", str(BUILD_DIR), "--target", "ekf"], check=True)
+    subprocess.run(["cmake", "-S", str(C_DIR), "-B", str(build_dir), f"-DCMAKE_TOOLCHAIN_FILE={TOOLCHAIN_FILE}",
+                    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON", *options], check=True)
+    subprocess.run(["cmake", "--build", str(build_dir), "--target", "ekf"], check=True)
 
 
 def compiler_version():
     return output_of("arm-none-eabi-gcc", "--version").splitlines()[0]
 
 
-def library_flags():
+def library_flags(build_dir):
     """The flags ekf.c was compiled with, from compile_commands.json, without include paths, -c and -o."""
-    commands = json.loads((BUILD_DIR / "compile_commands.json").read_text())
+    commands = json.loads((build_dir / "compile_commands.json").read_text())
     command = next(entry["command"] for entry in commands if entry["file"].endswith("/src/ekf.c"))
     flags = [token for token in shlex.split(command)[1:] if token.startswith("-")]
     return [flag for flag in flags if not flag.startswith("-I") and flag not in ("-c", "-o")]
 
 
-def section_sizes():
+def section_sizes(object_dir, objects):
     """(object, text, data, bss) of each counted object, from the Berkeley format of arm-none-eabi-size."""
-    text = output_of("arm-none-eabi-size", *(str(OBJECT_DIR / name) for name in COUNTED_OBJECTS))
+    text = output_of("arm-none-eabi-size", *(str(object_dir / name) for name in objects))
     rows = []
-    for line, name in zip(text.splitlines()[1:], COUNTED_OBJECTS):
+    for line, name in zip(text.splitlines()[1:], objects):
         text_b, data_b, bss_b = (int(field) for field in line.split()[:3])
         rows.append((name, text_b, data_b, bss_b))
     return rows
 
 
-def ekf_t_size():
+def ekf_t_size(object_dir):
     """sizeof(ekf_t) on the target: the size column of nm -S for ekf_t_size_marker."""
-    for line in output_of("arm-none-eabi-nm", "-S", str(OBJECT_DIR / MARKER_OBJECT)).splitlines():
+    for line in output_of("arm-none-eabi-nm", "-S", str(object_dir / MARKER_OBJECT)).splitlines():
         fields = line.split()
         if fields and fields[-1] == "ekf_t_size_marker":
             return int(fields[1], 16)
     raise RuntimeError("ekf_t_size_marker not found in " + MARKER_OBJECT)
 
 
-def undefined_symbols():
+def undefined_symbols(library):
     """The symbols the library objects reference but do not define, sorted and without duplicates."""
-    lines = output_of("arm-none-eabi-nm", "-u", str(LIBRARY)).splitlines()
+    lines = output_of("arm-none-eabi-nm", "-u", str(library)).splitlines()
     return sorted({line.split()[-1] for line in lines if line.strip().startswith("U ")})
 
 
-def footprint_md(version, flags, rows, state_size, undefined, helpers):
+def stack_frames(object_dir):
+    """(function, bytes, kind) from the compiler's ekf.c.su: the static stack frame of each function of ekf.c."""
+    rows = []
+    for line in (object_dir / "ekf.c.su").read_text().splitlines():
+        location, size, kind = line.split("\t")
+        rows.append((location.rsplit(":", 1)[-1], int(size), kind))
+    return rows
+
+
+def stack_lines(frames):
+    lines = ["", "## Static stack frames", "",
+             "From `-fstack-usage` (`ekf.c.su`): the frame of each function of `ekf.c` in bytes, as the compiler",
+             "reports it. A call nests the frames of the functions it calls; nothing here is measured on a target.", "",
+             "| function | bytes | kind |", "|---|---:|---|"]
+    return lines + [f"| {name} | {size} | {kind} |" for name, size, kind in frames]
+
+
+def footprint_md(version, flags, rows, state_size, undefined, helpers, title, command, frames=None):
     total = [sum(row[k] for row in rows) for k in (1, 2, 3)]
     lines = [
-        "# C library footprint (Cortex-M4, float build)",
+        f"# {title}",
         "",
-        "Generated by python/arm_footprint.py (make arm), do not edit. The library is cross-compiled only; nothing",
+        f"Generated by python/arm_footprint.py ({command}), do not edit. The library is cross-compiled only; nothing",
         "is linked or run on a target.",
         "",
         f"- Compiler: `{version}`",
@@ -116,16 +137,29 @@ def footprint_md(version, flags, rows, state_size, undefined, helpers):
         "",
         ("Result: FAIL, found " + ", ".join(f"`{h}`" for h in helpers) + ".") if helpers else "Result: PASS, none found.",
     ]
+    if frames is not None:
+        lines += stack_lines(frames)
     return "\n".join(lines) + "\n"
 
 
 def main():
-    build_library()
-    undefined = undefined_symbols()
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--model", choices=MODELS, default="2rc")
+    model = parser.parse_args().model
+    folder, options, objects, report, command = MODELS[model]
+    build_dir = C_DIR / "build" / folder
+    object_dir = build_dir / "CMakeFiles" / "ekf.dir" / "src"
+    build_library(build_dir, options)
+    undefined = undefined_symbols(build_dir / "libekf.a")
     helpers = [symbol for symbol in undefined if any(fnmatchcase(symbol, helper) for helper in DOUBLE_HELPERS)]
-    text = footprint_md(compiler_version(), library_flags(), section_sizes(), ekf_t_size(), undefined, helpers)
-    FOOTPRINT_MD.write_text(text)
-    print(f"wrote {FOOTPRINT_MD.relative_to(REPO_DIR)}")
+    title = "C library footprint (Cortex-M4, float build)" if model == "2rc" else \
+        "C library footprint, 3RC-D0 (Cortex-M4, float build)"
+    frames = stack_frames(object_dir) if model == "3rcd0" else None
+    text = footprint_md(compiler_version(), library_flags(build_dir), section_sizes(object_dir, objects),
+                        ekf_t_size(object_dir), undefined, helpers, title, command, frames)
+    path = REPO_DIR / "results" / report
+    path.write_text(text)
+    print(f"wrote {path.relative_to(REPO_DIR)}")
     if helpers:
         sys.exit("double-precision helpers referenced by the library: " + ", ".join(helpers))
 

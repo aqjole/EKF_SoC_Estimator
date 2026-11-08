@@ -98,7 +98,16 @@ def step_cases(params, cfg):
     so the three cases follow one step of the filter.
     """
     ekf = Ekf(params, cfg, 0.0)
-    ekf.x, ekf.P = np.array(X_START), np.array(P_START)
+    x_start = np.array(X_START)
+    p_start = np.array(P_START)
+    x_above_one = np.array(X_ABOVE_ONE)
+    if params.r3 is not None:
+        x_start = np.r_[x_start, 0.008]
+        x_above_one = np.r_[x_above_one, 0.005]
+        p_start = np.pad(p_start, (0, 1))
+        v3_covariance = [1.1e-4, 1e-5, 6e-5, 1.6e-4]
+        p_start[-1, :] = p_start[:, -1] = v3_covariance
+    ekf.x, ekf.P = x_start.copy(), p_start.copy()
     ekf.predict(I_A, TEMP_DEGC, DT_S)
     x_predicted, P_predicted = ekf.x.copy(), ekf.P.copy()
 
@@ -110,11 +119,11 @@ def step_cases(params, cfg):
     ekf.update(I_A, v_v, TEMP_DEGC)
     x_updated, P_updated = ekf.x.copy(), ekf.P.copy()
 
-    x_limited = ekf.limit_soc(np.array(X_ABOVE_ONE), P_updated)
+    x_limited = ekf.limit_soc(x_above_one, P_updated)
 
     return [
         "static const vec_predict_t vec_predict = {",
-        *c_state(X_START, P_START, "    "),
+        *c_state(x_start, p_start, "    "),
         f"    {c_literal(I_A)}, {c_literal(TEMP_DEGC)}, {c_literal(DT_S)},",
         *c_state(x_predicted, P_predicted, "    "),
         "};",
@@ -127,24 +136,26 @@ def step_cases(params, cfg):
         "};",
         "",
         "static const vec_limit_soc_t vec_limit_soc = {",
-        *c_state(X_ABOVE_ONE, P_updated, "    "),
+        *c_state(x_above_one, P_updated, "    "),
         f"    {c_vector(x_limited)},",
         "};",
     ]
 
 
-def vectors_text(params, cfg):
+def vectors_text(params, cfg, *, note=GENERATED_NOTE, header="ekf_params.h"):
     """Return the text of c/tests/vectors/vectors.h."""
+    n_state = len(params.branches) + 1
+    state_names = ", ".join(["SoC", *[f"V{k}" for k in range(1, n_state)]])
     lines = [
-        f"/* {GENERATED_NOTE}",
+        f"/* {note}",
         " *",
         " * Inputs and the values the Python filter (python/ekfsoc/ekf.py) computes from them, for the C unit",
-        " * tests. Tables and grids are those of ekf_params.h; the noise settings are VEC_Q_SOC, VEC_Q_V, VEC_R.",
+        f" * tests. Tables and grids are those of {header}; the noise settings are VEC_Q_SOC, VEC_Q_V, VEC_R.",
         " */",
         "#ifndef EKF_TEST_VECTORS_H",
         "#define EKF_TEST_VECTORS_H",
         "",
-        '#include "ekf_params.h"',
+        f'#include "{header}"',
         '#include "ekf_types.h"',
         "",
         f"#define VEC_Q_SOC {c_literal(cfg.q_soc)}",
@@ -160,10 +171,10 @@ def vectors_text(params, cfg):
         "    ekf_real_t expected;",
         "} vec_interp2_t;",
         "",
-        "/* A filter state x = [SoC, V1, V2] and its covariance P. */",
+        f"/* A filter state x = [{state_names}] and its covariance P. */",
         "typedef struct {",
-        "    ekf_real_t x[3];",
-        "    ekf_real_t P[3][3];",
+        f"    ekf_real_t x[{n_state}];",
+        f"    ekf_real_t P[{n_state}][{n_state}];",
         "} vec_state_t;",
         "",
         "/* predict (Eq. 6, 7): before, then i_held over dt_s at t_degc, gives after. */",
@@ -184,7 +195,7 @@ def vectors_text(params, cfg):
         "/* limit_soc (Eq. 10): before.x with SoC above 1 and before.P give x; P is not changed. */",
         "typedef struct {",
         "    vec_state_t before;",
-        "    ekf_real_t x[3];",
+        f"    ekf_real_t x[{n_state}];",
         "} vec_limit_soc_t;",
         "",
         *interp2_lines(params, cfg),

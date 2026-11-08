@@ -1,4 +1,4 @@
-/* The extended Kalman filter of the 2RC model, state x = [SoC, V1, V2], input I, measurement V.
+/* The extended Kalman filter of the 2RC or 3RC-D0 model, input I, measurement V.
  *
  * The C port of python/ekfsoc/ekf.py and of find_cell / interp2 in python/ekfsoc/model.py, function
  * for function and with the same operation order. Equation numbers ("Eq. n") are those of
@@ -8,8 +8,15 @@
 #ifndef EKF_H
 #define EKF_H
 
-#include "ekf_params.h"
 #include "ekf_types.h"
+
+#ifdef EKF_USE_3RCD0
+#include "ekf_params_3rcd0.h"
+#define EKF_N_STATE 4
+#else
+#include "ekf_params.h"
+#define EKF_N_STATE 3
+#endif
 
 typedef enum {
     EKF_OK = 0,
@@ -22,10 +29,10 @@ typedef enum {
 /* The noise settings of the filter (as EkfConfig in Python) and the model tables it reads.
  *
  * q_soc       process noise of the SoC state in 1/s (Q[0][0] = q_soc * dt)
- * q_v         process noise of V1 and V2 in V^2/s (Q[1][1] = Q[2][2] = q_v * dt)
+ * q_v         process noise of every branch voltage in V^2/s (Q[i][i] = q_v * dt for i >= 1)
  * r           measurement noise variance in V^2
  * p0_soc_std  initial standard deviation of the SoC state (0.2 = 20 pp)
- * p0_v_std    initial standard deviation of V1 and V2 in V
+ * p0_v_std    initial standard deviation of every branch voltage in V
  */
 typedef struct {
     ekf_real_t q_soc, q_v, r, p0_soc_std, p0_v_std;
@@ -36,14 +43,14 @@ typedef struct {
  * held over the next step (docs/model.md C11); y_hat is the voltage predicted before the last
  * measurement was used (Eq. 8), NaN before the first step. */
 typedef struct {
-    ekf_real_t x[3];
-    ekf_real_t P[3][3];
+    ekf_real_t x[EKF_N_STATE];
+    ekf_real_t P[EKF_N_STATE][EKF_N_STATE];
     ekf_real_t i_held;
     ekf_real_t y_hat;
     const ekf_cfg_t *cfg;
 } ekf_t;
 
-/* Start a filter at x = [soc0, 0, 0] with P = diag(p0_soc_std^2, p0_v_std^2, p0_v_std^2). */
+/* Start at soc0 with zero branch voltages and the configured diagonal covariance. */
 ekf_status_t ekf_init(ekf_t *e, const ekf_cfg_t *cfg, ekf_real_t soc0);
 
 /* Process one sample: predict over dt_s with the held current (skipped when dt_s = 0), update with

@@ -44,18 +44,31 @@ The C port (v1.0 2RC model) against the Python reference, experiment 1 on all 63
 
 <!-- results:summary_equivalence:end -->
 
+The C port of the deployment model, 3RC-D0 with the S2 settings, against the Python reference in all six experiment cases (1, 2, 3 low, 3 high, 3 reference, 4) on all 63 runs:
+
+<!-- results:summary_equivalence_3rcd0:begin -->
+
+**Result**
+
+| build | threshold (pp) | max \|delta SoC\| (pp) | worst run | largest RMS (pp) | result |
+|---|---|---|---|---|---|
+| float | 0.1 | 1.94e-02 | Mix 4, exp2 at 0 degC (590) | 3.65e-03 | PASS |
+| double | 0.001 | 5.05e-09 | Mix 1, exp3_ref at -10 degC (601) | 2.91e-09 | PASS |
+
+<!-- results:summary_equivalence_3rcd0:end -->
+
 ![SoC RMSE per experiment and temperature](results/plots/s2/summary_rmse.png)
 
 *Per-run SoC RMSE of the v1.0 2RC filter in all four experiments (experiment 3 split into its low and high start).*
 
-On a Cortex-M4F in float32 the library takes 19,388 B of flash, 17,432 B of it the const parameter tables, no .data or .bss, and 60 B of state per filter, owned by the caller; it needs no double-precision helpers (`results/c_footprint.md`). All tables and plots of every stage are in [`docs/results.md`](docs/results.md).
+On a Cortex-M4F in float32 the library takes 19,388 B of flash, 17,432 B of it the const parameter tables, no .data or .bss, and 60 B of state per filter, owned by the caller; it needs no double-precision helpers (`results/c_footprint.md`). The 3RC-D0 build, the deployment model since S11, takes 21,888 B of flash, 19,860 B of it the tables, and 92 B of state per filter; its largest static stack frame is 376 B and it also needs no double-precision helpers (`results/c_footprint_3rcd0.md`). All tables and plots of every stage are in [`docs/results.md`](docs/results.md).
 
 ## Claims
 
 1. **The EKF recovers from a wrong initial SoC and keeps a current-sensor offset bounded, where plain coulomb counting does not.** This holds in nearly every run at 40, 25, 10 and 0 degC. At -10 and -20 degC it holds only in part: in many cold runs the error does not settle inside the +-2 pp band before the end of the run ("not reached"), and some cold runs end several pp off.
    Evidence: the convergence tables of experiments 2 and 3 (their `reached` rows count the runs per temperature) and the end-of-window errors of experiment 4, where coulomb counting drifts with the offset and the EKF does not ([S2 results](docs/results.md#s2-ekf-experiments)).
 2. **The float32 C port reproduces the Python reference to within 0.1 pp of SoC.**
-   Evidence: `results/equivalence.md` runs the C filter and the Python filter on every evaluation run and the tuning cycle and compares the SoC row by row; the worst case is in the [C port equivalence](docs/results.md#s3-c-port-equivalence) table.
+   Evidence: `results/equivalence.md` (v1.0 2RC, experiment 1) and `results/equivalence_3rcd0.md` (3RC-D0, all six experiment cases) run the C filter and the Python filter on every evaluation run and the tuning cycle and compare the SoC row by row; the worst case is in the [C port equivalence](docs/results.md#s3-c-port-equivalence) table.
 
 ## Overview
 
@@ -67,7 +80,7 @@ On a Cortex-M4F in float32 the library takes 19,388 B of flash, 17,432 B of it t
 
 **Reference SoC.** The reference is coulomb counting on the cycler's own Ah counter from the full charge at the start of each test. Q_ref is the 25 degC C/20 discharge capacity, one value for every temperature (`docs/decisions.md` 1.6, `docs/model.md` C13). The plain coulomb-counting baseline integrates the logged current instead, as a BMS would.
 
-**C port.** `c/` holds a C99 library with the same equations in the same operation order. It uses no dynamic allocation, no mutable globals and no file I/O. `ekf_real_t` is `float` by default and `double` on request.
+**C port.** `c/` holds a C99 library with the same equations in the same operation order. It uses no dynamic allocation, no mutable globals and no file I/O. `ekf_real_t` is `float` by default and `double` on request. The default build is the v1.0 2RC filter; `-DEKF_USE_3RCD0=ON` builds the four-state 3RC-D0 filter, the model selected for deployment (`docs/decisions.md` 1.54).
 
 The two model equations, with `a_i = exp(-dt / tau_i)` and the current held over each step:
 
@@ -86,6 +99,7 @@ The full equations and conventions are in [`docs/model.md`](docs/model.md). Expe
 - **S10, drive-fitted third branch with v1.0 R1.** 3RC-D0 improved experiment-1 SoC RMSE on every standard run versus 2RC-I. The unfitted S9 R1 substitution scored better on US06 and had a higher overall mean. [Comparison](results/model_compare_3rcd0.md)
 - **S11 step A, noise settings and initial branch covariance.** A 945-point search on the 40 Mix runs cut its calibration objective from 2.92 to 1.10 pp, but the chosen settings failed six of eight adoption guards: a 5 mV prior on the branch voltages forgets a rested wrong start within a second and collapses a start under load, and the -20 degC runs get worse. The S2 settings stay. [Comparison](results/model_compare_3rcd0n.md) · [Search](results/tuning_3rcd0.md)
 - **S11 step B, regen rows at the 4.2 V limit.** Every run meets regen rows held at the cycler's 4.2 V limit near full charge, and the adopted model's cold SoC error moves 3 to 5 pp per run across them. Skipping the update there fails a fixed guard, and a regen resistance term does not move the SoC, so S11 adopts nothing. [Diagnostic](results/regen_limit.md)
+- **S11 close, C port of 3RC-D0.** With nothing adopted in S11, 3RC-D0 with the S2 settings is the deployment model. Its four-state C build matches Python in every experiment case of all 63 runs (float within 0.02 pp) and fits in 21,888 B of Cortex-M4 flash with 92 B of state. [Equivalence](results/equivalence_3rcd0.md) · [Footprint](results/c_footprint_3rcd0.md)
 
 ## Dataset
 

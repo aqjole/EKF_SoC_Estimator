@@ -22,6 +22,7 @@ from ekfsoc.constants import REPO_DIR
 README_SOURCES = [
     ("summary_exp1", "results/model_compare_r1i.md", ("Experiment 1",)),
     ("summary_equivalence", "results/equivalence.md", ("Result",)),
+    ("summary_equivalence_3rcd0", "results/equivalence_3rcd0.md", ("Result",)),
 ]
 
 RESULTS_SOURCES = [
@@ -50,6 +51,9 @@ RESULTS_SOURCES = [
     ("equivalence", "results/equivalence.md", ("Result",)),
     ("equivalence", "results/equivalence.md", ("Per temperature",)),
     ("footprint", "results/c_footprint.md", ("C library footprint (Cortex-M4, float build)",)),
+    ("equivalence_3rcd0", "results/equivalence_3rcd0.md", ("Result",)),
+    ("equivalence_3rcd0", "results/equivalence_3rcd0.md", ("Per experiment",)),
+    ("footprint_3rcd0", "results/c_footprint_3rcd0.md", ("C library footprint, 3RC-D0 (Cortex-M4, float build)",)),
     ("sensitivity_capacity", "results/sensitivity.md", ("Capacity error: the filter capacity at -5 % and +5 %",)),
     ("sensitivity_rate", "results/sensitivity.md", ("Sample rate: every 10th row (1 Hz)",)),
     ("equivalence_octave", "results/equivalence_octave.md", ("Result",)),

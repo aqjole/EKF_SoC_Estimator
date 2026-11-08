@@ -88,10 +88,10 @@ def c_array(declaration, comment, body):
     return ["", f"/* {comment} */", f"const ekf_real_t {declaration} = {{", *body, "};"]
 
 
-def header_text(params):
+def header_text(params, *, tables=C_TABLES, note=GENERATED_NOTE, tau3_s=None):
     """Return the text of c/include/ekf_params.h: the size defines, Q_ref, the nine arrays and the ekf_params_t struct."""
     lines = [
-        f"/* {GENERATED_NOTE}",
+        f"/* {note}",
         " *",
         " * The model tables of docs/model.md on the two axes of C15. Table row j is the temperature",
         " * ekf_t_grid_degc[j] (descending, 40 down to -20 degC) and column m is the SoC ekf_soc_grid[m]",
@@ -105,12 +105,16 @@ def header_text(params):
         f"#define EKF_N_T {len(params.t_grid)}",
         f"#define EKF_N_SOC {len(params.soc_grid)}",
         f"#define EKF_Q_REF_AH {c_literal(Q_REF_AH)}  /* Q_ref in Ah, Q_REF_AH of python/ekfsoc/constants.py (docs/model.md C4) */",
+    ]
+    if tau3_s is not None:
+        lines.append(f"#define EKF_TAU3_S {c_literal(tau3_s)}  /* fixed middle-branch time constant in s */")
+    lines += [
         "",
         "extern const ekf_real_t ekf_t_grid_degc[EKF_N_T];  /* temperature axis in degC */",
         "extern const ekf_real_t ekf_soc_grid[EKF_N_SOC];  /* SoC axis as a fraction */",
     ]
     lines += [f"extern const ekf_real_t {c_name}[EKF_N_T][EKF_N_SOC];  /* {meaning} */"
-              for _, c_name, meaning in C_TABLES]
+              for _, c_name, meaning in tables]
     lines += [
         "",
         "/* One set of model tables. Each table pointer is row-major: entry [j][m] is at j * EKF_N_SOC + m. */",
@@ -118,7 +122,7 @@ def header_text(params):
         "    const ekf_real_t *t_grid;  /* temperature axis in degC, EKF_N_T nodes */",
         "    const ekf_real_t *soc_grid;  /* SoC axis as a fraction, EKF_N_SOC nodes */",
     ]
-    lines += [f"    const ekf_real_t *{attribute};  /* {meaning} */" for attribute, _, meaning in C_TABLES]
+    lines += [f"    const ekf_real_t *{attribute};  /* {meaning} */" for attribute, _, meaning in tables]
     lines += [
         "} ekf_params_t;",
         "",
@@ -129,14 +133,14 @@ def header_text(params):
     return "\n".join(lines) + "\n"
 
 
-def source_text(params):
+def source_text(params, *, tables=C_TABLES, note=GENERATED_NOTE, header="ekf_params.h"):
     """Return the text of c/src/ekf_params.c: the two axes and the seven tables as const ekf_real_t arrays, and ekf_params_default."""
-    lines = [f"/* {GENERATED_NOTE} */", "", '#include "ekf_params.h"']
+    lines = [f"/* {note} */", "", f'#include "{header}"']
     lines += c_array("ekf_t_grid_degc[EKF_N_T]", "temperature axis in degC, one table row each",
                      c_values_lines(params.t_grid, "    "))
     lines += c_array("ekf_soc_grid[EKF_N_SOC]", "SoC axis as a fraction, one table column each",
                      c_values_lines(params.soc_grid, "    "))
-    for attribute, c_name, meaning in C_TABLES:
+    for attribute, c_name, meaning in tables:
         body = []
         for temp, row in zip(params.t_grid, getattr(params, attribute)):
             body += [f"    {{ /* T = {temp:g} degC */", *c_values_lines(row, "        "), "    },"]
@@ -148,17 +152,17 @@ def source_text(params):
         "    .t_grid = ekf_t_grid_degc,",
         "    .soc_grid = ekf_soc_grid,",
     ]
-    lines += [f"    .{attribute} = &{c_name}[0][0]," for attribute, c_name, _ in C_TABLES]
+    lines += [f"    .{attribute} = &{c_name}[0][0]," for attribute, c_name, _ in tables]
     lines += ["};"]
     return "\n".join(lines) + "\n"
 
 
-def write_c_files(params, c_path, h_path):
+def write_c_files(params, c_path, h_path, *, tables=C_TABLES, note=GENERATED_NOTE, tau3_s=None):
     """Write the C source and header for `params`; refuse axes that are not the project grids."""
     if not np.allclose(params.t_grid, T_GRID_DEGC) or not np.allclose(params.soc_grid, SOC_GRID, rtol=0.0, atol=1e-6):
         raise ValueError("params axes are not the project grids (T_GRID_DEGC, SOC_GRID)")
-    write_text(c_path, source_text(params))
-    write_text(h_path, header_text(params))
+    write_text(c_path, source_text(params, tables=tables, note=note, header=h_path.name))
+    write_text(h_path, header_text(params, tables=tables, note=note, tau3_s=tau3_s))
 
 
 # --- results/params.md ---------------------------------------------------------------------------

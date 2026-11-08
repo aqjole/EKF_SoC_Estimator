@@ -1,8 +1,7 @@
-/* The extended Kalman filter of the 2RC model: the C port of python/ekfsoc/ekf.py.
+/* The 2RC and 3RC-D0 filters from python/ekfsoc/ekf.py.
  *
  * Every function repeats its Python namesake with the same operation order, so the double build
- * matches Python to rounding. Equation numbers ("Eq. n") are those of docs/model.md. Each 3 x 3
- * product is its own named step, and every sum over k runs k = 0, 1, 2 from zero.
+ * matches Python to rounding. Equation numbers ("Eq. n") are those of docs/model.md. Matrix products are separate steps, with every sum in state order from zero.
  */
 #include "ekf.h"
 
@@ -77,33 +76,33 @@ static ekf_real_t lookup(const ekf_t *e, const ekf_real_t *table, ekf_real_t t_d
     return ekf_interp2(table, params->t_grid, EKF_N_T, params->soc_grid, EKF_N_SOC, t_degc, soc);
 }
 
-static ekf_real_t dot3(const ekf_real_t a[3], const ekf_real_t b[3])
+static ekf_real_t dot_state(const ekf_real_t a[EKF_N_STATE], const ekf_real_t b[EKF_N_STATE])
 {
     ekf_real_t sum = EKF_R(0.0);
     int k;
-    for (k = 0; k < 3; k++) {
+    for (k = 0; k < EKF_N_STATE; k++) {
         sum += a[k] * b[k];
     }
     return sum;
 }
 
 /* out = a @ v */
-static void mat3_vec(ekf_real_t a[3][3], const ekf_real_t v[3], ekf_real_t out[3])
+static void mat_vec(ekf_real_t a[EKF_N_STATE][EKF_N_STATE], const ekf_real_t v[EKF_N_STATE], ekf_real_t out[EKF_N_STATE])
 {
     int i;
-    for (i = 0; i < 3; i++) {
-        out[i] = dot3(a[i], v);
+    for (i = 0; i < EKF_N_STATE; i++) {
+        out[i] = dot_state(a[i], v);
     }
 }
 
 /* out = a @ b */
-static void mat3_mul(ekf_real_t a[3][3], ekf_real_t b[3][3], ekf_real_t out[3][3])
+static void mat_mul(ekf_real_t a[EKF_N_STATE][EKF_N_STATE], ekf_real_t b[EKF_N_STATE][EKF_N_STATE], ekf_real_t out[EKF_N_STATE][EKF_N_STATE])
 {
     int i, j, k;
-    for (i = 0; i < 3; i++) {
-        for (j = 0; j < 3; j++) {
+    for (i = 0; i < EKF_N_STATE; i++) {
+        for (j = 0; j < EKF_N_STATE; j++) {
             ekf_real_t sum = EKF_R(0.0);
-            for (k = 0; k < 3; k++) {
+            for (k = 0; k < EKF_N_STATE; k++) {
                 sum += a[i][k] * b[k][j];
             }
             out[i][j] = sum;
@@ -112,12 +111,12 @@ static void mat3_mul(ekf_real_t a[3][3], ekf_real_t b[3][3], ekf_real_t out[3][3
 }
 
 /* out = a @ b.T */
-static void mat3_mul_transposed(ekf_real_t a[3][3], ekf_real_t b[3][3], ekf_real_t out[3][3])
+static void mat_mul_transposed(ekf_real_t a[EKF_N_STATE][EKF_N_STATE], ekf_real_t b[EKF_N_STATE][EKF_N_STATE], ekf_real_t out[EKF_N_STATE][EKF_N_STATE])
 {
     int i, j;
-    for (i = 0; i < 3; i++) {
-        for (j = 0; j < 3; j++) {
-            out[i][j] = dot3(a[i], b[j]);
+    for (i = 0; i < EKF_N_STATE; i++) {
+        for (j = 0; j < EKF_N_STATE; j++) {
+            out[i][j] = dot_state(a[i], b[j]);
         }
     }
 }
@@ -139,14 +138,20 @@ ekf_status_t ekf_init(ekf_t *e, const ekf_cfg_t *cfg, ekf_real_t soc0)
     e->x[0] = soc0;
     e->x[1] = EKF_R(0.0);
     e->x[2] = EKF_R(0.0);
-    for (i = 0; i < 3; i++) {
-        for (j = 0; j < 3; j++) {
+#ifdef EKF_USE_3RCD0
+    e->x[3] = EKF_R(0.0);
+#endif
+    for (i = 0; i < EKF_N_STATE; i++) {
+        for (j = 0; j < EKF_N_STATE; j++) {
             e->P[i][j] = EKF_R(0.0);
         }
     }
     e->P[0][0] = var_soc;
     e->P[1][1] = var_v;
     e->P[2][2] = var_v;
+#ifdef EKF_USE_3RCD0
+    e->P[3][3] = var_v;
+#endif
     e->i_held = EKF_R(0.0);
     e->y_hat = (ekf_real_t)NAN;
     e->cfg = cfg;
@@ -165,33 +170,46 @@ void ekf_predict(ekf_t *e, ekf_real_t i_held, ekf_real_t t_degc, ekf_real_t dt_s
 
     ekf_real_t a1 = EKF_EXP(-dt_s / tau1);
     ekf_real_t a2 = EKF_EXP(-dt_s / tau2);
-    ekf_real_t F[3][3] = {
+#ifdef EKF_USE_3RCD0
+    ekf_real_t r3 = lookup(e, params->r3, t_degc, soc);
+    ekf_real_t a3 = EKF_EXP(-dt_s / EKF_TAU3_S);
+#endif
+    ekf_real_t F[EKF_N_STATE][EKF_N_STATE] = {
         {EKF_R(1.0), EKF_R(0.0), EKF_R(0.0)},
         {EKF_R(0.0), a1, EKF_R(0.0)},
         {EKF_R(0.0), EKF_R(0.0), a2},
+#ifdef EKF_USE_3RCD0
+        {EKF_R(0.0), EKF_R(0.0), EKF_R(0.0), a3},
+#endif
     };
-    ekf_real_t B[3] = {
+    ekf_real_t B[EKF_N_STATE] = {
         -dt_s / (EKF_R(3600.0) * EKF_Q_REF_AH),
         r1 * (EKF_R(1.0) - a1),
         r2 * (EKF_R(1.0) - a2),
+#ifdef EKF_USE_3RCD0
+        r3 * (EKF_R(1.0) - a3),
+#endif
     };
-    ekf_real_t Q[3][3] = {
+    ekf_real_t Q[EKF_N_STATE][EKF_N_STATE] = {
         {cfg->q_soc * dt_s, EKF_R(0.0), EKF_R(0.0)},
         {EKF_R(0.0), cfg->q_v * dt_s, EKF_R(0.0)},
         {EKF_R(0.0), EKF_R(0.0), cfg->q_v * dt_s},
+#ifdef EKF_USE_3RCD0
+        {EKF_R(0.0), EKF_R(0.0), EKF_R(0.0), cfg->q_v * dt_s},
+#endif
     };
-    ekf_real_t F_x[3], F_P[3][3], F_P_Ft[3][3];
+    ekf_real_t F_x[EKF_N_STATE], F_P[EKF_N_STATE][EKF_N_STATE], F_P_Ft[EKF_N_STATE][EKF_N_STATE];
     int i, j;
 
-    mat3_vec(F, e->x, F_x);
-    for (i = 0; i < 3; i++) {
+    mat_vec(F, e->x, F_x);
+    for (i = 0; i < EKF_N_STATE; i++) {
         e->x[i] = F_x[i] + B[i] * i_held;  /* Eq. 6 */
     }
 
-    mat3_mul(F, e->P, F_P);
-    mat3_mul_transposed(F_P, F, F_P_Ft);
-    for (i = 0; i < 3; i++) {
-        for (j = 0; j < 3; j++) {
+    mat_mul(F, e->P, F_P);
+    mat_mul_transposed(F_P, F, F_P_Ft);
+    for (i = 0; i < EKF_N_STATE; i++) {
+        for (j = 0; j < EKF_N_STATE; j++) {
             e->P[i][j] = F_P_Ft[i][j] + Q[i][j];  /* Eq. 7 */
         }
     }
@@ -209,7 +227,7 @@ void ekf_limit_soc(ekf_t *e)
     }
 
     excess = soc - soc_bound;
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < EKF_N_STATE; i++) {
         ekf_real_t shift = e->P[i][0] * excess / e->P[0][0];
         e->x[i] = e->x[i] - shift;  /* Eq. 10, the projection along P[:, 0] */
     }
@@ -227,38 +245,47 @@ void ekf_update(ekf_t *e, ekf_real_t i_a, ekf_real_t v_v, ekf_real_t t_degc)
     ekf_real_t docv = lookup(e, params->docv, t_degc, soc_prior);
     ekf_real_t r0 = lookup(e, params->r0, t_degc, soc_prior);
 
-    ekf_real_t y_hat = ocv - v1_prior - v2_prior - r0 * i_a;  /* Eq. 8 */
-    ekf_real_t H[3] = {docv, EKF_R(-1.0), EKF_R(-1.0)};  /* Eq. 8, dR0/dSoC left out */
+    ekf_real_t v_terminal = ocv - v1_prior - v2_prior;
+#ifdef EKF_USE_3RCD0
+    v_terminal -= e->x[3];
+#endif
+    ekf_real_t y_hat = v_terminal - r0 * i_a;  /* Eq. 8 */
+    ekf_real_t H[EKF_N_STATE] = {  /* Eq. 8, dR0/dSoC left out */
+        docv, EKF_R(-1.0), EKF_R(-1.0),
+#ifdef EKF_USE_3RCD0
+        EKF_R(-1.0),
+#endif
+    };
 
-    ekf_real_t P_Ht[3], K[3], x_post[3];
-    ekf_real_t I_KH[3][3], I_KH_P[3][3], I_KH_P_I_KH_t[3][3], K_R_Kt[3][3];
+    ekf_real_t P_Ht[EKF_N_STATE], K[EKF_N_STATE], x_post[EKF_N_STATE];
+    ekf_real_t I_KH[EKF_N_STATE][EKF_N_STATE], I_KH_P[EKF_N_STATE][EKF_N_STATE], I_KH_P_I_KH_t[EKF_N_STATE][EKF_N_STATE], K_R_Kt[EKF_N_STATE][EKF_N_STATE];
     ekf_real_t S, innovation;
     int i, j;
 
-    mat3_vec(e->P, H, P_Ht);
-    S = dot3(H, P_Ht) + cfg->r;  /* Eq. 9 */
-    for (i = 0; i < 3; i++) {
+    mat_vec(e->P, H, P_Ht);
+    S = dot_state(H, P_Ht) + cfg->r;  /* Eq. 9 */
+    for (i = 0; i < EKF_N_STATE; i++) {
         K[i] = P_Ht[i] / S;  /* Eq. 9 */
     }
 
     innovation = v_v - y_hat;
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < EKF_N_STATE; i++) {
         x_post[i] = e->x[i] + K[i] * innovation;  /* Eq. 10 */
     }
 
-    for (i = 0; i < 3; i++) {
-        for (j = 0; j < 3; j++) {
+    for (i = 0; i < EKF_N_STATE; i++) {
+        for (j = 0; j < EKF_N_STATE; j++) {
             ekf_real_t identity = (i == j) ? EKF_R(1.0) : EKF_R(0.0);
             I_KH[i][j] = identity - K[i] * H[j];
             K_R_Kt[i][j] = cfg->r * (K[i] * K[j]);
         }
     }
-    mat3_mul(I_KH, e->P, I_KH_P);
-    mat3_mul_transposed(I_KH_P, I_KH, I_KH_P_I_KH_t);
+    mat_mul(I_KH, e->P, I_KH_P);
+    mat_mul_transposed(I_KH_P, I_KH, I_KH_P_I_KH_t);
 
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < EKF_N_STATE; i++) {
         e->x[i] = x_post[i];
-        for (j = 0; j < 3; j++) {
+        for (j = 0; j < EKF_N_STATE; j++) {
             e->P[i][j] = I_KH_P_I_KH_t[i][j] + K_R_Kt[i][j];  /* Eq. 11 */
         }
     }
