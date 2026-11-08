@@ -84,6 +84,7 @@ The full equations and conventions are in [`docs/model.md`](docs/model.md). Expe
 - **S8, R1 by the sign of the current and at low current: three negative results.** Two ways to read R1 under regen (the charging current of regenerative braking) and one low-current R1 fitted on data outside the evaluation set, to undo that US06 regression; each fixed US06 in part but broke guards on other cycles (limits, fixed in advance, on how much any run or cycle may get worse), so 2RC-I stays and the stage is closed. [Results](docs/results.md#s8-r1-by-the-sign-of-the-current-and-at-low-current-three-negative-results)
 - **S9, slow-branch resistances fitted on drive data.** 3RC-D lowered open-loop voltage RMSE and experiment-1 mean SoC RMSE at all six temperatures on the standard cycles. The worst-run guard rejected it after US06 at -10 degC rose from 6.25 to 6.40 pp. [Results](docs/results.md#s9-slow-branch-resistances-fitted-on-drive-data)
 - **S10, drive-fitted third branch with v1.0 R1.** 3RC-D0 improved experiment-1 SoC RMSE on every standard run versus 2RC-I. The unfitted S9 R1 substitution scored better on US06 and had a higher overall mean. [Comparison](results/model_compare_3rcd0.md)
+- **S11 step A, noise settings and initial branch covariance.** A 945-point search on the 40 Mix runs cut its calibration objective from 2.92 to 1.10 pp, but the chosen settings failed six of eight adoption guards: a 5 mV prior on the branch voltages forgets a rested wrong start within a second and collapses a start under load, and the -20 degC runs get worse. The S2 settings stay. [Comparison](results/model_compare_3rcd0n.md) · [Search](results/tuning_3rcd0.md)
 
 ## Dataset
 
@@ -103,6 +104,8 @@ make readme-check  # fail if README.md or docs/results.md is out of sync with re
 ```
 
 Every target, what it writes and the extra tools some need (the Arm toolchain, Octave) are listed in [`docs/results.md`](docs/results.md#how-to-run-every-target). To reproduce S9 using the earlier outputs, run `make fit-3rcd` and then `make ekf-3rcd`. Run `make accuracy` for the S10 fit, evaluation and separate diagnosis.
+
+Run `make ekf-3rcd0n` to reproduce the S11 step A comparison from the saved candidate settings; `make tune-3rcd0` repeats the search itself (outside `make all`, needs a host C compiler).
 
 ## Limitations
 

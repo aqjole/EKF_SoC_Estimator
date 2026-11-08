@@ -160,7 +160,8 @@ class Ekf:
         return float(self.x[0])
 
 
-def run_ekf(params, cfg, i, v, temp, dt, soc0, start=0, current_offset=0.0, q_ref_ah=Q_REF_AH):
+def run_ekf(params, cfg, i, v, temp, dt, soc0, start=0, current_offset=0.0, q_ref_ah=Q_REF_AH,
+            record_state=False):
     """Run the filter over rows start .. len(i)-1 of a run and return the per-row results as a dict.
 
     i, v, temp, dt are float64 arrays like those of a loader Run (A, V, degC, s; dt[k] = t[k] - t[k-1]);
@@ -171,6 +172,8 @@ def run_ekf(params, cfg, i, v, temp, dt, soc0, start=0, current_offset=0.0, q_re
       soc      posterior SoC (fraction)
       v_pred   terminal voltage predicted before the update (Eq. 8), in V
       p_soc    SoC variance P[0][0] after the update
+    With record_state=True, also return posterior state and p_diag histories, shape
+    (rows, 1 + branch count). Default outputs and arithmetic are unchanged.
     """
     n = len(i)
     currents = (i + current_offset).tolist()
@@ -181,10 +184,19 @@ def run_ekf(params, cfg, i, v, temp, dt, soc0, start=0, current_offset=0.0, q_re
     p_soc = np.full(n, np.nan)
 
     ekf = Ekf(params, cfg, soc0, q_ref_ah)
+    if record_state:
+        state = np.full((n, len(ekf.x)), np.nan)
+        p_diag = np.full_like(state, np.nan)
     for k in range(start, n):
         step_dt = 0.0 if k == start else dts[k]
         soc[k] = ekf.step(currents[k], voltages[k], temps[k], step_dt)
         v_pred[k] = ekf.y_hat
         p_soc[k] = ekf.P[0, 0]
+        if record_state:
+            state[k] = ekf.x
+            p_diag[k] = np.diag(ekf.P)
 
-    return {"soc": soc, "v_pred": v_pred, "p_soc": p_soc}
+    result = {"soc": soc, "v_pred": v_pred, "p_soc": p_soc}
+    if record_state:
+        result.update(state=state, p_diag=p_diag)
+    return result

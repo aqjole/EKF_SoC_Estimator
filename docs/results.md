@@ -78,6 +78,8 @@ make all         # every stage below, in order
 | `make diagnose-accuracy` | S10 | checks residuals and timing and measures local Jacobian terms on all 63 incumbent experiment-1 trajectories | `results/accuracy_diagnostics.md`, `results/accuracy_residual_bins.csv`, `results/accuracy_jacobian.csv`, `results/plots/s10/accuracy_residuals.png` |
 | `make fit-3rcd0` | S10 | fits the S9 parameterization using v1.0 R1 and the frozen inputs | `results/params_3rcd0.csv`, `results/fit_nodes_3rcd0.csv`, `results/model_fit_3rcd0.md`, `results/plots/s10/params_3rcd0.png` |
 | `make ekf-3rcd0` | S10 | applies the S1 gate, runs the frozen experiments and guards, and scores the unfitted S9 R1 substitution and sensitivity | `results/ekf_results_3rcd0.csv`, `results/model_compare_3rcd0.md`, `results/sensitivity_3rcd0.csv`, `results/plots/s10/model_compare_3rcd0.png` |
+| `make tune-3rcd0` | S11 A | searches 864 grid points and 81 refinement points on 40 Mix runs; not in `make all` | `results/tuning_3rcd0.md`, `results/ekf_config_3rcd0.json`, `results/plots/s11/tuning_3rcd0.png` |
+| `make ekf-3rcd0n` | S11 A | evaluates the settings candidate in Python on all 63 runs, eight adoption guards and wrong-start diagnostics | `results/model_compare_3rcd0n.md`, `results/ekf_results_3rcd0n.csv`, `results/plots/s11/model_compare_3rcd0n.png` |
 | `make readme` | S4 | copies the results tables into `README.md` and this file | `README.md`, `docs/results.md` |
 | `make readme-check` | S4 | fails if `README.md` or this file is out of sync with `results/` | |
 
@@ -1087,6 +1089,71 @@ with a higher mean across the full standard suite. The substitution was scored
 in experiment 1 for diagnosis. [Decision 1.47](decisions.md#147-s10-review-expands-the-diagnosis-and-defers-deployment)
 
 ![S10 comparison](../results/plots/s10/model_compare_3rcd0.png)
+
+### S11 A · Noise and initial branch covariance
+
+This experiment tunes the three noise settings and shared initial branch-voltage
+uncertainty for 3RC-D0 using all 40 Mix runs. The objective balances wrong-start
+and sensor-offset RMSE equally across six temperatures. The 23 standard runs stay
+outside the objective; all 63 runs enter the regression guards. The model tables
+and filter equations are unchanged. The C search accelerator is an offline tool;
+the evaluation and adoption verdict use the Python reference.
+
+<!-- results:s11_settings:begin -->
+
+**Summary**
+
+Experiment-1 SoC RMSE in percentage points. Each run has equal weight here; the calibration objective instead gives each temperature equal weight.
+
+| Split | Incumbent mean | Incumbent worst | Candidate mean | Candidate worst |
+|---|---|---|---|---|
+| Standard (23) | 0.9817 | 2.3883 | 1.2275 | 4.2586 |
+| Mix (40, calibration) | 1.2736 | 6.7681 | 1.0852 | 4.9228 |
+| All (63) | 1.1670 | 6.7681 | 1.1372 | 4.9228 |
+
+**Guards and adoption verdict**
+
+Guard 2 uses the 23 standard runs; guards 3–7 use all 63; guard 8 uses the 40 Mix runs. The current incumbent and stage baseline are identical for step A, so both comparisons coincide. CSV values decide except within 1e-4 of a threshold or equality, where unrounded trace values decide. The 25 pp count threshold is included in that check. Original S10 files are unchanged.
+
+| guard | value | result |
+|---|---|---|
+| 1. S1 gate | US06 at 25 degC: 23.2363 mV (limit 30) | pass |
+| 2. Standard-run improvement | lower at 2 of 6; higher by more than 0.10 pp at -10 degC, -20 degC | FAIL |
+| 3. run increase | largest +3.2588 pp; above the limit of +0.50: Mix 8 at -20 degC +3.2588, US06 at -20 degC +2.8193, UDDS at -20 degC +1.0158, Mix 4 at -20 degC +0.5792, HWFET at -10 degC +0.5461, LA92 at -10 degC +0.5062 | FAIL |
+| 4. largest cycle increase | +0.3129 pp (US06, limit +0.25) | FAIL |
+| 5. worst run | 4.9228 pp against 6.7681 pp | pass |
+| 6. experiments 2 to 4 | largest exp4 increase +0.3890 pp (limit +0.10); fewer reached: exp3_high at -20 degC | FAIL |
+| 7. Wrong-start peaks | above 25 pp: 45 vs 30; maximum 70.0000 vs 46.7341 pp | FAIL |
+| 8. Mix-run means | largest increase +0.1567 pp (limit +0.10) | FAIL |
+
+**NOT ADOPTED.** The S2 settings remain the incumbent; the candidate JSON is experimental.
+
+See [the complete search](../results/tuning_3rcd0.md) and [per-run results](../results/ekf_results_3rcd0n.csv).
+
+<!-- results:s11_settings:end -->
+
+The [search report](../results/tuning_3rcd0.md) lists all 945 objectives, the
+grid winner at each p0_v_std value and the input hashes, and states that the native
+evaluator passed its checks against the Python filter (decision 1.50). The
+[comparison report](../results/model_compare_3rcd0n.md) holds every experiment, the
+guard-7 counts of the three grid winners and the state replays of the wrong-start
+cases. `results/ekf_config_3rcd0.json` keeps the candidate for reproduction;
+`results/ekf_config.json` stays the frozen S2 configuration.
+
+What the candidate shows (decision 1.51): the objective pushed the initial branch
+standard deviation to the end of the searched range, 5 mV. At a rested start
+(experiment 2) the branches really are near zero, so the filter puts the whole first
+innovation into SoC and forgets a 20 pp wrong start within a second; no experiment-2
+case peaks above 25 pp against 19 for the incumbent. At a start under load
+(experiment 3) the branches hold tens of millivolts, the same prior forbids the
+filter to put it there, and in the cold the SoC estimate runs onto the 0 bound: 34
+experiment-3-high cases peak above 25 pp, six of them at 70 pp. The objective
+contains experiment 2 and not experiment 3, so one set of settings cannot serve both
+start conditions. The smaller r and q_v also turn cold model error into SoC error:
+Mix 8 and US06 at -20 degC rise by 3.3 and 2.8 pp, while Mix 8 at -10 degC, the
+full-charge regen event, falls from 6.77 to 1.07 pp.
+
+![S11 settings comparison](../results/plots/s11/model_compare_3rcd0n.png)
 
 ## C port
 
