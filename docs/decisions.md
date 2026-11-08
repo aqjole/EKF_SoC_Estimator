@@ -838,6 +838,15 @@ experiments select the model for deployment. Release tag v1.6 remains reserved.
 - Footprint: `python/arm_footprint.py --model 3rcd0` (`make arm-3rcd0`) cross-compiles with the S3 hard-float settings plus `-DEKF_STACK_USAGE=ON` and writes `results/c_footprint_3rcd0.md`: the sections of `ekf.c.obj` and `ekf_params_3rcd0.c.obj`, sizeof(ekf_t), the static stack frame of each library function from the compiler's `.su` files, and the double-precision helper check. There is no target timing, because there is no board (1.46).
 - `make all` runs the three targets after `make arm`. CI builds and unit-tests both 3RC-D0 builds and checks that the committed `results/c_footprint_3rcd0.md` matches. The README and the C port section of `docs/results.md` name 3RC-D0 as the deployment model and keep the 2RC tables as the S3 record.
 
+### 1.55 S11 closed: the 3RC-D0 C port meets 1.46; S10 and S11 are tagged v1.6
+
+**The four-state C build passes every check that 1.46 and 1.54 set, so S10 and S11 close together under the tag v1.6 (1.48). The deployment model is 3RC-D0 with the S2 settings; the default C build stays the v1.0 2RC filter, and its results are unchanged.**
+
+- Equivalence (`results/equivalence_3rcd0.md`): over the 378 cases (six experiment cases on 63 runs, every processed row) the largest |delta SoC| is 1.94e-2 pp in the float build (Mix 4 at 0 degC, experiment 2; limit 0.1 pp) and 5.05e-9 pp in the double build (limit 0.001 pp), the 10-digit resolution of the tool's output.
+- Footprint (`results/c_footprint_3rcd0.md`, Arm GNU Toolchain 15.3.Rel1, S3 hard-float flags): 21,888 B of flash, 19,860 B of it the const tables, no .data or .bss; sizeof(ekf_t) = 92 B per cell; no double-precision helper. The largest static frames are 376 B (`ekf_predict`, `ekf_update`); one `ekf_step` nests about 450 B. Against the 2RC build that is +2,500 B of flash and +32 B of state.
+- Unit tests pass in the float and the double 3RC-D0 build and in both 2RC builds. `results/equivalence.md`, `results/c_footprint.md`, the 2RC C tables and every earlier result regenerate byte for byte; the three 3RC-D0 reports rerun byte for byte.
+- Left as recorded limitations: no target hardware or timing; the cold error across the 4.2 V regen rows (1.53); the wrong-start overshoots of the three-state filter (1.48, 1.51).
+
 ## 2. Dataset facts confirmed in S0
 
 | claim (readme, or the spec's S0 checks) | verdict | evidence |
