@@ -77,6 +77,8 @@ RESULTS_SOURCES = [
     ("s10_results", "results/model_compare_3rcd0.md", ("Guards and adoption verdict",)),
     ("s11_settings", "results/model_compare_3rcd0n.md", ("Summary",)),
     ("s11_settings", "results/model_compare_3rcd0n.md", ("Guards and adoption verdict",)),
+    ("s11_regen", "results/regen_limit.md", ("Limit rows per temperature",)),
+    ("s11_regen", "results/regen_limit.md", ("Mean over runs of the summed change in size (pp)",)),
 ]
 
 # Each document, relative to the repo root, with the sections copied into it.

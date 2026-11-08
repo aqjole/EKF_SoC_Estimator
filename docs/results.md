@@ -80,6 +80,7 @@ make all         # every stage below, in order
 | `make ekf-3rcd0` | S10 | applies the S1 gate, runs the frozen experiments and guards, and scores the unfitted S9 R1 substitution and sensitivity | `results/ekf_results_3rcd0.csv`, `results/model_compare_3rcd0.md`, `results/sensitivity_3rcd0.csv`, `results/plots/s10/model_compare_3rcd0.png` |
 | `make tune-3rcd0` | S11 A | searches 864 grid points and 81 refinement points on 40 Mix runs; not in `make all` | `results/tuning_3rcd0.md`, `results/ekf_config_3rcd0.json`, `results/plots/s11/tuning_3rcd0.png` |
 | `make ekf-3rcd0n` | S11 A | evaluates the settings candidate in Python on all 63 runs, eight adoption guards and wrong-start diagnostics | `results/model_compare_3rcd0n.md`, `results/ekf_results_3rcd0n.csv`, `results/plots/s11/model_compare_3rcd0n.png` |
+| `make diagnose-regen` | S11 B | finds the regen rows at the 4.2 V limit in all 63 runs and reports each model's experiment-1 SoC error change across them, from the stored traces | `results/regen_limit.md`, `results/regen_limit.csv`, `results/plots/s11/regen_limit.png` |
 | `make readme` | S4 | copies the results tables into `README.md` and this file | `README.md`, `docs/results.md` |
 | `make readme-check` | S4 | fails if `README.md` or this file is out of sync with `results/` | |
 
@@ -1155,6 +1156,51 @@ full-charge regen event, falls from 6.77 to 1.07 pp.
 
 ![S11 settings comparison](../results/plots/s11/model_compare_3rcd0n.png)
 
+### S11 B · Regen rows at the 4.2 V limit
+
+Every run starts at full charge and meets regen rows that the cycler holds at its
+4.2 V limit in its first minutes. No fitted table covers that regime. The diagnostic
+reads each model's stored experiment-1 trace and measures how far the SoC error moves
+across those rows. In the cold the adopted 3RC-D0 moves several pp per run, in both
+directions; the models that read R1 over current move less.
+
+<!-- results:s11_regen:begin -->
+
+**Limit rows per temperature**
+
+| T (degC) | runs | intervals | limit rows | end of last interval (s) | lowest reference SoC | most negative current (A) |
+|---|---|---|---|---|---|---|
+| 40 | 7 | 34 | 920 | 1116.9 | 0.9220 | -5.956 |
+| 25 | 11 | 78 | 2168 | 1116.9 | 0.9071 | -5.995 |
+| 10 | 11 | 157 | 3599 | 2047.9 | 0.8451 | -5.995 |
+| 0 | 11 | 153 | 4320 | 1658.9 | 0.8895 | -2.999 |
+| -10 | 11 | 204 | 6320 | 1984.9 | 0.8596 | -2.999 |
+| -20 | 12 | 172 | 6592 | 1637.9 | 0.8730 | -1.497 |
+
+**Mean over runs of the summed change in size (pp)**
+
+| Model | 40 degC | 25 degC | 10 degC | 0 degC | -10 degC | -20 degC |
+|---|---|---|---|---|---|---|
+| 2RC | 0.190 | 0.389 | 1.241 | 3.022 | 4.844 | 5.365 |
+| 2RC-I | 0.107 | 0.147 | 0.420 | 0.860 | 1.672 | 1.887 |
+| 2RC-Id | 0.149 | 0.256 | 0.673 | 1.979 | 2.771 | 2.889 |
+| 2RC-Ic | 0.149 | 0.226 | 0.436 | 1.223 | 1.995 | 2.424 |
+| 2RC-Il | 0.107 | 0.153 | 0.385 | 1.023 | 1.792 | 2.118 |
+| 3RC-D | 0.092 | 0.153 | 0.535 | 0.967 | 1.606 | 1.835 |
+| 3RC-D0 | 0.158 | 0.365 | 1.293 | 2.960 | 4.745 | 3.331 |
+| 3RC-D0-N | 0.047 | 0.084 | 0.422 | 0.972 | 1.598 | 1.549 |
+
+<!-- results:s11_regen:end -->
+
+Two candidates were set aside before any run ([decision 1.52](decisions.md#152-s11-step-b-first-candidate-the-voltage-update-skipped-on-the-limit-rows-3rc-d0-g-not-run),
+[decision 1.53](decisions.md#153-s11-step-b-closed-without-a-run-no-s11-change-is-adopted)). Skipping the voltage update on these rows
+would slow the recovery from a wrong start at -20 degC and fail a fixed adoption guard.
+A regen resistance term near full charge corrects part of the model voltage there but
+leaves the SoC estimate unchanged, because part of the error is tied to the voltage limit
+itself. S11 adopts nothing; 3RC-D0 with the S2 settings stays.
+
+![S11 regen rows at the limit](../results/plots/s11/regen_limit.png)
+
 ## C port
 
 **API** (`c/include/ekf.h`). The caller owns one `ekf_t` per cell and one `ekf_cfg_t` with the noise settings and a pointer to the parameter tables. The library allocates nothing and keeps no state of its own.
@@ -1214,6 +1260,7 @@ CI runs on every push to GitHub.
 
 ## Limitations in full
 
+- In the cold the SoC estimate of 3RC-D0 moves by about 3 to 5 pp per run across the regen rows that the cycler holds at its 4.2 V limit near full charge ([`results/regen_limit.md`](../results/regen_limit.md)). S11 found no model or settings change that removes this within the adoption guards.
 - S9 used one cell and shared drive segments across the two splits. The standard runs also informed prior diagnostics and the low-SoC boundary choice.
 - This is a personal project. It validates offline on public data from one new cell.
 - Not run on target hardware: the C library is cross-compiled only. It is not checked against MISRA C or ISO 26262.

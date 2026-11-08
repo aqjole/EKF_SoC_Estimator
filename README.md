@@ -85,6 +85,7 @@ The full equations and conventions are in [`docs/model.md`](docs/model.md). Expe
 - **S9, slow-branch resistances fitted on drive data.** 3RC-D lowered open-loop voltage RMSE and experiment-1 mean SoC RMSE at all six temperatures on the standard cycles. The worst-run guard rejected it after US06 at -10 degC rose from 6.25 to 6.40 pp. [Results](docs/results.md#s9-slow-branch-resistances-fitted-on-drive-data)
 - **S10, drive-fitted third branch with v1.0 R1.** 3RC-D0 improved experiment-1 SoC RMSE on every standard run versus 2RC-I. The unfitted S9 R1 substitution scored better on US06 and had a higher overall mean. [Comparison](results/model_compare_3rcd0.md)
 - **S11 step A, noise settings and initial branch covariance.** A 945-point search on the 40 Mix runs cut its calibration objective from 2.92 to 1.10 pp, but the chosen settings failed six of eight adoption guards: a 5 mV prior on the branch voltages forgets a rested wrong start within a second and collapses a start under load, and the -20 degC runs get worse. The S2 settings stay. [Comparison](results/model_compare_3rcd0n.md) · [Search](results/tuning_3rcd0.md)
+- **S11 step B, regen rows at the 4.2 V limit.** Every run meets regen rows held at the cycler's 4.2 V limit near full charge, and the adopted model's cold SoC error moves 3 to 5 pp per run across them. Skipping the update there fails a fixed guard, and a regen resistance term does not move the SoC, so S11 adopts nothing. [Diagnostic](results/regen_limit.md)
 
 ## Dataset
 
@@ -117,6 +118,7 @@ Run `make ekf-3rcd0n` to reproduce the S11 step A comparison from the saved cand
 - The noise settings were tuned on one cycle at one temperature, and the evaluation runs share segments with it, because the mixes are built from segments of the standard cycles (`docs/decisions.md` 1.11). S7 and S8 compared models on the same 62 runs that every stage since S2 has looked at, so those comparisons are on a repeatedly inspected set (1.32).
 - S9 and S10 used 23 previously inspected standard runs for regression checks. They share segments with the 40 Mix runs used for calibration.
 - Errors grow in the cold: at -10 and -20 degC many runs of experiments 2 and 3 never settle inside the 2 pp band. The cycler also caps the cold currents, so the cold drive cycles are lighter loads than the warm ones. With the current offset of experiment 4, four cold runs (Mix 8 at -10 and -20 degC, HWFET and Mix 4 at -20 degC) have a larger SoC RMSE than coulomb counting, and US06 at -10 degC ends with a slightly larger error (`results/ekf_results.csv`).
+- In the cold the SoC estimate moves by about 3 to 5 pp per run across the regen rows the cycler holds at 4.2 V near full charge; S11 found no change that removes this within the adoption guards.
 - The S7 2RC-I model held R1 flat below its smallest pulse current and made US06 worse from 10 degC down. The S10 experiment replaces its current-axis lookup with v1.0 R1 and refits the slow branches.
 
 The full list, with the fit and OCV assumptions, is in [`docs/results.md`](docs/results.md#limitations-in-full).

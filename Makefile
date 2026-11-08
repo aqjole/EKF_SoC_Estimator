@@ -2,11 +2,12 @@
 
 PYTHON := .venv/bin/python
 
-.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd accuracy diagnose-accuracy fit-3rcd0 ekf-3rcd0 tune-3rcd0 ekf-3rcd0n tune ekf c equiv arm sensitivity octave readme readme-check
+.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd accuracy diagnose-accuracy fit-3rcd0 ekf-3rcd0 tune-3rcd0 ekf-3rcd0n diagnose-regen tune ekf c equiv arm sensitivity octave readme readme-check
 
 all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd
 	$(MAKE) accuracy
 	$(MAKE) ekf-3rcd0n
+	$(MAKE) diagnose-regen
 	$(MAKE) readme
 
 # Fetch the LG 18650HG2 .mat files into data/raw/ and verify their sha256.
@@ -104,6 +105,10 @@ tune-3rcd0:
 # S11 A: Python reference experiments, eight guards and wrong-start diagnostics.
 ekf-3rcd0n:
 	$(PYTHON) python/compare_3rcd0n.py
+
+# S11 B: the regen rows at the 4.2 V limit, read from the stored traces of every model (decision 1.48).
+diagnose-regen:
+	$(PYTHON) python/diagnose_regen.py
 
 # S2: tune the EKF noise settings on the tuning cycle and freeze them (not part of "all": the frozen values are committed).
 # Writes results/tuning.md, results/ekf_config.json and section 1.15 of docs/decisions.md.
