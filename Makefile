@@ -2,12 +2,13 @@
 
 PYTHON := .venv/bin/python
 
-.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd accuracy diagnose-accuracy fit-3rcd0 ekf-3rcd0 tune-3rcd0 ekf-3rcd0n diagnose-regen c-3rcd0 equiv-3rcd0 arm-3rcd0 tune ekf c equiv arm sensitivity octave readme readme-check
+.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd accuracy diagnose-accuracy fit-3rcd0 ekf-3rcd0 tune-3rcd0 ekf-3rcd0n diagnose-regen diagnose-starts c-3rcd0 equiv-3rcd0 arm-3rcd0 tune ekf c equiv arm sensitivity octave readme readme-check
 
 all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd
 	$(MAKE) accuracy
 	$(MAKE) ekf-3rcd0n
 	$(MAKE) diagnose-regen
+	$(MAKE) diagnose-starts
 	$(MAKE) c-3rcd0
 	$(MAKE) equiv-3rcd0
 	$(MAKE) arm-3rcd0
@@ -112,6 +113,13 @@ ekf-3rcd0n:
 # S11 B: the regen rows at the 4.2 V limit, read from the stored traces of every model (decision 1.48).
 diagnose-regen:
 	$(PYTHON) python/diagnose_regen.py
+
+# S12 step A: history before each run, the 189 wrong-start cases and the branch prior alone on the Mix runs
+# (decision 1.56). Needs ekf-3rcd0 (results/runs/3rcd0/ and ekf_results_3rcd0.csv); builds the native evaluator of
+# decision 1.50 (c/tools/ekf_tuning.c, with cc) and runs the prior values through it. Writes results/start_cases.md,
+# start_cases.csv and plots/s12/start_cases.png.
+diagnose-starts:
+	$(PYTHON) python/diagnose_starts.py
 
 # S11 close (decision 1.54): regenerate the 3RC-D0 C tables and test vectors, build the float and the double
 # library with -DEKF_USE_3RCD0=ON and run the unit tests in both.
