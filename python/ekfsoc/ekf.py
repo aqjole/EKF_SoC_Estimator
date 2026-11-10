@@ -21,15 +21,22 @@ from ekfsoc.constants import Q_REF_AH
 from ekfsoc.model import R1Reader, interp2
 
 
+# The start rule of 3RC-D0-P (docs/decisions.md 1.57): a first processed row whose input current is smaller than
+# this, in A, starts the branches with p0_v_std_rested.
+RESTED_CURRENT_A = 0.5
+
+
 @dataclass
 class EkfConfig:
     """The noise settings of the filter, the same for every experiment and temperature (the spec, S2).
 
-    q_soc       process noise of the SoC state in 1/s (Q[0][0] = q_soc * dt)
-    q_v         process noise of each branch voltage in V^2/s (Q[i][i] = q_v * dt for i >= 1)
-    r           measurement noise variance in V^2
-    p0_soc_std  initial standard deviation of the SoC state (0.2 = 20 pp)
-    p0_v_std    initial standard deviation of each branch voltage in V (0.05 = 50 mV)
+    q_soc            process noise of the SoC state in 1/s (Q[0][0] = q_soc * dt)
+    q_v              process noise of each branch voltage in V^2/s (Q[i][i] = q_v * dt for i >= 1)
+    r                measurement noise variance in V^2
+    p0_soc_std       initial standard deviation of the SoC state (0.2 = 20 pp)
+    p0_v_std         initial standard deviation of each branch voltage in V (0.05 = 50 mV)
+    p0_v_std_rested  if set, the initial branch standard deviation in V for a start below RESTED_CURRENT_A
+                     (branch_std); unset in every configuration before decision 1.57, and then left out of the file
     """
 
     q_soc: float
@@ -37,6 +44,7 @@ class EkfConfig:
     r: float
     p0_soc_std: float = 0.2
     p0_v_std: float = 0.05
+    p0_v_std_rested: float | None = None
 
     @classmethod
     def from_json(cls, path):
@@ -44,9 +52,22 @@ class EkfConfig:
             return cls(**json.load(handle))
 
     def to_json(self, path):
+        settings = asdict(self)
+        if self.p0_v_std_rested is None:
+            del settings["p0_v_std_rested"]
         with open(path, "w") as handle:
-            json.dump(asdict(self), handle, indent=2)
+            json.dump(settings, handle, indent=2)
             handle.write("\n")
+
+
+def branch_std(cfg, i_first):
+    """The initial branch standard deviation in V for a filter whose first processed row has input current i_first (A).
+
+    p0_v_std_rested when it is set and abs(i_first) < RESTED_CURRENT_A, else p0_v_std (docs/decisions.md 1.57).
+    """
+    if cfg.p0_v_std_rested is not None and abs(i_first) < RESTED_CURRENT_A:
+        return cfg.p0_v_std_rested
+    return cfg.p0_v_std
 
 
 class Ekf:
@@ -54,7 +75,8 @@ class Ekf:
 
     n is the number of RC branches of params (Params.branches). soc0 is the initial SoC and every
     V_i = 0. The filter is never told whether soc0 is right: P0 is the same diagonal for every run
-    (docs/model.md, Symbols).
+    (docs/model.md, Symbols), except that a config with p0_v_std_rested set lets the first step choose the
+    branch entries from that step's current (set_branch_prior, docs/decisions.md 1.57).
     q_ref_ah is the capacity the filter believes, in Ah; only the capacity sensitivity of S5 changes it
     (docs/decisions.md 1.18).
     After step() or update(), y_hat is the voltage predicted before the measurement was used (Eq. 8).
@@ -74,6 +96,7 @@ class Ekf:
         self.P = np.diag([cfg.p0_soc_std**2] + [cfg.p0_v_std**2] * n_rc)
         self.i_held = 0.0  # the previous sample's current, held over the next step (docs/model.md C11)
         self.y_hat = math.nan
+        self.first_step = True
 
     def lookup(self, name, t_degC, soc):
         """Read table `name` at (t_degC, soc) with the clamped bilinear rule (Eq. 4)."""
@@ -156,11 +179,25 @@ class Ekf:
         self.P = P_post
         self.y_hat = y_hat
 
+    def set_branch_prior(self, i_first):
+        """Set the branch diagonal of P to branch_std(cfg, i_first)^2; P0 is diagonal, so P stays diagonal.
+
+        Called on the first processed row, whose dt = 0 makes predict the identity, so this equals choosing P0 at
+        the start (docs/model.md, the start rule; docs/decisions.md 1.57).
+        """
+        v_var = branch_std(self.cfg, i_first) ** 2
+        for k in range(1, len(self.x)):
+            self.P[k, k] = v_var
+
     def step(self, i_a, v_v, t_degC, dt_s):
         """Process one sample: predict over dt_s with the previous sample's current, then update; return the SoC.
 
-        i_a is the sample's own current. It enters the update now and is held over the next step.
+        i_a is the sample's own current. It enters the update now and is held over the next step. On the first
+        step of a config with p0_v_std_rested set, i_a also sets the branch prior (set_branch_prior).
         """
+        if self.first_step and self.cfg.p0_v_std_rested is not None:
+            self.set_branch_prior(i_a)
+        self.first_step = False
         self.predict(self.i_held, t_degC, dt_s)
         self.update(i_a, v_v, t_degC)
         self.i_held = i_a

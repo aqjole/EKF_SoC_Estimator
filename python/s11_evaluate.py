@@ -39,20 +39,22 @@ def trace_path(spec, directory=RUNS):
     return directory / f"{spec.folder}__{spec.path.stem}.npz"
 
 
-def evaluate(spec):
-    """Cache candidate by content, reuse frozen incumbent traces, return full precision scores."""
-    path = trace_path(spec)
+def evaluate(spec, config=CONFIG, runs=RUNS):
+    """Cache candidate by content, reuse frozen incumbent traces, return full precision scores.
+
+    config is the candidate's settings file and runs its trace folder (S11 A by default; S12 C passes its own)."""
+    path = trace_path(spec, runs)
     stamp = path.with_suffix(".sha256")
-    wanted = digest([spec.path, CONFIG, *dependencies()])
+    wanted = digest([spec.path, config, *dependencies()])
     if not path.exists() or not stamp.exists() or stamp.read_text() != wanted:
         run = load_run(spec.path)
-        cases = experiment_runs(run, load_candidate(), EkfConfig.from_json(CONFIG))
+        cases = experiment_runs(run, load_candidate(), EkfConfig.from_json(config))
         save_traces(path, run.t, run.v, soc_ref(run), cases)
         stamp.write_text(wanted)
     baseline = trace_path(spec, RESULTS / "runs/3rcd0")
     if not baseline.exists():
-        # Do not rewrite historical traces; this fallback is local to S11.
-        baseline = trace_path(spec, RUNS / "baseline")
+        # Do not rewrite historical traces; this fallback is local to the candidate's trace folder.
+        baseline = trace_path(spec, runs / "baseline")
         baseline_stamp = baseline.with_suffix(".sha256")
         wanted_old = digest([spec.path, CONFIG_JSON, *dependencies()])
         if (not baseline.exists() or not baseline_stamp.exists()

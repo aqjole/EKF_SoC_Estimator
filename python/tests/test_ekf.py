@@ -234,6 +234,72 @@ def test_config_json_round_trip(tmp_path):
     assert EkfConfig.from_json(tmp_path / "ekf_config.json") == cfg
 
 
+def test_config_json_leaves_out_an_unset_rested_prior(tmp_path):
+    EkfConfig(q_soc=1e-7, q_v=1e-6, r=0.01).to_json(tmp_path / "ekf_config.json")
+    assert "p0_v_std_rested" not in (tmp_path / "ekf_config.json").read_text()
+
+
+def test_config_json_round_trips_a_set_rested_prior(tmp_path):
+    cfg = EkfConfig(q_soc=1e-7, q_v=1e-6, r=0.01, p0_v_std_rested=0.01)
+    cfg.to_json(tmp_path / "ekf_config.json")
+    assert EkfConfig.from_json(tmp_path / "ekf_config.json") == cfg
+
+
+# --- the rested branch prior of 3RC-D0-P (docs/decisions.md 1.57) ------------------------------------
+
+RULE_CFG = EkfConfig(q_soc=1e-4, q_v=1e-3, r=0.01)
+RESTED_CFG = replace(RULE_CFG, p0_v_std_rested=0.01)
+
+
+def rule_case(cfg, first_current, start=0, current_offset=0.0):
+    """run_ekf on the toy RC tables with a 2 A load everywhere except first_current on row `start`."""
+    params = toy_params(r0=0.05, r1=0.02, tau1=10.0, r2=0.03, tau2=100.0)
+    i = np.full(6, 2.0)
+    i[start] = first_current
+    return run_ekf(params, cfg, i=i, v=np.full(6, 3.4), temp=np.zeros(6), dt=np.full(6, 1.0), soc0=0.5,
+                   start=start, current_offset=current_offset, record_state=True)
+
+
+@pytest.mark.parametrize("first_current", [0.0, 0.49, -0.49])
+def test_a_start_below_the_threshold_gets_the_rested_branch_prior(first_current):
+    # Setting P0's branch entries to 0.01^2 is the same filter as p0_v_std = 0.01 from the start.
+    out = rule_case(RESTED_CFG, first_current)
+    np.testing.assert_array_equal(out["p_diag"], rule_case(replace(RULE_CFG, p0_v_std=0.01), first_current)["p_diag"])
+
+
+@pytest.mark.parametrize("first_current", [0.5, -0.5, 2.0])
+def test_a_start_at_or_above_the_threshold_keeps_p0_v_std(first_current):
+    out = rule_case(RESTED_CFG, first_current)
+    np.testing.assert_array_equal(out["p_diag"], rule_case(RULE_CFG, first_current)["p_diag"])
+
+
+def test_an_unset_rested_prior_leaves_the_first_step_unchanged():
+    first = Ekf(toy_params(0.05, 0.02, 10.0, 0.03, 100.0), RULE_CFG, soc0=0.5)
+    first.step(0.0, 3.4, 0.0, 0.0)
+    manual = Ekf(toy_params(0.05, 0.02, 10.0, 0.03, 100.0), RULE_CFG, soc0=0.5)
+    manual.predict(0.0, 0.0, 0.0)
+    manual.update(0.0, 3.4, 0.0)
+    np.testing.assert_array_equal(first.P, manual.P)
+
+
+def test_the_rested_prior_keeps_p_diagonal():
+    ekf = Ekf(toy_params(0.05, 0.02, 10.0, 0.03, 100.0), RESTED_CFG, soc0=0.5)
+    ekf.set_branch_prior(0.0)
+    np.testing.assert_array_equal(ekf.P, np.diag([0.2**2, 0.01**2, 0.01**2]))
+
+
+def test_the_rule_reads_the_current_with_its_offset():
+    # 0.4 A alone is below 0.5 A; with the 0.2 A offset of experiment 4 it is not, so the prior stays at 50 mV.
+    out = rule_case(RESTED_CFG, 0.4, current_offset=0.2)
+    np.testing.assert_array_equal(out["p_diag"], rule_case(RULE_CFG, 0.4, current_offset=0.2)["p_diag"])
+
+
+def test_the_rule_reads_the_restart_row_not_row_zero():
+    # Row 0 carries the 2 A load and is never processed; the restart row at 3 carries 0.1 A.
+    out = rule_case(RESTED_CFG, 0.1, start=3)
+    np.testing.assert_array_equal(out["p_diag"], rule_case(replace(RULE_CFG, p0_v_std=0.01), 0.1, start=3)["p_diag"])
+
+
 # --- synthetic data: the filter on data from the model itself ---------------------------------------
 
 

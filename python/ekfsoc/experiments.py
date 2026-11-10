@@ -102,6 +102,21 @@ def run_case(run, params, cfg, soc0, start, current_offset):
     return {"soc": ekf["soc"], "v_pred": ekf["v_pred"], "cc": cc, "start": start, "soc0": soc0}
 
 
+def experiment_cases(run):
+    """{name: (soc0, start, current_offset)} of every experiment of experiment_runs on one loader Run."""
+    reference = soc_ref(run)
+    soc0 = float(reference[0])
+    exp3_start = int(np.flatnonzero(reference <= EXP3_START_SOC)[0])
+    return {
+        "exp1": (soc0, 0, 0.0),
+        "exp2": (soc0 - INIT_ERROR_SOC, 0, 0.0),
+        "exp3_low": (EXP3_SOC0_LOW, exp3_start, 0.0),
+        "exp3_high": (EXP3_SOC0_HIGH, exp3_start, 0.0),
+        "exp3_ref": (EXP3_START_SOC, exp3_start, 0.0),
+        "exp4": (soc0, 0, OFFSET_A),
+    }
+
+
 def experiment_runs(run, params, cfg):
     """Run every experiment on one loader Run and return {name: case}; the reference is loader.soc_ref(run).
 
@@ -115,20 +130,9 @@ def experiment_runs(run, params, cfg):
       exp4       as exp1 with OFFSET_A added to the current; its case also holds expected_drift_pp, the
                  drift of coulomb counting over the evaluation window in pp
     """
+    results = {name: run_case(run, params, cfg, *case) for name, case in experiment_cases(run).items()}
+
     reference = soc_ref(run)
-    soc0 = float(reference[0])
-    exp3_start = int(np.flatnonzero(reference <= EXP3_START_SOC)[0])
-
-    cases = {
-        "exp1": (soc0, 0, 0.0),
-        "exp2": (soc0 - INIT_ERROR_SOC, 0, 0.0),
-        "exp3_low": (EXP3_SOC0_LOW, exp3_start, 0.0),
-        "exp3_high": (EXP3_SOC0_HIGH, exp3_start, 0.0),
-        "exp3_ref": (EXP3_START_SOC, exp3_start, 0.0),
-        "exp4": (soc0, 0, OFFSET_A),
-    }
-    results = {name: run_case(run, params, cfg, *case) for name, case in cases.items()}
-
     window_time = run.t[window_mask(reference, 0)]
     duration_s = float(window_time[-1] - window_time[0])
     results["exp4"]["expected_drift_pp"] = expected_drift_pp(OFFSET_A, duration_s, Q_REF_AH)

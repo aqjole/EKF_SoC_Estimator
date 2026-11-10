@@ -22,24 +22,27 @@ def peak_stats(frame):
 
 
 def guards(frames, mix, standard, voltage):
-    """Guard 2 uses 23 standard runs; 3–7 all 63; guard 8 only the 40 Mix runs."""
+    """Guard 2 uses 23 standard runs; 3–7 all 63; guard 8 only the 40 Mix runs.
+
+    frames maps the incumbent's label, then the candidate's, to its results frame."""
+    old, new = frames
     frames = {name: frame.assign(is_tuning=False) for name, frame in frames.items()}
     tables = {name: per_temperature(frame) for name, frame in frames.items()}
-    gates = {NEW: {25: voltage}}
-    rows = guard_rows(frames, tables, gates, NEW, OLD)
+    gates = {new: {25: voltage}}
+    rows = guard_rows(frames, tables, gates, new, old)
     standard_frames = {name: subset(frame, standard) for name, frame in frames.items()}
     standard_tables = {name: per_temperature(frame) for name, frame in standard_frames.items()}
-    rows[1] = guard_rows(standard_frames, standard_tables, gates, NEW, OLD)[1]
+    rows[1] = guard_rows(standard_frames, standard_tables, gates, new, old)[1]
     rows[1][0] = "2. Standard-run improvement"
-    old_count, old_max = peak_stats(frames[OLD])
-    new_count, new_max = peak_stats(frames[NEW])
+    old_count, old_max = peak_stats(frames[old])
+    new_count, new_max = peak_stats(frames[new])
     near_threshold = min(float(abs(frame.loc[frame.experiment.isin(WRONG), "max_abs_pp"] - 25).min())
                          for frame in frames.values())
     rows.append(["7. Wrong-start peaks", f"above 25 pp: {new_count} vs {old_count}; "
                  f"maximum {new_max:.4f} vs {old_max:.4f} pp", new_count <= old_count and new_max <= old_max,
                  min(near_threshold, abs(new_max - old_max))])
     mix_tables = {name: per_temperature(subset(frame, mix)) for name, frame in frames.items()}
-    delta = [mix_tables[NEW][temp]["exp1"] - mix_tables[OLD][temp]["exp1"] for temp in T_GRID_DEGC]
+    delta = [mix_tables[new][temp]["exp1"] - mix_tables[old][temp]["exp1"] for temp in T_GRID_DEGC]
     rows.append(["8. Mix-run means", f"largest increase {max(delta):+.4f} pp (limit +0.10)",
                  max(delta) <= .1, min(abs(value - .1) for value in delta)])
     return rows
@@ -71,33 +74,8 @@ def comparison_lines(frames, mix, standard, decided, grid_counts, replays):
              + ("The candidate settings become the Python 3RC-D0 incumbent."
                 if accepted else "The S2 settings remain the incumbent; the candidate JSON is experimental."), "",
              "See [the complete search](../results/tuning_3rcd0.md) and [per-run results](../results/ekf_results_3rcd0n.csv).", ""]
-    for label, specs in (("Standard regression", standard), ("Mix calibration", mix)):
-        lines += [f"## {label}", ""]
-        rows = []
-        for temp in T_GRID_DEGC:
-            for exp in ("exp1", "exp2", "exp3_low", "exp3_high", "exp4"):
-                values = []
-                for name in (OLD, NEW):
-                    here = subset(frames[name], specs)
-                    here = here[(here.T_degC == temp) & (here.experiment == exp)]
-                    conv = here.t_conv_s.dropna()
-                    values.extend([f"{here.rmse_pp.mean():.4f}", f"{here.max_abs_pp.max():.4f}",
-                                   str(len(conv)), f"{conv.median():.1f}" if len(conv) else "n/a"])
-                rows.append([str(temp), exp, *values])
-        lines += md_table(["T (degC)", "Experiment", "Old RMSE", "Old peak", "Old reached", "Old median conv (s)",
-                           "New RMSE", "New peak", "New reached", "New median conv (s)"], rows) + [""]
-    one = {name: frame[frame.experiment == "exp1"].set_index(["folder", "file"])
-           for name, frame in frames.items()}
-    rows = [[row.folder, row.cycle, f"{row.rmse_pp:.4f}", f"{one[NEW].loc[(row.folder, row.file), 'rmse_pp']:.4f}",
-             f"{one[NEW].loc[(row.folder, row.file), 'rmse_pp'] - row.rmse_pp:+.4f}"]
-            for row in frames[OLD][frames[OLD].experiment == "exp1"].itertuples()]
-    lines += ["## Experiment 1, every run", "", *md_table(["Folder", "Cycle", "Old (pp)", "New (pp)", "Change (pp)"], rows), ""]
-    rows = []
-    for cycle in sorted(one[OLD].cycle.unique()):
-        means = [one[name].loc[one[name].cycle == cycle, "rmse_pp"].mean() for name in (OLD, NEW)]
-        rows.append([cycle, *[f"{x:.4f}" for x in means], f"{means[1] - means[0]:+.4f}"])
-    lines += ["## Experiment 1, cycle means", "", *md_table(["Cycle", "Old (pp)", "New (pp)", "Change (pp)"], rows), "",
-              "## Grid winners and wrong-start peaks", "",
+    lines += split_lines(frames, mix, standard) + exp1_lines(frames)
+    lines += ["## Grid winners and wrong-start peaks", "",
               "Best objective at each grid value of p0_v_std; diagnostics only, never used to choose "
               "another candidate after seeing the guards. All 189 wrong-start cases are replayed in Python per row below.", "",
               *md_table(["q_soc", "q_v", "r", "p0_v_std", "Objective (pp)", "Cases >25 pp", "Maximum (pp)"], grid_counts), "",
@@ -109,7 +87,45 @@ def comparison_lines(frames, mix, standard, decided, grid_counts, replays):
     return "\n".join(lines)
 
 
-def plot(frames, mix, standard):
+def split_lines(frames, mix, standard):
+    """Per split, temperature and scored experiment: RMSE mean, peak, reached count and median convergence time of
+    the incumbent (old, the first label of frames) and the candidate (new)."""
+    lines = []
+    for label, specs in (("Standard regression", standard), ("Mix calibration", mix)):
+        lines += [f"## {label}", ""]
+        rows = []
+        for temp in T_GRID_DEGC:
+            for exp in ("exp1", "exp2", "exp3_low", "exp3_high", "exp4"):
+                values = []
+                for frame in frames.values():
+                    here = subset(frame, specs)
+                    here = here[(here.T_degC == temp) & (here.experiment == exp)]
+                    conv = here.t_conv_s.dropna()
+                    values.extend([f"{here.rmse_pp.mean():.4f}", f"{here.max_abs_pp.max():.4f}",
+                                   str(len(conv)), f"{conv.median():.1f}" if len(conv) else "n/a"])
+                rows.append([str(temp), exp, *values])
+        lines += md_table(["T (degC)", "Experiment", "Old RMSE", "Old peak", "Old reached", "Old median conv (s)",
+                           "New RMSE", "New peak", "New reached", "New median conv (s)"], rows) + [""]
+    return lines
+
+
+def exp1_lines(frames):
+    """Experiment 1 of every run and per cycle, the incumbent (the first label of frames) against the candidate."""
+    old, new = frames
+    one = {name: frame[frame.experiment == "exp1"].set_index(["folder", "file"])
+           for name, frame in frames.items()}
+    rows = [[row.folder, row.cycle, f"{row.rmse_pp:.4f}", f"{one[new].loc[(row.folder, row.file), 'rmse_pp']:.4f}",
+             f"{one[new].loc[(row.folder, row.file), 'rmse_pp'] - row.rmse_pp:+.4f}"]
+            for row in frames[old][frames[old].experiment == "exp1"].itertuples()]
+    lines = ["## Experiment 1, every run", "", *md_table(["Folder", "Cycle", "Old (pp)", "New (pp)", "Change (pp)"], rows), ""]
+    rows = []
+    for cycle in sorted(one[old].cycle.unique()):
+        means = [one[name].loc[one[name].cycle == cycle, "rmse_pp"].mean() for name in (old, new)]
+        rows.append([cycle, *[f"{x:.4f}" for x in means], f"{means[1] - means[0]:+.4f}"])
+    return lines + ["## Experiment 1, cycle means", "", *md_table(["Cycle", "Old (pp)", "New (pp)", "Change (pp)"], rows), ""]
+
+
+def plot(frames, mix, standard, path=RESULTS / "plots/s11/model_compare_3rcd0n.png"):
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
     for ax, specs, title in zip(axes, (standard, mix), ("Standard regression", "Mix calibration")):
         for name, frame in frames.items():
@@ -118,4 +134,4 @@ def plot(frames, mix, standard):
             ax.plot(means.index, means, "o-", label=name)
         ax.set(title=title, xlabel="Temperature (°C)", ylabel="Exp. 1 mean SoC RMSE (pp)")
     axes[0].legend()
-    save(fig, RESULTS / "plots/s11/model_compare_3rcd0n.png")
+    save(fig, path)

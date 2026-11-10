@@ -1,9 +1,10 @@
 """S12 step A, part 3 (decision 1.56): the branch prior alone, by the current rule of kind (i), on the 40 Mix runs.
 
 Experiments 1, 2 and 4 start at row 0 and run through the native evaluator of 1.50 under the S2 settings with
-p0_v_std set by `branch_prior`; experiment 3 is taken from the stored S2 traces, which the rule leaves as they are
-because every Mix experiment-3 start is above the threshold (checked per run). The S2 value itself is scored from
-the stored Python traces, and the native evaluator must reproduce those at the S2 prior before any number is used.
+p0_v_std set by the filter's own rule (`ekfsoc.ekf.branch_std`); experiment 3 is taken from the stored S2 traces,
+which the rule leaves as they are because every Mix experiment-3 start is above the threshold (checked per run).
+The S2 value itself is scored from the stored Python traces, and the native evaluator must reproduce those at the S2
+prior before any number is used.
 """
 
 from dataclasses import replace
@@ -13,7 +14,7 @@ import pandas as pd
 
 from compare_3rcd0 import RUNS_DIR as RUNS_3RCD0
 from ekfsoc.constants import T_GRID_DEGC
-from ekfsoc.ekf import EkfConfig
+from ekfsoc.ekf import RESTED_CURRENT_A, EkfConfig, branch_std
 from ekfsoc.experiments import OFFSET_A
 from ekfsoc.loader import load_run
 from fit_3rcd0 import load_candidate
@@ -24,15 +25,9 @@ from s12_prescreen import temperature_table, wrong_start_peaks
 
 
 PRIORS_V = (0.005, 0.010, 0.015, 0.020, 0.025, 0.030)
-THRESHOLD_A = 0.5
 # The row-0 experiments and the current offset each one adds (experiments.experiment_runs).
 ROW0_OFFSETS_A = {"exp1": 0.0, "exp2": 0.0, "exp4": OFFSET_A}
 NATIVE_TOLERANCE = 1e-12
-
-
-def branch_prior(current_a, small_v, load_v):
-    """Kind (i): the small prior when the size of the filter's first input current is below THRESHOLD_A."""
-    return small_v if abs(current_a) < THRESHOLD_A else load_v
 
 
 def prior_run(spec):
@@ -41,14 +36,14 @@ def prior_run(spec):
     run = load_run(spec.path)
     t, v, reference, stored = load_traces(trace_path(spec, RUNS_3RCD0))
     cfg = EkfConfig.from_json(CONFIG_JSON)
-    if min(abs(run.i[stored[name]["start"]]) for name in WRONG[1:]) < THRESHOLD_A:
+    if min(abs(run.i[stored[name]["start"]]) for name in WRONG[1:]) < RESTED_CURRENT_A:
         raise ValueError(f"an experiment-3 start of {spec.path.name} is below the threshold; it cannot stay at S2")
     model = NativeModel(load_candidate())
 
     def cases_at(small_v):
         cases = dict(stored)
         for name, offset in ROW0_OFFSETS_A.items():
-            prior = replace(cfg, p0_v_std=branch_prior(run.i[0] + offset, small_v, cfg.p0_v_std))
+            prior = replace(cfg, p0_v_std=branch_std(replace(cfg, p0_v_std_rested=small_v), run.i[0] + offset))
             out = model.run(run, prior, stored[name]["soc0"], offset)
             cases[name] = stored[name] | {"soc": out["soc"], "v_pred": out["v_pred"]}
         return cases

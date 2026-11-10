@@ -15,7 +15,7 @@ import pandas as pd
 
 from data_checks import file_records
 from ekfsoc.constants import T_GRID_DEGC
-from ekfsoc.ekf import EkfConfig
+from ekfsoc.ekf import RESTED_CURRENT_A, EkfConfig
 from ekfsoc.plots import DOTS, MODEL_COLORS, TEMP_COLORS, save
 from export_params import write_text
 from run_all import CONFIG_JSON
@@ -24,7 +24,7 @@ from s11_evaluate import WRONG
 from s11_native import build
 from s12_prescreen import EXP1_LIMIT_PP, PEAK_LIMIT_PP, prescreen, prior_metric
 from start_cases import IN_RUN, UNKNOWN, replay_run, run_history, scan_record
-from start_prior import NATIVE_TOLERANCE, PRIORS_V, THRESHOLD_A, prior_frame, prior_run, prior_table
+from start_prior import NATIVE_TOLERANCE, PRIORS_V, prior_frame, prior_run, prior_table
 from start_report import report_text
 
 
@@ -35,13 +35,13 @@ STORED_RESULTS = RESULTS / "ekf_results_3rcd0.csv"
 
 
 def history_frame(specs, splits_of, records):
-    """Part 1: one row per run, marked L when its first current is at or above THRESHOLD_A and U when unknown."""
+    """Part 1: one row per run, marked L when its first current is at or above RESTED_CURRENT_A and U when unknown."""
     rows = []
     for spec in specs:
         row = {"split": splits_of[spec.path.name], "folder": spec.folder, "file": spec.path.name,
                "cycle": spec.cycle_name, "T_degC": spec.nominal_temp_degc, **run_history(spec, records)}
         marks = []
-        if abs(row["i_first_A"]) >= THRESHOLD_A:
+        if abs(row["i_first_A"]) >= RESTED_CURRENT_A:
             marks.append("L")
         if row["run_class"] == UNKNOWN:
             marks.append("U")

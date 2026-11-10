@@ -1,5 +1,5 @@
-"""The rules of S12 step A (decision 1.56) on synthetic inputs: the history class, the separation threshold, the
-current rule that chooses the branch prior and the measures of one wrong-start case."""
+"""The rules of S12 step A (decision 1.56) on synthetic inputs: the history class, the separation threshold and the
+measures of one wrong-start case. The current rule that chooses the branch prior is the filter's (test_ekf.py)."""
 
 import math
 from types import SimpleNamespace
@@ -8,7 +8,6 @@ import numpy as np
 import pytest
 
 from start_cases import RESTED, UNKNOWN, best_threshold, case_measures, history_class, span_end
-from start_prior import branch_prior
 
 
 def test_a_long_rest_and_a_short_gap_make_a_rested_start():
@@ -50,18 +49,6 @@ def test_a_flag_below_the_threshold_is_found_too():
 def test_overlapping_values_count_the_fewest_misclassified():
     values = np.array([0.1, 0.5, 0.3, 0.9])
     assert best_threshold(values, np.array([False, True, False, False]))[2] == 1
-
-
-def test_a_small_first_current_gets_the_small_prior():
-    assert branch_prior(0.049, 0.015, 0.05) == 0.015
-
-
-def test_a_first_current_of_the_threshold_gets_the_load_prior():
-    assert branch_prior(0.5, 0.015, 0.05) == 0.05
-
-
-def test_the_rule_reads_the_size_of_a_regen_current():
-    assert branch_prior(-1.2, 0.015, 0.05) == 0.05
 
 
 def synthetic_case():

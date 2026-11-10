@@ -2,7 +2,7 @@
 
 PYTHON := .venv/bin/python
 
-.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd accuracy diagnose-accuracy fit-3rcd0 ekf-3rcd0 tune-3rcd0 ekf-3rcd0n diagnose-regen diagnose-starts diagnose-jacobian c-3rcd0 equiv-3rcd0 arm-3rcd0 tune ekf c equiv arm sensitivity octave readme readme-check
+.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd accuracy diagnose-accuracy fit-3rcd0 ekf-3rcd0 tune-3rcd0 ekf-3rcd0n diagnose-regen diagnose-starts diagnose-jacobian ekf-3rcd0p c-3rcd0 equiv-3rcd0 arm-3rcd0 tune ekf c equiv arm sensitivity octave readme readme-check
 
 all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd
 	$(MAKE) accuracy
@@ -10,6 +10,7 @@ all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3r
 	$(MAKE) diagnose-regen
 	$(MAKE) diagnose-starts
 	$(MAKE) diagnose-jacobian
+	$(MAKE) ekf-3rcd0p
 	$(MAKE) c-3rcd0
 	$(MAKE) equiv-3rcd0
 	$(MAKE) arm-3rcd0
@@ -127,6 +128,13 @@ diagnose-starts:
 # results/jacobian_3rcd0.md, jacobian_3rcd0.csv and plots/s12/jacobian_3rcd0.png.
 diagnose-jacobian:
 	$(PYTHON) python/diagnose_jacobian.py
+
+# S12 step C: 3RC-D0-P, the 10 mV branch prior for a start below 0.5 A, on all 378 cases of the 63 runs with the
+# Python filter, judged by the eight guards of 1.48 (decision 1.57). Needs ekf-3rcd0 and diagnose-starts. Writes
+# results/ekf_config_3rcd0p.json, ekf_results_3rcd0p.csv, model_compare_3rcd0p.md and
+# plots/s12/model_compare_3rcd0p.png; traces in results/runs/3rcd0p/.
+ekf-3rcd0p:
+	$(PYTHON) python/compare_3rcd0p.py
 
 # S11 close (decision 1.54): regenerate the 3RC-D0 C tables and test vectors, build the float and the double
 # library with -DEKF_USE_3RCD0=ON and run the unit tests in both.

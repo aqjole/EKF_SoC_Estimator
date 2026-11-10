@@ -7,16 +7,17 @@ import numpy as np
 
 from data_checks import fmt
 from ekfsoc.constants import T_GRID_DEGC
+from ekfsoc.ekf import RESTED_CURRENT_A
 from export_params import md_table
 from s10_protocol import DISCLOSURE
 from s11_evaluate import WRONG
 from s12_prescreen import EXP1_LIMIT_PP, PEAK_LIMIT_PP, SCREEN_HEADER, screen_cells
 from start_cases import BEFORE_S, CLASS_CODE, GAP_MAX_S, IN_RUN, REST_MIN_S, UNKNOWN, best_threshold
-from start_prior import NATIVE_TOLERANCE, PRIORS_V, THRESHOLD_A
+from start_prior import NATIVE_TOLERANCE, PRIORS_V
 
 
-MARKS = (f"Mark L: the run's first used row has |I| at or above {THRESHOLD_A} A, so the rule of kind (i) gives it the "
-         "S2 prior in experiments 1, 2 and 4. Mark U: its history is unknown (part 1).")
+MARKS = (f"Mark L: the run's first used row has |I| at or above {RESTED_CURRENT_A} A, so the rule of kind (i) gives "
+         "it the S2 prior in experiments 1, 2 and 4. Mark U: its history is unknown (part 1).")
 
 
 def run_label(row):
@@ -31,7 +32,7 @@ def marked_runs(history, temp):
 
 def part1_lines(history, cases):
     exp3 = cases[cases.experiment == "exp3_low"].set_index(["folder", "file"])
-    loaded = history[history.i_first_A.abs() >= THRESHOLD_A]
+    loaded = history[history.i_first_A.abs() >= RESTED_CURRENT_A]
     unknown = history[history.run_class == UNKNOWN]
     below_load = exp3[exp3.i_start_A.abs() < loaded.i_first_A.abs().min()]
     rows = [[row.split, row.folder, row.cycle, row.mark, row.previous_file, fmt(row.gap_s, 0), fmt(row.rest_s, 1),
@@ -51,8 +52,8 @@ def part1_lines(history, cases):
         f"- Rested: {int((history.run_class != UNKNOWN).sum())} of {len(history)} runs. Unknown: "
         + "; ".join(f"{run_label(row)} ({'no previous file' if row.previous_file == 'none' else f'gap {row.gap_s:,.0f} s'})"
                     for row in unknown.itertuples()) + ".",
-        f"- First used row: {len(history) - len(loaded)} of {len(history)} runs below {THRESHOLD_A} A "
-        f"(|I| {fmt(history.i_first_A.abs().min(), 4)} to {fmt(history.i_first_A.abs()[history.i_first_A.abs() < THRESHOLD_A].max(), 4)} A); "
+        f"- First used row: {len(history) - len(loaded)} of {len(history)} runs below {RESTED_CURRENT_A} A "
+        f"(|I| {fmt(history.i_first_A.abs().min(), 4)} to {fmt(history.i_first_A.abs()[history.i_first_A.abs() < RESTED_CURRENT_A].max(), 4)} A); "
         f"{len(loaded)} at {fmt(loaded.i_first_A.abs().min(), 4)} to {fmt(loaded.i_first_A.abs().max(), 4)} A: "
         + "; ".join(run_label(row) for row in loaded.itertuples()) + ".",
         f"- Experiment-3 start rows: |I| from {fmt(exp3.i_start_A.abs().min(), 4)} to {fmt(exp3.i_start_A.abs().max(), 4)} A; "
@@ -138,7 +139,7 @@ def separation_lines(cases):
             cut, side, wrong = best_threshold(values, flagged)
             rows.append([name, f"{flagged.sum()} of {len(here)}", label, threshold_text(cut, side), str(wrong),
                          "yes" if wrong == 0 else "no"])
-        small = here.i_start_A.abs().to_numpy() < THRESHOLD_A
+        small = here.i_start_A.abs().to_numpy() < RESTED_CURRENT_A
         rule_rows.append([name, str(small.sum()), str((small & flagged).sum()), str((~small).sum()),
                           str((~small & flagged).sum())])
     codes = ", ".join(f"{label} {code}" for label, code in CLASS_CODE.items())
@@ -151,9 +152,9 @@ def separation_lines(cases):
         "experiment 3 by construction, which is not a finding. A rule that needs 30 s of history can act only after "
         "those 30 s, and the error of those seconds stays in every score.", "",
         *md_table(["Experiment", "Cases above", "Quantity", "Best threshold", "Misclassified", "Separates"], rows), "",
-        f"The {THRESHOLD_A} A rule of kind (i) on |I| of the start row (the prior it would set does not enter this "
-        "replay):", "",
-        *md_table(["Experiment", f"Starts below {THRESHOLD_A} A", "of them above 25 pp", "Starts at or above",
+        f"The {RESTED_CURRENT_A} A rule of kind (i) on |I| of the start row (the prior it would set does not enter "
+        "this replay):", "",
+        *md_table(["Experiment", f"Starts below {RESTED_CURRENT_A} A", "of them above 25 pp", "Starts at or above",
                    "of them above 25 pp"], rule_rows), ""]
 
 
@@ -218,11 +219,11 @@ def part3_lines(history, by_prior, tables, screens, metrics, deviation):
     incumbent_prior = next(iter(by_prior))
     return ["## Part 3: the branch prior alone on the 40 Mix runs", "",
             f"3RC-D0 under the S2 settings, with every branch voltage started at the prior value when the size of the "
-            f"filter's input current on the first used row is below {THRESHOLD_A} A (in experiment 4 with its 0.2 A "
-            f"offset) and at the S2 value, {1000 * incumbent_prior:.0f} mV, otherwise. Experiments 1, 2 and 4 run "
+            f"filter's input current on the first used row is below {RESTED_CURRENT_A} A (in experiment 4 with its "
+            f"0.2 A offset) and at the S2 value, {1000 * incumbent_prior:.0f} mV, otherwise. Experiments 1, 2 and 4 run "
             "through the native evaluator of decision 1.50; experiment 3 is the stored S2 trace, because every Mix "
-            f"experiment-3 start is above {THRESHOLD_A} A. The S2 rows are scored from the stored Python traces. Before "
-            f"any number is used, the native evaluator at the S2 value reproduces the stored Python traces of "
+            f"experiment-3 start is above {RESTED_CURRENT_A} A. The S2 rows are scored from the stored Python traces. "
+            f"Before any number is used, the native evaluator at the S2 value reproduces the stored Python traces of "
             f"experiments 1, 2 and 4 on all 40 Mix runs within {NATIVE_TOLERANCE:g}: largest difference "
             f"{deviation[0]:.2e} in SoC and {deviation[1]:.2e} V in predicted voltage. The standard runs are not run. "
             "This is a selection on the calibration runs, in sample, and nothing here is a guard.", "", MARKS, "",
