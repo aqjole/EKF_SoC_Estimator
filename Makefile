@@ -2,7 +2,7 @@
 
 PYTHON := .venv/bin/python
 
-.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd accuracy diagnose-accuracy fit-3rcd0 ekf-3rcd0 tune-3rcd0 ekf-3rcd0n diagnose-regen diagnose-starts diagnose-jacobian ekf-3rcd0p c-3rcd0 equiv-3rcd0 arm-3rcd0 tune ekf c equiv arm sensitivity octave readme readme-check
+.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd accuracy diagnose-accuracy fit-3rcd0 ekf-3rcd0 tune-3rcd0 ekf-3rcd0n diagnose-regen diagnose-starts diagnose-jacobian ekf-3rcd0p c-3rcd0 equiv-3rcd0 arm-3rcd0 summary tune ekf c equiv arm sensitivity octave readme readme-check
 
 all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd
 	$(MAKE) accuracy
@@ -14,6 +14,7 @@ all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3r
 	$(MAKE) c-3rcd0
 	$(MAKE) equiv-3rcd0
 	$(MAKE) arm-3rcd0
+	$(MAKE) summary
 	$(MAKE) readme
 
 # Fetch the LG 18650HG2 .mat files into data/raw/ and verify their sha256.
@@ -155,6 +156,11 @@ equiv-3rcd0:
 # S11 close: Cortex-M4 sections, sizeof(ekf_t) and static stack frames of the 3RC-D0 build (needs arm-none-eabi-gcc).
 arm-3rcd0:
 	$(PYTHON) python/arm_footprint.py --model 3rcd0
+
+# Every filter model side by side, read from the committed result files of every stage (decision 1.59); the US06
+# open-loop check needs data/raw/. Writes results/summary.md.
+summary:
+	$(PYTHON) python/summarize.py
 
 # S2: tune the EKF noise settings on the tuning cycle and freeze them (not part of "all": the frozen values are committed).
 # Writes results/s2/tuning.md, results/s2/ekf_config.json and section 1.15 of docs/decisions.md.

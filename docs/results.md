@@ -1,6 +1,6 @@
 # Results in full
 
-The detail behind the [README](../README.md): the dataset, every `make` target, the results of every stage with all their tables and plots, and the C port. Every table between `<!-- results:<key>:begin -->` and `<!-- results:<key>:end -->` markers is copied from a file in `results/` by `python/update_readme.py`; `make readme-check` and CI fail when this file and `results/` disagree. The rules behind each result are in [`decisions.md`](decisions.md), the equations in [`model.md`](model.md).
+The detail behind the [README](../README.md): the dataset, every `make` target, the results of every stage with all their tables and plots, and the C port. Every table between `<!-- results:<key>:begin -->` and `<!-- results:<key>:end -->` markers is copied from a file in `results/` by `python/update_readme.py`; `make readme-check` and CI fail when this file and `results/` disagree. The rules behind each result are in [`decisions.md`](decisions.md), the equations in [`model.md`](model.md). What every file in `results/` holds, and which script and target write it, is in [`results/README.md`](../results/README.md).
 
 ## Dataset
 
@@ -87,6 +87,7 @@ make all         # every stage below, in order
 | `make c-3rcd0` | S11 | regenerates the 3RC-D0 C tables and test vectors, builds float and double with `-DEKF_USE_3RCD0=ON` and runs the unit tests | `c/src/ekf_params_3rcd0.c`, `c/include/ekf_params_3rcd0.h`, `c/tests/vectors/vectors_3rcd0.h` |
 | `make equiv-3rcd0` | S11 | compares both 3RC-D0 builds with the Python traces in six experiment cases on all 63 runs | `results/s11/equivalence_3rcd0.md`, `results/s11/equivalence_3rcd0.csv` |
 | `make arm-3rcd0` | S11 | cross-compiles the 3RC-D0 build for a Cortex-M4 with `-fstack-usage` | `results/s11/c_footprint_3rcd0.md` |
+| `make summary` | after S12 (1.59) | puts every filter model run in all four experiments side by side from the committed result files of every stage, and reruns the US06 open-loop check of every model's tables | `results/summary.md` |
 | `make readme` | S4 | copies the results tables into `README.md` and this file | `README.md`, `docs/results.md` |
 | `make readme-check` | S4 | fails if `README.md` or this file is out of sync with `results/` | |
 
