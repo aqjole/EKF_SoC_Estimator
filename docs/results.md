@@ -1207,6 +1207,187 @@ itself. S11 adopts nothing; 3RC-D0 with the S2 settings stays.
 
 ![S11 regen rows at the limit](../results/plots/s11/regen_limit.png)
 
+### S12 A · Starts of the 3RC-D0 filter
+
+S12 is a diagnostic stage on the deployment filter, 3RC-D0 with the S2 settings
+([decision 1.56](decisions.md#156-s12-a-diagnostic-stage-on-the-starts-and-the-jacobian-of-the-3rc-d0-filter-before-any-estimator-change)).
+Step A lists the history before each of the 63 runs and replays the 189 wrong-start
+cases (experiments 2, 3 low and 3 high) under the unchanged filter. It then tries one
+change on the 40 Mix runs only: a smaller initial branch standard deviation, the
+branch prior, when the filter's first input current is below 0.5 A, and the S2 value,
+50 mV, otherwise. No standard run was run under a changed filter in this step.
+
+<!-- results:s12_starts:begin -->
+
+**Step C's pre-screen quantities**
+
+Per prior value on the 40 Mix runs: the change of each temperature's experiment-1 mean against the S2 value (step C's limit +0.10 pp), the count of the 120 Mix wrong-start cases above 25 pp (experiment 3 from the stored S2 traces) and the largest of their peaks, the experiments and temperatures whose reached count (experiments 2 and 3, as guard 6 counts them) is lower than at the S2 value, the selection metric (the mean over the six temperatures of the mean of the experiment-1, -2 and -4 Mix RMSEs) and whether the value qualifies under step C's pre-screen.
+
+| Prior | exp1 change 40 degC | exp1 change 25 degC | exp1 change 10 degC | exp1 change 0 degC | exp1 change -10 degC | exp1 change -20 degC | Cases above 25 pp | Largest peak (pp) | Fewer reached | Metric (pp) | Qualifies |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 50 mV (S2) | +0.0000 | +0.0000 | +0.0000 | +0.0000 | +0.0000 | +0.0000 | 20 | 46.7341 | none | 2.3452 | yes |
+| 5 mV | -0.0365 | -0.0221 | -0.0049 | +0.0449 | -0.0697 | -0.5015 | 10 | 37.0495 | none | 1.2988 | yes |
+| 10 mV | -0.0356 | -0.0207 | -0.0016 | +0.0084 | -0.1785 | -0.4755 | 10 | 37.0495 | none | 1.2835 | yes |
+| 15 mV | -0.0342 | -0.0190 | +0.0007 | -0.0196 | -0.1955 | -0.4504 | 10 | 37.0495 | none | 1.2929 | yes |
+| 20 mV | -0.0323 | -0.0170 | +0.0013 | -0.0339 | -0.1750 | -0.2571 | 10 | 37.0495 | none | 1.3145 | yes |
+| 25 mV | -0.0295 | -0.0148 | +0.0015 | -0.0378 | -0.1498 | -0.1780 | 10 | 37.0495 | none | 1.3330 | yes |
+| 30 mV | -0.0256 | -0.0124 | +0.0009 | -0.0342 | -0.1274 | -0.1745 | 10 | 37.0495 | none | 1.3528 | yes |
+
+<!-- results:s12_starts:end -->
+
+58 of the 63 runs start rested, right after a charge file that ends in a rest; the
+other 5 have an unknown history (a gap of hours to days, or no previous file). On the
+first used row 54 runs carry less than 0.5 A, and 9, all of them Mix 4 or Mix 8, open
+under a load of 1.1034 to 1.7215 A. Under the unchanged filter 30 of the 189
+wrong-start cases peak above 25 pp: 19 in experiment 2 and 11 in experiment 3 low.
+No measured start quantity separates them from the other cases: not the history
+class, the opening current, or the mean current or voltage change over the first 1,
+10 and 30 s. The best, the voltage change over 30 s, still misclassifies 11 of the 63
+experiment-2 cases and 4 of the 63 experiment-3-low cases. The experiment-3-low peaks
+are tied to the polarisation the restart drops.
+
+On the Mix runs every branch prior from 5 to 30 mV halves the cases above 25 pp (20 to
+10), lowers the largest peak from 46.7341 to 37.0495 pp and lowers no reached count.
+The pre-screen of decision 1.56 picks 10 mV, whose metric (the mean over the six
+temperatures of the experiment-1, -2 and -4 Mix means) is the lowest, 1.2835 pp
+against 2.3452 pp at 50 mV. These Mix-run numbers are in sample. The
+[diagnostic](../results/start_cases.md) lists every run's history and every case
+above 25 pp with its start measures.
+
+![S12 wrong starts and the branch prior on the Mix runs](../results/plots/s12/start_cases.png)
+
+### S12 B · Omitted Jacobian terms of 3RC-D0
+
+The filter's Jacobians leave out the SoC dependence of R0 and of the branch parameters
+([`model.md`](model.md) Eq. 6 to Eq. 8). Step B measures these terms along the
+unchanged 3RC-D0 filter, as S10 measured them on 2RC-I, and replays three variants
+that put them back on the 40 Mix runs only: the process term (the SoC column of F),
+the measurement term (-I dR0/dSoC in H) and both.
+
+<!-- results:s12_jacobian:begin -->
+
+**Step C pre-screen**
+
+Against the incumbent, over the 40 Mix runs: the change of each temperature's experiment-1 mean (limit +0.10 pp), the count of the 120 wrong-start cases above 25 pp and the largest peak, every temperature and experiment whose reached count (experiments 2 and 3, as guard 6 counts them) is lower, the selection metric (the experiment-1 mean over the 40 runs) and whether the variant qualifies under step C's pre-screen of decision 1.56. Step C's entry names the outcome.
+
+| variant | exp1 change 40 degC | exp1 change 25 degC | exp1 change 10 degC | exp1 change 0 degC | exp1 change -10 degC | exp1 change -20 degC | Cases above 25 pp | Largest peak (pp) | Fewer reached | Metric (pp) | Qualifies |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Incumbent | +0.0000 | +0.0000 | +0.0000 | +0.0000 | +0.0000 | +0.0000 | 20 | 46.7341 | none | 1.2736 | yes |
+| Process | +0.0249 | +0.0114 | +0.1902 | +0.2800 | +1.3900 | +2.1918 | 14 | 45.8737 | exp3_low at 0 degC (7 to 5), exp3_high at 0 degC (7 to 5), exp2 at -10 degC (7 to 1), exp3_low at -10 degC (7 to 1), exp3_high at -10 degC (7 to 1) | 2.0416 | no |
+| Measurement | -0.0141 | +0.0040 | +0.0197 | -0.3075 | -0.3372 | +0.1110 | 14 | 48.4113 | none | 1.1861 | no |
+| Both | -0.0063 | +0.0279 | +0.2124 | +0.4003 | +1.4494 | +2.0268 | 14 | 45.9339 | exp3_high at 0 degC (7 to 5), exp2 at -10 degC (7 to 1), exp3_low at -10 degC (7 to 1), exp3_high at -10 degC (7 to 1) | 2.0449 | no |
+
+<!-- results:s12_jacobian:end -->
+
+The terms matter mainly in the cold. Their one-step effect on the SoC-to-branch
+cross-covariance (the largest run-level 95th percentile of the normalised change in
+experiment 1, a local sensitivity) is smaller on 3RC-D0 than on 2RC-I at every
+temperature and lies above 0.5 only at -20 degC: 0.87082, against 1.4638 on 2RC-I.
+None of the three variants passes the pre-screen. The process term and both terms raise
+the -20 degC experiment-1 Mix mean by 2.1918 and 2.0268 pp and lower reached counts
+at 0 and -10 degC. The measurement term alone lowers the experiment-1 Mix mean over
+the 40 runs from 1.2736 to 1.1861 pp, but raises it at -20 degC by 0.1110 pp, above
+the 0.10 pp limit, and raises the largest Mix peak to 48.4113 pp, above 46.7341 pp.
+The result covers these three variants under the S2 settings only. The
+[diagnostic](../results/jacobian_3rcd0.md) has every term per split and temperature
+and the 30 wrong-start cases above 25 pp.
+
+![S12 Jacobian terms and variants](../results/plots/s12/jacobian_3rcd0.png)
+
+### S12 C · A rested-start branch prior (not adopted)
+
+Step C ([decision 1.57](decisions.md#157-s12-step-c-a-10-mv-branch-prior-for-a-start-below-05-a-3rc-d0-p-judged-by-the-eight-guards-of-148-unchanged))
+names one candidate by the pre-screen fixed in 1.56: every prior value qualifies and
+no Jacobian variant does, so the candidate is 3RC-D0-P. It is 3RC-D0 with the S2
+settings and one rule: when the size of the filter's input current on the first row
+it processes is below 0.5 A, every branch starts with a standard deviation of 10 mV
+instead of 50 mV. The eight guards of decision 1.48 judge it unchanged, on all 378
+cases of the 63 runs. The standard runs had been inspected before the candidate ran
+(1.57 lists the earlier looks, which made a failure of guards 2 and 3 the expected
+outcome), so this result is a regression check, not an independent validation.
+
+<!-- results:s12_prior:begin -->
+
+**Guards and verdict**
+
+The eight guards of decision 1.48 against 3RC-D0 under `results/ekf_config.json`, evaluated as 1.35 amends 1.32: on the values of the results CSVs, recomputed from the unrounded traces where the margin (the smallest distance of a compared value from its limit, or of two compared values from each other, taken over the RMSE and peak values, not over the integer counts) is below 1e-4. Guard 2 uses the 23 standard runs, guards 3 to 7 all 63, guard 8 the 40 Mix runs; the tuning run is scored with the others. Guard 1 is recomputed from the unchanged 3RC-D0 tables.
+
+| Guard | Value | Limit | Margin | Result |
+|---|---|---|---|---|
+| 1. S1 gate | US06 at 25 degC: 23.2363 mV (limit 30) | at most 30 mV (inherited: no table changes) | n/a | PASS |
+| 2. Standard-run improvement | lower at 3 of 6; higher by more than 0.10 pp at -10 degC, -20 degC | lower at 4 or more of 6 temperatures, higher at none by more than 0.10 pp | 0.0183 | FAIL |
+| 3. Largest run increase | largest +0.5071 pp; above the limit of +0.50: HWFET at -20 degC +0.5071 | no run higher by more than 0.50 pp | 0.0071 | FAIL |
+| 4. Largest cycle increase | +0.2273 pp (HWFET, limit +0.25) | no cycle mean higher by more than 0.25 pp | 0.0227 | PASS |
+| 5. Worst run | 6.7681 pp against 6.7681 pp (recomputed from unrounded values) | not above the incumbent's worst run | 0.0000 | PASS |
+| 6. Experiment-4 means and reached counts | largest exp4 increase +0.0133 pp (limit +0.10); fewer reached: none | experiment-4 mean higher at no temperature by more than 0.10 pp; no reached count lower | 0.0867 | PASS |
+| 7. Wrong-start peaks | above 25 pp: 13 vs 30; maximum 37.0495 vs 46.7341 pp | count above 25 pp and largest peak not above the incumbent's | 0.0640 | PASS |
+| 8. Mix-run means | largest increase +0.0085 pp (limit +0.10) | Mix experiment-1 mean higher at no temperature by more than 0.10 pp | 0.0915 | PASS |
+
+**NOT ADOPTED.**
+
+**Experiment 2: the rule off and on**
+
+Start 20 pp below the reference at row 0, all 63 runs. Pairs are 3RC-D0 / 3RC-D0-P (the rule off / on).
+
+| T (degC) | Runs | 3RC-D0 RMSE (pp) | 3RC-D0-P RMSE (pp) | Change (pp) | Above 25 pp | Largest peak (pp) | Reached | Median t_conv (s) |
+|---|---|---|---|---|---|---|---|---|
+| 40 | 7 | 1.0128 | 0.3891 | -0.6237 | 0 / 0 | 11.1664 / 7.6697 | 7 / 7 | 124.7 / 0.3 |
+| 25 | 11 | 0.8573 | 0.5321 | -0.3252 | 0 / 0 | 13.1960 / 8.9296 | 11 / 11 | 94.7 / 0.3 |
+| 10 | 11 | 2.1205 | 0.9359 | -1.1845 | 0 / 0 | 24.0287 / 9.4065 | 11 / 11 | 885.0 / 0.3 |
+| 0 | 11 | 2.6984 | 1.2505 | -1.4479 | 2 / 0 | 29.6050 / 12.8381 | 11 / 11 | 2971.8 / 2982.7 |
+| -10 | 11 | 6.9446 | 2.1107 | -4.8339 | 6 / 1 | 34.9057 / 26.0135 | 10 / 10 | 5234.4 / 4815.7 |
+| -20 | 12 | 12.4502 | 2.6061 | -9.8442 | 11 / 1 | 46.7341 / 26.2550 | 9 / 11 | 3709.3 / 2523.5 |
+
+**Experiment-3 starts below the threshold**
+
+The restart cases whose first current is below the threshold, so that the candidate starts them with the rested prior although the branches are polarised (decision 1.57). Pairs are 3RC-D0 / 3RC-D0-P. Reached at is t_conv, the time after the start from which the error stays inside +-2 pp (n/a: never); the forgetting time is against exp3_ref, which is not scored itself and changes with the rule too.
+
+| Folder | Cycle | Experiment | RMSE (pp) | Peak (pp) | Reached at (s) | Forgetting time (s) |
+|---|---|---|---|---|---|---|
+| 0degC | LA92 | exp3_low | 2.1724 / 3.1844 | 15.2210 / 14.5097 | 2425.1 / 3161.4 | 24.4 / 0.3 |
+| 0degC | LA92 | exp3_high | 1.2456 / 3.1124 | 3.8787 / 10.5523 | 489.4 / 3160.9 | 1239.6 / 0.5 |
+| 0degC | LA92 | exp3_ref | 1.9140 / 3.1660 | 10.0815 / 11.9130 | 2423.6 / 3161.2 | n/a / n/a |
+
+<!-- results:s12_prior:end -->
+
+3RC-D0-P fails guards 2 and 3 and is not adopted ([decision
+1.58](decisions.md#158-s12-outcome-3rc-d0-p-is-not-adopted-s12-closes-on-its-diagnostics-and-accuracy-work-on-this-dataset-ends)).
+In experiment 2 the rule does what it was built for: the mean at -20 degC falls from
+12.4502 to 2.6061 pp, and its cases above 25 pp fall from 19 to 2 (30 to 13 over the 189
+wrong-start cases). The two experiment-2 cases still above 25 pp open under load and
+keep 50 mV; the 11 experiment-3-low cases are unchanged. The cost is on the cold
+standard runs: their correct start, and with the current offset US06 at -20 degC, whose
+experiment-4 RMSE rises from 1.9131 to 6.8700 pp (`results/ekf_results_3rcd0p.csv`). A
+likely cause, seen in a replay of HWFET at -20 degC but not in the reports: with the 50
+mV prior the branches absorb the error of the first cold pulses; with a small prior the
+SoC state takes it. The standard-run experiment-1 mean rises by 0.1424 pp at -10 degC
+and 0.2079 pp at -20 degC, and HWFET at -20 degC rises by 0.5071 pp against the 0.50 pp
+limit. Over the 63 runs the experiment-1 mean still falls, from 1.1670 to 1.1002 pp, but
+the gain is on the Mix runs, in sample.
+
+The rule reads one current sample, so it cannot tell a rest from a quiet sample inside a
+drive. The one such start in this dataset is LA92 at 0 degC in experiment 3, which
+restarts on a 0.401 A sample: its SoC RMSE rises from 2.1724 to 3.1844 pp (3 low) and
+from 1.2456 to 3.1124 pp (3 high). The 0.5 A test also nearly coincides with the
+experiment type, so this data cannot tell a physical rule from one that learned the
+labels. The result does not show that no start-dependent prior can pass: an earlier
+scratch look, not reproduced by a script here, found larger priors that might, but the
+rule of 1.56 did not select them, and running one now would select on the standard runs
+after their result is known. The [comparison report](../results/model_compare_3rcd0p.md)
+holds every experiment, every case above 25 pp and the prior each case received.
+
+![S12 3RC-D0 and 3RC-D0-P, experiment 1](../results/plots/s12/model_compare_3rcd0p.png)
+
+Accuracy work on this dataset ends with S12. The filter is not the limit: a manual twin
+test recorded in decision 1.56 (not reproduced by a script in this repo) found that, on
+voltage generated by 3RC-D0 itself, a correct start leaves almost no error, so the
+remaining experiment-1 error is model error, largest in the cold. No unseen run is left,
+since the 23 standard runs were inspected before S9 and before every stage since, and
+with one cell in one campaign only another cell can show whether a table or a rule
+transfers. 3RC-D0 with the S2 settings stays the deployment model. The next stage runs
+the C filter on target hardware, a Cortex-M4 board against recorded runs, under its own
+entry.
+
 ## C port
 
 **API** (`c/include/ekf.h`). The caller owns one `ekf_t` per cell and one `ekf_cfg_t` with the noise settings and a pointer to the parameter tables. The library allocates nothing and keeps no state of its own.
@@ -1343,7 +1524,9 @@ CI runs on every push to GitHub.
 ## Limitations in full
 
 - In the cold the SoC estimate of 3RC-D0 moves by about 3 to 5 pp per run across the regen rows that the cycler holds at its 4.2 V limit near full charge ([`results/regen_limit.md`](../results/regen_limit.md)). S11 found no model or settings change that removes this within the adoption guards.
+- Under the deployment filter, 30 of the 189 wrong-start cases peak above 25 pp, 19 in experiment 2 and 11 in experiment 3 low ([`results/start_cases.md`](../results/start_cases.md)). S12 measured them and adopted nothing: a 10 mV branch prior for a start below 0.5 A cuts the experiment-2 error but fails guards 2 and 3 on the cold standard runs ([`results/model_compare_3rcd0p.md`](../results/model_compare_3rcd0p.md)). A rule that reads one current sample cannot tell a rest from a quiet sample inside a drive.
 - S9 used one cell and shared drive segments across the two splits. The standard runs also informed prior diagnostics and the low-SoC boundary choice.
+- Accuracy work on this dataset ends with S12. The 23 standard runs were inspected before S9 and before every stage since, and they share segments with the 40 Mix runs, so no unseen run is left; whether a table or a rule transfers is a question only another cell can answer (`docs/decisions.md` 1.58).
 - This is a personal project. It validates offline on public data from one new cell.
 - Not run on target hardware: the C library is cross-compiled only. It is not checked against MISRA C or ISO 26262.
 - No SOH or SOP estimation, and no Simulink model.
@@ -1352,7 +1535,7 @@ CI runs on every push to GitHub.
 - The cell aged over the campaign, which ran 25, 40, 10, 0, -10 and -20 degC in that order. It also lost capacity inside the 25 degC block (the two 25 degC 1C runs in the capacity table). One Q_ref, from the freshest cell, is used at every temperature. Missing and off-temperature 1C tests are marked in `results/capacity.md`.
 - The reference SoC is itself coulomb counting, on the cycler's Ah counter. The baseline counts the logged current; the two agree closely (the coulomb-counting table of experiment 1, `docs/model.md` C13). The cycler's stated accuracy is 0.1 % of full scale, so a real sensor offset in the data would be invisible to this comparison.
 - The OCV table is the C/20 discharge branch, corrected onto the HPPC 1 h rest voltages. The correction rests on the few rest points of each temperature and is held flat beyond the first and last of them. The cold rests have not fully relaxed after 1 h, which leaves a small bias in those points (`docs/decisions.md` 1.1, 1.12). The charge half of the C/20 test is not used, because the two halves do not share an Ah axis.
-- The 2RC fit assumes two separable branches: R0, R1 and tau1 from the discharge pulses, R2 and tau2 from the 1 h rests, with V2 = 0 at the start of each move. A third branch fitted from the same pulses made the US06 voltage worse at most temperatures (S6), so the model keeps no time constant between the fast and the slow branch, although the drive cycles ask for one of 20 to 50 s (`docs/decisions.md` 1.25). A second fit of the middle branch alone, on the HPPC pulse trains, failed the US06 gate too (1.27). Charge pulses are fitted only for the 2RC-Ic model of S8, which is not adopted, so regen uses discharge parameters in the adopted model too; the low-current R1 of the 2RC-Il model of S8, fitted on the PausCycl files, is not adopted either. The EKF Jacobians leave out dR0/dSoC and the SoC dependence of the RC parameters (`docs/decisions.md` 1.12, `docs/model.md` Eq. 7, Eq. 8).
+- The 2RC fit assumes two separable branches: R0, R1 and tau1 from the discharge pulses, R2 and tau2 from the 1 h rests, with V2 = 0 at the start of each move. A third branch fitted from the same pulses made the US06 voltage worse at most temperatures (S6), so the model keeps no time constant between the fast and the slow branch, although the drive cycles ask for one of 20 to 50 s (`docs/decisions.md` 1.25). A second fit of the middle branch alone, on the HPPC pulse trains, failed the US06 gate too (1.27). Charge pulses are fitted only for the 2RC-Ic model of S8, which is not adopted, so regen uses discharge parameters in the adopted model too; the low-current R1 of the 2RC-Il model of S8, fitted on the PausCycl files, is not adopted either. The EKF Jacobians leave out dR0/dSoC and the SoC dependence of the RC parameters (`docs/decisions.md` 1.12, `docs/model.md` Eq. 7, Eq. 8). S12 measured these terms on 3RC-D0; none of three variants that put them back passed the Mix pre-screen ([`results/jacobian_3rcd0.md`](../results/jacobian_3rcd0.md)).
 - The 25 degC open-loop voltage error passes the sanity limit by a thin margin (the gate line under the model-fit table).
 - The noise settings were tuned on one cycle at one temperature. The eight mixes are built from segments of the four standard cycles, so the tuning cycle and the evaluation runs share segments (`docs/decisions.md` 1.11).
 - Errors grow in the cold. Experiment 1 errors are clearly larger at 0, -10 and -20 degC than at 40, 25 and 10 degC, and at -10 and -20 degC many runs of experiments 2 and 3 never settle inside the +-2 pp band.

@@ -83,6 +83,11 @@ RESULTS_SOURCES = [
     ("s11_settings", "results/model_compare_3rcd0n.md", ("Guards and adoption verdict",)),
     ("s11_regen", "results/regen_limit.md", ("Limit rows per temperature",)),
     ("s11_regen", "results/regen_limit.md", ("Mean over runs of the summed change in size (pp)",)),
+    ("s12_starts", "results/start_cases.md", ("Step C's pre-screen quantities",)),
+    ("s12_jacobian", "results/jacobian_3rcd0.md", ("Step C pre-screen",)),
+    ("s12_prior", "results/model_compare_3rcd0p.md", ("Guards and verdict",)),
+    ("s12_prior", "results/model_compare_3rcd0p.md", ("Experiment 2: the rule off and on",)),
+    ("s12_prior", "results/model_compare_3rcd0p.md", ("Experiment-3 starts below the threshold",)),
 ]
 
 # Each document, relative to the repo root, with the sections copied into it.
