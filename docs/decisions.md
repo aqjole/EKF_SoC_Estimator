@@ -935,6 +935,29 @@ experiments select the model for deployment. Release tag v1.6 remains reserved.
 - Next: the recorded limitation "no target hardware or timing" (1.55). A stage that runs the C filter on a Cortex-M4 board against recorded runs is planned under its own entry, written before any measurement. A second cell remains the open test of transfer.
 - Review: one refuter recomputed all eight guards from the text of 1.48 with its own code and reproduced 114 of the 378 cases bitwise with its own setting of the prior; it refuted the first version on a duplicated threshold test in `python/start_prior.py`, since removed. A second refuter (120 cases, guards again) found no result, specification or code defect. Two refuters then checked this entry and the S12 sections of the README and `docs/results.md` against the result files; their corrections (the experiment-4 cost on the standard runs, the mechanism stated as likely, the scope of the identity check, the stage count) are in the text above.
 
+### 1.59 Layout of `results/`: one folder per stage
+
+**Every committed file of `results/` moves from the flat folder into the folder of the stage that produced it, `results/s0/` to `results/s12/`, with its file name unchanged. No number changes: a moved file is byte-identical to the file it replaces, except where a generated report prints the path of another result file. `results/plots/` (already one folder per stage, 1.14) and the git-ignored traces under `results/runs/` stay where they are. Entries of this log written before this one name result files by their old path, `results/<file>`; they are left as written, and `results/README.md` maps every file to its folder.**
+
+- Reason: 69 files in one folder, told apart only by a model suffix; the stage is how the work, the decisions, the plots and the make targets are already organised.
+- The mapping (file names as before):
+  - `s0/`: `data_inventory.md`, `capacity.md`, `data_checks.md`
+  - `s1/`: `params.csv`, `params.md`, `fit_levels.csv`, `ocv_correction.csv`, `model_fit.md`
+  - `s2/`: `ekf_config.json`, `tuning.md`, `ekf_results.csv`, `ekf_summary.md`
+  - `s3/`: `equivalence.md`, `c_footprint.md`
+  - `s5/`: `sensitivity.csv`, `sensitivity.md`, `equivalence_octave.md`
+  - `s6/`: `fit_levels_3rc.csv`, `params_3rc.csv`, `model_fit_3rc.md`, `fit_levels_3rc_rest.csv`, `params_3rc_rest.csv`, `model_fit_3rc_rest.md`
+  - `s7/`: `fit_pulses_r1i.csv`, `r1_current.csv`, `model_fit_r1i.md`, `ekf_results_r1i.csv`, `model_compare_r1i.md`
+  - `s8/`: `ekf_results_r1d.csv`, `model_compare_r1d.md`, `fit_pulses_r1c.csv`, `r1_charge.csv`, `model_fit_r1c.md`, `ekf_results_r1c.csv`, `model_compare_r1c.md`, `r1_low.csv`, `model_fit_r1l.md`, `ekf_results_r1l.csv`, `model_compare_r1l.md`
+  - `s9/`: `fit_nodes_3rcd.csv`, `params_3rcd.csv`, `model_fit_3rcd.md`, `ekf_results_3rcd.csv`, `model_compare_3rcd.md`
+  - `s10/`: `fit_nodes_3rcd0.csv`, `params_3rcd0.csv`, `model_fit_3rcd0.md`, `ekf_results_3rcd0.csv`, `model_compare_3rcd0.md`, `sensitivity_3rcd0.csv`, `accuracy_diagnostics.md`, `accuracy_jacobian.csv`, `accuracy_residual_bins.csv`
+  - `s11/`: `tuning_3rcd0.md`, `ekf_config_3rcd0.json`, `ekf_results_3rcd0n.csv`, `model_compare_3rcd0n.md`, `regen_limit.csv`, `regen_limit.md`, `equivalence_3rcd0.csv`, `equivalence_3rcd0.md`, `c_footprint_3rcd0.md`
+  - `s12/`: `start_cases.csv`, `start_cases.md`, `jacobian_3rcd0.csv`, `jacobian_3rcd0.md`, `ekf_config_3rcd0p.json`, `ekf_results_3rcd0p.csv`, `model_compare_3rcd0p.md`
+  There is no `s4/`: S4 wrote the README, not a result file.
+- What changes with the move: the path constants of the scripts, the Makefile comments, the CI workflow, the C build's read of the S2 configuration, the Octave comments, the sources of `python/update_readme.py`, and the links of `README.md`, `docs/results.md` and `docs/model.md`. Inside generated reports only printed paths and relative links change.
+- Check, run with the move: git records every file as a rename; each moved file equals its old content after the new paths in it are mapped back; every make target of `make all` except `octave` (hours under emulation here; CI runs it) is rerun and reproduces the moved files byte for byte, which also regenerates the stored traces of every model under the current code (the check 1.58 left open); the tests and `readme-check` pass; no reference to an old path is left outside this log.
+- Next in the same clean-up, not part of this entry's move: a generated `results/summary.md`, one row per filter model from the per-stage result CSVs, and the index `results/README.md`.
+
 ## 2. Dataset facts confirmed in S0
 
 | claim (readme, or the spec's S0 checks) | verdict | evidence |
