@@ -14,6 +14,6 @@ Every figure here is written by a repo script; none is saved by hand. The fixed 
 | `s9/` | `python/fit_3rcd.py` (`make fit-3rcd`), `python/compare_3rcd.py` (`make ekf-3rcd`) | `params_3rcd.png`, `model_compare_3rcd.png` |
 | `s10/` | `python/diagnose_accuracy.py`, `python/fit_3rcd0.py`, `python/compare_3rcd0.py` | `accuracy_residuals.png`, `params_3rcd0.png`, `model_compare_3rcd0.png` |
 | `s11/` | `python/tune_3rcd0.py` (`make tune-3rcd0`), `python/compare_3rcd0n.py` (`make ekf-3rcd0n`), `python/diagnose_regen.py` (`make diagnose-regen`) | `tuning_3rcd0.png`, `model_compare_3rcd0n.png`, `regen_limit.png` |
-| `s12/` | `python/diagnose_starts.py` (`make diagnose-starts`) | `start_cases.png` |
+| `s12/` | `python/diagnose_starts.py` (`make diagnose-starts`), `python/diagnose_jacobian.py` (`make diagnose-jacobian`) | `start_cases.png`, `jacobian_3rcd0.png` |
 
 Per-run traces for every evaluation run are not committed; `run_all.py` writes them to `results/runs/plots/` (gitignored).

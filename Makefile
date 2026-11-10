@@ -2,13 +2,14 @@
 
 PYTHON := .venv/bin/python
 
-.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd accuracy diagnose-accuracy fit-3rcd0 ekf-3rcd0 tune-3rcd0 ekf-3rcd0n diagnose-regen diagnose-starts c-3rcd0 equiv-3rcd0 arm-3rcd0 tune ekf c equiv arm sensitivity octave readme readme-check
+.PHONY: all data inventory checks fit fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd accuracy diagnose-accuracy fit-3rcd0 ekf-3rcd0 tune-3rcd0 ekf-3rcd0n diagnose-regen diagnose-starts diagnose-jacobian c-3rcd0 equiv-3rcd0 arm-3rcd0 tune ekf c equiv arm sensitivity octave readme readme-check
 
 all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3rc-rest fit-r1i ekf-r1i ekf-r1d fit-r1c ekf-r1c fit-r1l ekf-r1l fit-3rcd ekf-3rcd
 	$(MAKE) accuracy
 	$(MAKE) ekf-3rcd0n
 	$(MAKE) diagnose-regen
 	$(MAKE) diagnose-starts
+	$(MAKE) diagnose-jacobian
 	$(MAKE) c-3rcd0
 	$(MAKE) equiv-3rcd0
 	$(MAKE) arm-3rcd0
@@ -120,6 +121,12 @@ diagnose-regen:
 # start_cases.csv and plots/s12/start_cases.png.
 diagnose-starts:
 	$(PYTHON) python/diagnose_starts.py
+
+# S12 step B: the omitted Jacobian terms of the 3RC-D0 filter and the three variants on the Mix runs (decision 1.56).
+# Needs the ekf-3rcd0 traces (results/runs/3rcd0/) and results/accuracy_jacobian.csv of diagnose-accuracy. Writes
+# results/jacobian_3rcd0.md, jacobian_3rcd0.csv and plots/s12/jacobian_3rcd0.png.
+diagnose-jacobian:
+	$(PYTHON) python/diagnose_jacobian.py
 
 # S11 close (decision 1.54): regenerate the 3RC-D0 C tables and test vectors, build the float and the double
 # library with -DEKF_USE_3RCD0=ON and run the unit tests in both.

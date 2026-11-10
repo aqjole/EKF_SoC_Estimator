@@ -16,7 +16,7 @@ from export_params import md_table, write_text
 from fit_3rcd import branch_regressors, grid_cell, load_params_3rcd, read_tables, voltage
 from fit_r1_current import R1_CURRENT_CSV
 from run_all import CONFIG_JSON, DEPENDENCIES, is_fresh, load_traces
-from s10_jacobian import SLOPE_FLOOR, replay_measurements
+from s10_jacobian import replay_case, summarize_jacobian
 from s10_protocol import COLD, DIAGNOSTIC_MD, DISCLOSURE, PLOTS, RESULTS, provenance, splits, verify_baseline
 
 
@@ -87,17 +87,6 @@ def correlation(values, mask, lag):
     return len(left), np.corrcoef(left, right)[0, 1] if len(left) > 1 and left.std() and right.std() else np.nan
 
 
-def summarize_jacobian(measurements, mask):
-    h, slope, process, covariance, cross = (array[mask] for array in measurements)
-    safe = np.abs(slope) >= SLOPE_FLOOR
-    ratio = np.abs(h[safe] / slope[safe])
-    return [len(h), len(ratio), *np.percentile(np.abs(h), [50, 95, 100]),
-            np.percentile(ratio, 95) if len(ratio) else np.nan,
-            np.max(np.abs(h[~safe])) if (~safe).any() else np.nan,
-            *np.percentile(np.abs(process), 95, axis=0), np.percentile(covariance, 95),
-            np.percentile(cross.max(axis=1), 95)]
-
-
 def diagnose_run(task):
     split, spec = task
     run = load_run(spec.path)
@@ -115,7 +104,7 @@ def diagnose_run(task):
     rows = [(split, spec.nominal_temp_degc, *row) for row in bin_rows(groups, signals, masks)]
     acf = [[split, spec.nominal_temp_degc, scope, lag, *correlation(innovation, masks[scope], lag)]
            for scope in ("full", "window") for lag in (1, 10)]
-    measurements = replay_measurements(run, reference, incumbent, cfg, case["soc"], case["v_pred"])
+    measurements = replay_case(run, incumbent, cfg, float(reference[0]), 0, case["soc"], case["v_pred"])
     jacobian = [[split, spec.folder, spec.path.name, spec.cycle_name, spec.nominal_temp_degc, scope,
                  *summarize_jacobian(measurements, masks[scope])]
                 for scope in ("full", "window")]

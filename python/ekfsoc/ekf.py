@@ -115,6 +115,13 @@ class Ekf:
         x_limited[0] = soc_bound  # exactly on the bound, whatever the rounding of the line above
         return x_limited
 
+    def h_soc(self, i_a, t_degC, soc):
+        """The SoC entry of H (Eq. 8): the stored OCV slope; the term -I dR0/dSoC is left out.
+
+        A subclass that studies the omitted term overrides this (the S12 diagnostic, decision 1.56).
+        """
+        return self.lookup("docv", t_degC, soc)
+
     def update(self, i_a, v_v, t_degC):
         """Correct x and P with the measured voltage v_v taken at current i_a (Eq. 8 to Eq. 11).
 
@@ -122,14 +129,14 @@ class Ekf:
         """
         soc_prior, *v_prior = self.x.tolist()
         ocv = self.lookup("ocv", t_degC, soc_prior)
-        docv = self.lookup("docv", t_degC, soc_prior)
+        h_soc = self.h_soc(i_a, t_degC, soc_prior)
         r0 = self.lookup("r0", t_degC, soc_prior)
 
         v_terminal = ocv
         for v_i in v_prior:
             v_terminal -= v_i
         y_hat = v_terminal - r0 * i_a  # Eq. 8
-        H = np.array([docv] + [-1.0] * len(v_prior))  # Eq. 8, dR0/dSoC left out
+        H = np.array([h_soc] + [-1.0] * len(v_prior))  # Eq. 8
 
         P_Ht = self.P @ H
         S = H @ P_Ht + self.cfg.r  # Eq. 9
@@ -161,7 +168,7 @@ class Ekf:
 
 
 def run_ekf(params, cfg, i, v, temp, dt, soc0, start=0, current_offset=0.0, q_ref_ah=Q_REF_AH,
-            record_state=False):
+            record_state=False, filter_class=Ekf):
     """Run the filter over rows start .. len(i)-1 of a run and return the per-row results as a dict.
 
     i, v, temp, dt are float64 arrays like those of a loader Run (A, V, degC, s; dt[k] = t[k] - t[k-1]);
@@ -174,6 +181,8 @@ def run_ekf(params, cfg, i, v, temp, dt, soc0, start=0, current_offset=0.0, q_re
       p_soc    SoC variance P[0][0] after the update
     With record_state=True, also return posterior state and p_diag histories, shape
     (rows, 1 + branch count). Default outputs and arithmetic are unchanged.
+    filter_class is called as filter_class(params, cfg, soc0, q_ref_ah); a subclass of Ekf runs a changed
+    filter through the same loop (the Jacobian variants of S12, decision 1.56).
     """
     n = len(i)
     currents = (i + current_offset).tolist()
@@ -183,7 +192,7 @@ def run_ekf(params, cfg, i, v, temp, dt, soc0, start=0, current_offset=0.0, q_re
     v_pred = np.full(n, np.nan)
     p_soc = np.full(n, np.nan)
 
-    ekf = Ekf(params, cfg, soc0, q_ref_ah)
+    ekf = filter_class(params, cfg, soc0, q_ref_ah)
     if record_state:
         state = np.full((n, len(ekf.x)), np.nan)
         p_diag = np.full_like(state, np.nan)
