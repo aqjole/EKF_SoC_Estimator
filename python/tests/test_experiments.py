@@ -48,7 +48,7 @@ def made_up_run():
 
 @pytest.fixture(scope="module")
 def params():
-    return Params.from_csv(REPO_DIR / "results" / "params.csv")
+    return Params.from_csv(REPO_DIR / "results" / "s1" / "params.csv")
 
 
 @pytest.fixture(scope="module")

@@ -4,7 +4,7 @@ The 2RC equivalent-circuit model and the EKF, as used by every stage: loader, OC
 
 Data: LG 18650HG2 Li-ion Battery Data, Kollmeyer et al., McMaster University, Mendeley Data v2, DOI 10.17632/b5mj79w5w9.2, CC BY 4.0. There are 206 `.mat` files in `data/raw/` [inv].
 
-Sources: every measured number below comes from a results file that a script in this repo writes. `[inv]` = `results/data_inventory.md` and `[cap]` = `results/capacity.md` (both from `python/inventory.py`, `make inventory`). `[chk N]` = section N of `results/data_checks.md` (from `python/data_checks.py`, `make checks`). File names are shortened to `<folder>/<test>_<descriptor>`. Current and Ah values quoted from the files are in the cycler's sign (C2, C3). Row numbers count from 0 in the file as stored, before any row is dropped. A number that is a sum or ratio of printed values says so. The evaluation set is the 62 runs listed in `docs/decisions.md`: 25 degC 10, 40 degC 7, 10 degC 11, 0 degC 11, -10 degC 11, -20 degC 12 [chk legend]. The other eight drive files are `25degC/551_HWFET` (no current), `25degC/551_Mixed1` (tuning cycle), `40degC/562_Mixed4` to `Mixed8` (partial runs) and `n10degC/602_Mixed4` (corrupt, C12).
+Sources: every measured number below comes from a results file that a script in this repo writes. `[inv]` = `results/s0/data_inventory.md` and `[cap]` = `results/s0/capacity.md` (both from `python/inventory.py`, `make inventory`). `[chk N]` = section N of `results/s0/data_checks.md` (from `python/data_checks.py`, `make checks`). File names are shortened to `<folder>/<test>_<descriptor>`. Current and Ah values quoted from the files are in the cycler's sign (C2, C3). Row numbers count from 0 in the file as stored, before any row is dropped. A number that is a sum or ratio of printed values says so. The evaluation set is the 62 runs listed in `docs/decisions.md`: 25 degC 10, 40 degC 7, 10 degC 11, 0 degC 11, -10 degC 11, -20 degC 12 [chk legend]. The other eight drive files are `25degC/551_HWFET` (no current), `25degC/551_Mixed1` (tuning cycle), `40degC/562_Mixed4` to `Mixed8` (partial runs) and `n10degC/602_Mixed4` (corrupt, C12).
 
 ## Files and loader rules
 
@@ -168,9 +168,9 @@ V_i(k)  = a_i(k) · V_i(k-1) + R_i · (1 - a_i(k)) · I(k-1)
 - In the 2RC-I model of S7 (docs/decisions.md 1.28), R1 is read with Eq. 4b at (T(k-1), SoC(k-1), |I(k-1)|): the current that drives the branch over the step. Every other table is read with Eq. 4 as above.
 - In the 2RC-Id model of S8 step A (docs/decisions.md 1.33), R1 is read as in the 2RC-I model when I(k-1) > 0, and with Eq. 4 from the v1.0 R1 table at (T(k-1), SoC(k-1)) when I(k-1) < 0. At I(k-1) = 0 the branch input R1 · I(k-1) is zero, so the table does not matter.
 - In the 2RC-Ic model of S8 step B (docs/decisions.md 1.35), R1 is read as in the 2RC-I model when I(k-1) > 0, and with Eq. 4b from the charge-side table at (T(k-1), SoC(k-1), |I(k-1)|) when I(k-1) < 0.
-- In the 2RC-Il model of S8 step C (docs/decisions.md 1.37), R1 is read exactly as in the 2RC-I model, at |I(k-1)| for either sign, from the table of `results/r1_low.csv`.
-- In the 3RC-D model of S9 (docs/decisions.md 1.41), n = 3. R1 is read exactly as in the 2RC-I model. R2 and R3 are read with Eq. 4 from `results/params_3rcd.csv`, where R2 is the v1.0 table times the fitted scale and R3 is the fitted table; tau3 is 45 s at every grid point, and tau1 and tau2 are the v1.0 tables.
-- In the 3RC-D0 model of S10 (decision 1.44), n = 3. R1 uses the v1.0 (T, SoC) lookup for both current signs. R2 and R3 use the independently fitted tables in `results/params_3rcd0.csv`. Their parameterization, the fixed 45 s tau3, and tau1 and tau2 follow S9. The S9 R1 substitution reads `results/params_3rcd.csv` without its current-axis R1 table and is a diagnostic comparator.
+- In the 2RC-Il model of S8 step C (docs/decisions.md 1.37), R1 is read exactly as in the 2RC-I model, at |I(k-1)| for either sign, from the table of `results/s8/r1_low.csv`.
+- In the 3RC-D model of S9 (docs/decisions.md 1.41), n = 3. R1 is read exactly as in the 2RC-I model. R2 and R3 are read with Eq. 4 from `results/s9/params_3rcd.csv`, where R2 is the v1.0 table times the fitted scale and R3 is the fitted table; tau3 is 45 s at every grid point, and tau1 and tau2 are the v1.0 tables.
+- In the 3RC-D0 model of S10 (decision 1.44), n = 3. R1 uses the v1.0 (T, SoC) lookup for both current signs. R2 and R3 use the independently fitted tables in `results/s10/params_3rcd0.csv`. Their parameterization, the fixed 45 s tau3, and tau1 and tau2 follow S9. The S9 R1 substitution reads `results/s9/params_3rcd.csv` without its current-axis R1 table and is a diagnostic comparator.
 - Where it comes from: branch i is a resistor R_i in parallel with a capacitor C_i = tau_i / R_i, so dV_i/dt = -V_i / tau_i + R_i · I / tau_i. With I constant over the step, the solution over dt is Eq. 1 exactly. It is not an Euler step, so it holds for any dt, from the 0.1 s logging step to the 1.147 to 2.143 s steps at cycle boundaries (C11).
 - Limits: dt = 0 gives a_i = 1 and leaves V_i unchanged. A long step gives a_i -> 0 and V_i -> R_i · I(k-1), the steady value of a constant current.
 - Start: V_i(0) = 0 for every branch. The open-loop check starts the branches relaxed; C13 lists the runs that open under load.
@@ -231,7 +231,7 @@ The R1 table of the 2RC-I model (docs/decisions.md 1.28) has a third axis, the c
 - The rule is Eq. 4 applied twice and then once more along current, in the same weighted form, so a query on a current node returns that slice's Eq. 4 value with no rounding. No current is extrapolated: below 0.75 A and above 18 A the end slice is used.
 - Off a node, slices that hold the same table give the Eq. 4 value only to rounding, so the 2RC model keeps its own Eq. 4 path for R1.
 - The charge-side R1 table of the 2RC-Ic model (docs/decisions.md 1.35) is read by the same rule on its own current axis, the nodes 0.375, 0.75, 1.5, 3 and 6 A: below 0.375 A and above 6 A the end slice is used.
-- The R1 table of the 2RC-Il model (docs/decisions.md 1.37), `results/r1_low.csv`, has the nodes and the clamp of the 2RC-I table and is read by the same rule.
+- The R1 table of the 2RC-Il model (docs/decisions.md 1.37), `results/s8/r1_low.csv`, has the nodes and the clamp of the 2RC-I table and is read by the same rule.
 
 ### Eq. 5. dOCV/dSoC by central differences
 
@@ -244,7 +244,7 @@ dOCV/dSoC(S_{n-1}) = (OCV(S_{n-1}) - OCV(S_{n-2})) / (S_{n-1} - S_{n-2})     one
 ```
 
 - Computed once in Python from the OCV table and stored as its own table. Python and C both read it with Eq. 4 and never differentiate at runtime, so the Jacobians of the two are identical.
-- Below the lowest SoC the C/20 discharge reached, the OCV table is held constant (decisions 1.1), so the differences are 0 over that held region. At the two nodes next to its edge they mix held and measured values. The valid SoC range per temperature is in `results/params.md`.
+- Below the lowest SoC the C/20 discharge reached, the OCV table is held constant (decisions 1.1), so the differences are 0 over that held region. At the two nodes next to its edge they mix held and measured values. The valid SoC range per temperature is in `results/s1/params.md`.
 - Unit: V per unit SoC (Symbols). It is not negative where OCV is monotone in SoC.
 
 ## EKF equations (S2)

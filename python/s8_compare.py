@@ -2,7 +2,7 @@
 1.32 and the report tables, used by compare_r1d.py (step A), compare_r1c.py (step B) and compare_r1l.py (step C).
 
 A model is named by its label ("2RC", "2RC-I", "2RC-Id", "2RC-Ic"); results maps a label to its results frame (the
-columns of results/ekf_results.csv), tables maps it to compare_r1i.per_temperature of that frame.
+columns of results/s2/ekf_results.csv), tables maps it to compare_r1i.per_temperature of that frame.
 """
 
 import numpy as np

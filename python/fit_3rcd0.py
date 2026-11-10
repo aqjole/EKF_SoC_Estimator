@@ -15,9 +15,9 @@ from fit_all import GATE_RMSE_MV, GATE_TEMP_DEGC
 from s10_protocol import DISCLOSURE, PLOTS, RESULTS, splits, verify_baseline
 
 
-PARAMS_CSV_D0 = RESULTS / "params_3rcd0.csv"
-NODES_CSV = RESULTS / "fit_nodes_3rcd0.csv"
-FIT_MD = RESULTS / "model_fit_3rcd0.md"
+PARAMS_CSV_D0 = RESULTS / "s10" / "params_3rcd0.csv"
+NODES_CSV = RESULTS / "s10" / "fit_nodes_3rcd0.csv"
+FIT_MD = RESULTS / "s10" / "model_fit_3rcd0.md"
 MODELS = ("2RC", "2RC-I", "3RC-D", "3RC-D0", "S9 R1 substitution")
 INCUMBENT, CANDIDATE, SUBSTITUTION = MODELS[1], MODELS[3], MODELS[4]
 

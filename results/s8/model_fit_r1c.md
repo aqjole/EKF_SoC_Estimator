@@ -2,11 +2,11 @@
 
 Written by `python/fit_r1_charge.py` (`make fit-r1c`). Do not edit by hand.
 
-The charge-side R1 of the 2RC-Ic model (docs/decisions.md 1.35), read under a negative held current; the discharge side is the 2RC-I table of `results/r1_current.csv`.
+The charge-side R1 of the 2RC-Ic model (docs/decisions.md 1.35), read under a negative held current; the discharge side is the 2RC-I table of `results/s7/r1_current.csv`.
 
 ## Charge R1 per pulse
 
-Medians over the charge pulses in the fit, per temperature and pulse number. R1 is the fitted value (carried-in decay removed, rows unweighted); the uncorrected and dt-weighted columns are the sensitivity checks of docs/decisions.md 1.35 and do not enter the table. The fit holds R0 at the level's discharge value, so the charge R1 takes up any charge-discharge difference in R0: the step-rule column gives the charge pulse's step-rule R0 minus the level's R0, over the pulses that have one (pulses that miss the 0.3 s rule have none); the count of pulses with one is in brackets. v1.0 R1 is the level's fit (a) value; the 2RC-I discharge R1 is read from `results/r1_current.csv` at the pulse's current and the level's SoC. The R0 + R1 columns compare charge and discharge as the model reads them, both with the level's R0. Pulse numbers mix SoC levels, because the pulses in the fit differ by level.
+Medians over the charge pulses in the fit, per temperature and pulse number. R1 is the fitted value (carried-in decay removed, rows unweighted); the uncorrected and dt-weighted columns are the sensitivity checks of docs/decisions.md 1.35 and do not enter the table. The fit holds R0 at the level's discharge value, so the charge R1 takes up any charge-discharge difference in R0: the step-rule column gives the charge pulse's step-rule R0 minus the level's R0, over the pulses that have one (pulses that miss the 0.3 s rule have none); the count of pulses with one is in brackets. v1.0 R1 is the level's fit (a) value; the 2RC-I discharge R1 is read from `results/s7/r1_current.csv` at the pulse's current and the level's SoC. The R0 + R1 columns compare charge and discharge as the model reads them, both with the level's R0. Pulse numbers mix SoC levels, because the pulses in the fit differ by level.
 
 | T (degC) | pulse | pulses | median I (A) | R1 (mOhm) | uncorrected (mOhm) | dt-weighted (mOhm) | step-rule R0 - level R0 (mOhm) | v1.0 R1 (mOhm) | 2RC-I discharge R1 (mOhm) | charge R0 + R1 (mOhm) | discharge R0 + R1 (mOhm) |
 |---|---|---|---|---|---|---|---|---|---|---|---|

@@ -6,10 +6,10 @@ and octave-cli on PATH)
   1. Each run of experiments.evaluation_runs() gets its filter inputs written to results/runs/c_inputs/ exactly as
      python/compare_c.py writes them (17 significant digits), so both ports read the same float64 values.
   2. octave/ekf_run_csv.m runs experiment 1 (soc0 = the reference SoC at row 0) with the frozen noise settings of
-     results/ekf_config.json, in double precision, and writes SoC with 17 significant digits. Its SoC is compared
+     results/s2/ekf_config.json, in double precision, and writes SoC with 17 significant digits. Its SoC is compared
      with the Python experiment 1 SoC saved by run_all.py in results/runs/<folder>__<file>.npz; Python is not run
      again.
-  3. results/equivalence_octave.md gets max and RMS |delta SoC| in pp per run, per temperature and overall, against
+  3. results/s5/equivalence_octave.md gets max and RMS |delta SoC| in pp per run, per temperature and overall, against
      1e-3 pp (docs/decisions.md 1.20); results/plots/s5/equivalence_octave_25degC.png gets Python minus Octave SoC
      over time for US06 at 25 degC. A run whose delta is not finite is an error, and the command exits with status
      1 when the threshold is reached.
@@ -37,7 +37,7 @@ from ekfsoc.plots import ESTIMATE_COLORS, plt, save
 
 
 OCTAVE_SCRIPT = REPO_DIR / "octave" / "ekf_run_csv.m"
-EQUIVALENCE_MD = REPO_DIR / "results" / "equivalence_octave.md"
+EQUIVALENCE_MD = REPO_DIR / "results" / "s5" / "equivalence_octave.md"
 PLOT_PATH = REPO_DIR / "results" / "plots" / "s5" / "equivalence_octave_25degC.png"
 PLOT_FOLDER = "25degC"
 FIXTURES_DIR = C_DIR / "tests" / "fixtures"
@@ -67,7 +67,7 @@ def equivalence_text(table, cfg):
         "Written by `python/compare_octave.py` (`make octave`). The Octave filter (`octave/ekf_run_csv.m`, double "
         "precision) runs experiment 1 (soc0 = the reference SoC at row 0) on the "
         f"{len(table)} runs of the evaluation set and the tuning cycle, with the frozen noise settings of "
-        f"`results/ekf_config.json` (q_soc = {cfg.q_soc:g}, q_v = {cfg.q_v:g}, r = {cfg.r:g}), on the filter inputs "
+        f"`results/s2/ekf_config.json` (q_soc = {cfg.q_soc:g}, q_v = {cfg.q_v:g}, r = {cfg.r:g}), on the filter inputs "
         "the C port reads (dt computed in float64 by Python, written with 17 significant digits by "
         "`python/compare_c.py`). delta SoC = Python SoC - Octave SoC over every row of a run, in pp; the Python SoC "
         "is the experiment 1 trace of `python/run_all.py`. The port writes SoC with 17 significant digits, so the "

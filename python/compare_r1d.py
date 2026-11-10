@@ -3,10 +3,10 @@
 Run from the repo root:  .venv/bin/python python/compare_r1d.py   (or: make ekf-r1d; needs make ekf and make ekf-r1i)
 
   1. Every run of experiments.evaluation_runs() runs experiments 1 to 4 with the 2RC-Id tables (the 2RC-I tables,
-     with R1 from results/params.csv when the held current is negative) and the frozen noise settings, as
+     with R1 from results/s1/params.csv when the held current is negative) and the frozen noise settings, as
      compare_r1i.py does for 2RC-I. Traces go to results/runs/r1d/ (not committed) and are reused while fresh.
-  2. results/ekf_results_r1d.csv holds one row per run and experiment, in the columns of results/ekf_results.csv.
-  3. results/model_compare_r1d.md puts 2RC, 2RC-I and 2RC-Id side by side, splits the open-loop US06 error by
+  2. results/s8/ekf_results_r1d.csv holds one row per run and experiment, in the columns of results/s2/ekf_results.csv.
+  3. results/s8/model_compare_r1d.md puts 2RC, 2RC-I and 2RC-Id side by side, splits the open-loop US06 error by
      current band, gives the R1 ratio of 1.32, every guard of 1.32 with its value, the verdict and the test for
      step B of 1.33. results/plots/s8/model_compare_r1d.png draws the open-loop and experiment-1 columns.
 """
@@ -30,8 +30,8 @@ from s8_compare import (comparison_lines, guard_rows, guard_table, negative_shar
 
 
 RUNS_DIR = REPO_DIR / "results" / "runs" / "r1d"
-RESULTS_RD_CSV = REPO_DIR / "results" / "ekf_results_r1d.csv"
-COMPARE_MD = REPO_DIR / "results" / "model_compare_r1d.md"
+RESULTS_RD_CSV = REPO_DIR / "results" / "s8" / "ekf_results_r1d.csv"
+COMPARE_MD = REPO_DIR / "results" / "s8" / "model_compare_r1d.md"
 COMPARE_PNG = REPO_DIR / "results" / "plots" / "s8" / "model_compare_r1d.png"
 MODELS = ("2RC", "2RC-I", "2RC-Id")
 
@@ -53,7 +53,7 @@ def b_test(results):
 
 
 def compare_text(results, tables, open_loop, bands, ratios):
-    """Text of results/model_compare_r1d.md."""
+    """Text of results/s8/model_compare_r1d.md."""
     us06_rmse = {model: {temp: open_loop[temp][model][0] for temp in T_GRID_DEGC} for model in MODELS}
     guards = guard_rows(results, tables, us06_rmse, "2RC-Id", "2RC-I")
     adopted = all(passed for _, _, passed, _ in guards)
@@ -63,10 +63,10 @@ def compare_text(results, tables, open_loop, bands, ratios):
     lines = [
         "# Model comparison: 2RC, 2RC-I and 2RC-Id (S8, step A)", "",
         "Written by `python/compare_r1d.py` (`make ekf-r1d`). Do not edit by hand.", "",
-        "2RC-Id is the 2RC-I model with R1 from the v1.0 table of `results/params.csv` when the held current is "
+        "2RC-Id is the 2RC-I model with R1 from the v1.0 table of `results/s1/params.csv` when the held current is "
         "negative (docs/decisions.md 1.33). The three filters run experiments 1 to 4 on the 63 runs with the frozen "
-        "noise settings of `results/ekf_config.json`; the numbers come from `results/ekf_results.csv`, "
-        "`results/ekf_results_r1i.csv` and `results/ekf_results_r1d.csv`. SoC statistics are over the evaluation runs "
+        "noise settings of `results/s2/ekf_config.json`; the numbers come from `results/s2/ekf_results.csv`, "
+        "`results/s7/ekf_results_r1i.csv` and `results/s8/ekf_results_r1d.csv`. SoC statistics are over the evaluation runs "
         "(tuning cycle excluded). These 62 runs have been inspected in every stage since S2, so this is a comparison "
         "on a repeatedly inspected set, not a confirmation (1.32).", "",
     ]

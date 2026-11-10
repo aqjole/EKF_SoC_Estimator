@@ -12,7 +12,7 @@ from ekfsoc.model import simulate_open_loop
 
 
 # Provisional noise settings for this check only. The frozen settings come from python/tune.py
-# (results/ekf_config.json). R is deliberately larger than the 5 mV noise variance, 2.5e-5 V^2:
+# (results/s2/ekf_config.json). R is deliberately larger than the 5 mV noise variance, 2.5e-5 V^2:
 # with R at the true noise level a 20 pp start takes more than 1000 s to settle for some noise seeds.
 SYNTHETIC_CFG = EkfConfig(q_soc=1e-8, q_v=1e-8, r=1e-3)
 

@@ -2,14 +2,14 @@
 
 Run from the repo root:  .venv/bin/python python/sensitivity.py   (or: make sensitivity)
 
-  1. results/params.csv (S1) and results/ekf_config.json (frozen, docs/decisions.md 1.15) are read. Nothing is tuned.
+  1. results/s1/params.csv (S1) and results/s2/ekf_config.json (frozen, docs/decisions.md 1.15) are read. Nothing is tuned.
   2. Each run of experiments.evaluation_runs() is processed in a process pool, from the reference SoC at row 0:
      - capacity error (docs/decisions.md 1.18): the EKF and the coulomb counter believe 0.95 Q_ref and 1.05 Q_ref,
        scored against the unchanged reference over the unchanged evaluation window;
      - sample rate (docs/decisions.md 1.19): every 10th row of the run, filtered with the nominal capacity.
-  3. results/sensitivity.csv has one row per run, with the experiment-1 values of results/ekf_results.csv as the
+  3. results/s5/sensitivity.csv has one row per run, with the experiment-1 values of results/s2/ekf_results.csv as the
      nominal columns (they are read, not rerun).
-  4. results/sensitivity.md is written from that CSV, read back; results/plots/s5/ gets sensitivity_capacity.png
+  4. results/s5/sensitivity.md is written from that CSV, read back; results/plots/s5/ gets sensitivity_capacity.png
      and sensitivity_rate.png (docs/decisions.md 1.14).
 """
 
@@ -31,8 +31,8 @@ from export_params import PARAMS_CSV, md_table, write_text
 from run_all import CONFIG_JSON, RESULTS_CSV
 
 
-SENSITIVITY_CSV = REPO_DIR / "results" / "sensitivity.csv"
-SENSITIVITY_MD = REPO_DIR / "results" / "sensitivity.md"
+SENSITIVITY_CSV = REPO_DIR / "results" / "s5" / "sensitivity.csv"
+SENSITIVITY_MD = REPO_DIR / "results" / "s5" / "sensitivity.md"
 PLOTS_DIR = REPO_DIR / "results" / "plots" / "s5"
 
 # The capacities the filter and the coulomb counter believe, as multiples of Q_ref (docs/decisions.md 1.18).
@@ -41,7 +41,7 @@ CAPACITY_SCALES = (0.95, 1.05)
 # The 1 Hz run keeps every DECIMATION-th row of the 0.1 s run (docs/decisions.md 1.19).
 DECIMATION = 10
 
-# Experiment-1 columns of results/ekf_results.csv -> the nominal columns of results/sensitivity.csv.
+# Experiment-1 columns of results/s2/ekf_results.csv -> the nominal columns of results/s5/sensitivity.csv.
 NOMINAL_COLUMNS = {"rmse_pp": "ekf_rmse_pp_nominal", "max_abs_pp": "ekf_max_abs_pp_nominal", "cc_rmse_pp": "cc_rmse_pp_nominal"}
 
 
@@ -112,7 +112,7 @@ def rate_columns(run, params, cfg):
 
 
 def process_run(spec):
-    """Return the row of results/sensitivity.csv of one run, without the nominal columns."""
+    """Return the row of results/s5/sensitivity.csv of one run, without the nominal columns."""
     run = load_run(spec.path)
     params = Params.from_csv(PARAMS_CSV)
     cfg = EkfConfig.from_json(CONFIG_JSON)
@@ -128,12 +128,12 @@ def process_run(spec):
 
 
 def with_nominal(table, results):
-    """Append the experiment-1 values of results/ekf_results.csv (`results`) to each run's row, matched on folder and file."""
+    """Append the experiment-1 values of results/s2/ekf_results.csv (`results`) to each run's row, matched on folder and file."""
     exp1 = results.loc[results["experiment"] == "exp1", ["folder", "file", *NOMINAL_COLUMNS]]
     return table.merge(exp1.rename(columns=NOMINAL_COLUMNS), on=["folder", "file"], how="left", validate="one_to_one")
 
 
-# --- results/sensitivity.md ----------------------------------------------------------------------
+# --- results/s5/sensitivity.md ----------------------------------------------------------------------
 
 
 def summary_rows(table, columns):
@@ -158,7 +158,7 @@ def largest_text(table, estimator):
 
 
 def capacity_lines(table):
-    """The capacity-error section of results/sensitivity.md (docs/decisions.md 1.18)."""
+    """The capacity-error section of results/s5/sensitivity.md (docs/decisions.md 1.18)."""
     variants = capacity_variants()
     columns = [(f"{estimator}_rmse_pp_{suffix}", "mean") for estimator in ("ekf", "cc") for suffix, _ in variants]
     header = ["T (degC)", "runs", *(f"{name} {label}" for name in ("EKF", "coulomb counting") for _, label in variants)]
@@ -168,7 +168,7 @@ def capacity_lines(table):
         f"- The filter and the coulomb counter both believe {CAPACITY_SCALES[0]:g} Q_ref and {CAPACITY_SCALES[1]:g} Q_ref "
         f"(Q_ref = {Q_REF_AH:g} Ah) and start from the reference SoC at the first row (experiment 1).",
         "- Every cell is the mean SoC RMSE in pp over the evaluation window of the folder's runs; nominal is the "
-        "experiment-1 value of `results/ekf_results.csv`; the reference SoC does not change.",
+        "experiment-1 value of `results/s2/ekf_results.csv`; the reference SoC does not change.",
         "",
         *md_table(header, summary_rows(table, columns)),
         "",
@@ -179,7 +179,7 @@ def capacity_lines(table):
 
 
 def rate_lines(table):
-    """The sample-rate section of results/sensitivity.md (docs/decisions.md 1.19)."""
+    """The sample-rate section of results/s5/sensitivity.md (docs/decisions.md 1.19)."""
     columns = [("ekf_rmse_pp_nominal", "mean"), ("ekf_rmse_pp_1hz", "mean"),
                ("ekf_max_abs_pp_nominal", "max"), ("ekf_max_abs_pp_1hz", "max"),
                ("cc_rmse_pp_nominal", "mean"), ("cc_rmse_pp_1hz", "mean")]
@@ -192,7 +192,7 @@ def rate_lines(table):
         "The kept sample's current is held over the whole step (docs/model.md C11), the reference SoC is read at the kept rows "
         "and the evaluation window is C14 on them.",
         "- RMSE cells are means over the folder's runs; max |error| cells are the largest over the folder's runs. "
-        "The 0.1 s columns are experiment 1 of `results/ekf_results.csv`.",
+        "The 0.1 s columns are experiment 1 of `results/s2/ekf_results.csv`.",
         "",
         *md_table(header, summary_rows(table, columns)),
         "",
@@ -201,13 +201,13 @@ def rate_lines(table):
 
 
 def sensitivity_text(table, cfg):
-    """Return the text of results/sensitivity.md. Every number comes from the rows of results/sensitivity.csv or cfg."""
+    """Return the text of results/s5/sensitivity.md. Every number comes from the rows of results/s5/sensitivity.csv or cfg."""
     lines = [
         "# Sensitivity (S5)",
         "",
-        "Written by `python/sensitivity.py` (`make sensitivity`) from `results/sensitivity.csv`. Do not edit by hand. "
+        "Written by `python/sensitivity.py` (`make sensitivity`) from `results/s5/sensitivity.csv`. Do not edit by hand. "
         f"Experiment 1 on the {len(table)} runs (the evaluation set and the tuning cycle) with the frozen noise settings of "
-        f"`results/ekf_config.json` (q_soc = {cfg.q_soc:g} 1/s, q_v = {cfg.q_v:g} V^2/s, r = {cfg.r:g} V^2), with a wrong "
+        f"`results/s2/ekf_config.json` (q_soc = {cfg.q_soc:g} 1/s, q_v = {cfg.q_v:g} V^2/s, r = {cfg.r:g} V^2), with a wrong "
         "filter capacity (docs/decisions.md 1.18) and at 1 Hz (docs/decisions.md 1.19).",
         "",
         *capacity_lines(table),

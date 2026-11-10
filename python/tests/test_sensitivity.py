@@ -78,7 +78,7 @@ def test_run_ekf_with_twice_the_capacity_moves_soc_by_half_the_coulomb_term():
 
 @pytest.fixture
 def table():
-    """Four runs, two at 25 degC and two at -20 degC, with every column of results/sensitivity.csv."""
+    """Four runs, two at 25 degC and two at -20 degC, with every column of results/s5/sensitivity.csv."""
     columns = ["ekf_rmse_pp_095", "cc_rmse_pp_095", "ekf_rmse_pp_105", "cc_rmse_pp_105", "ekf_rmse_pp_1hz",
                "ekf_max_abs_pp_1hz", "cc_rmse_pp_1hz", "ekf_rmse_pp_nominal", "ekf_max_abs_pp_nominal", "cc_rmse_pp_nominal"]
     rows = []

@@ -2,7 +2,7 @@
 
 The synthetic runs are built directly as loader Runs: a C/20-like discharge (current +0.15 A, loader sign),
 then a rest and a charge half with a voltage far from the discharge curve, so a table that wrongly used
-those rows would show it. The real-data tests compare with results/data_checks.md section 11.
+those rows would show it. The real-data tests compare with results/s0/data_checks.md section 11.
 """
 
 import numpy as np
@@ -278,7 +278,7 @@ def test_real_discharge_halves_have_the_row_counts_of_data_checks(real_c20_runs,
 
 @pytest.mark.needs_data
 def test_real_soc_min_matches_data_checks_within_half_a_pp(real_table, data_checks_table):
-    """soc_min per temperature against the end-of-discharge SoC (%) of results/data_checks.md section 11."""
+    """soc_min per temperature against the end-of-discharge SoC (%) of results/s0/data_checks.md section 11."""
     column = "end-of-discharge SoC (%)"
     for folder, cells in data_checks_table(11, column).items():
         soc_min_pp = 100.0 * real_table.soc_min[T_GRID_DEGC.index(FOLDER_TEMP[folder])]

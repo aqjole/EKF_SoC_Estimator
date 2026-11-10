@@ -129,7 +129,7 @@ def parse_timestamp(text):
     """Parse one TimeStamp string into a datetime.
 
     The files use two formats. The rule below was checked against every file
-    in the dataset (see results/data_inventory.md):
+    in the dataset (see results/s0/data_inventory.md):
       - 25degC files: "10/28/2018 5:44:00 PM", month first, whole seconds.
         At midnight the time part is missing ("10/26/2018").
       - all other folders: "02/11/2018  6:30:13.000 PM", DAY first, with

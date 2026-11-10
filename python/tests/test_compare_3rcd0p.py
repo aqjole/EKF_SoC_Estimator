@@ -25,7 +25,7 @@ def mix_frame():
 
 
 def part3_text(exp2_at_minus_20):
-    """A results/start_cases.md stand-in with the 10 mV rows of the part-3 temperature table."""
+    """A results/s12/start_cases.md stand-in with the 10 mV rows of the part-3 temperature table."""
     rows = [f"| 10 mV | {temp} | 1 | 1.0000 | {exp2_at_minus_20 if temp == -20 else '2.0000'} | 3.0000 |"
             for temp in T_GRID_DEGC]
     return "\n".join(["## Part 3: x", "", "### Per temperature", "",

@@ -8,7 +8,7 @@ Run from the repo root:  .venv/bin/python python/fit_r1_low.py   (or: make fit-r
   3. The four factors r_10, r_0, r_-10 and r_-20 are fitted jointly by linear least squares on the open-loop voltage
      of the four PausCycl files, every row, one free offset per file. The model voltage is affine in the factors, so
      five simulations per file give the fit exactly: all factors at 1, and each in turn at 0.
-  4. The table goes to results/r1_low.csv; results/model_fit_r1l.md gives the factors, the PausCycl RMSE per file,
+  4. The table goes to results/s8/r1_low.csv; results/s8/model_fit_r1l.md gives the factors, the PausCycl RMSE per file,
      the open-loop US06 RMSE with the S1 gate and the open-loop error pooled over every drive run.
 """
 
@@ -29,8 +29,8 @@ from fit_all import GATE_RMSE_MV, GATE_TEMP_DEGC, load_ocv_inputs, load_test, va
 from fit_r1_current import I_GRID_A, R1_CURRENT_CSV, fit_level_pulses, level_nodes, pooled_rmse_mv, r1_table
 
 
-R1_LOW_CSV = REPO_DIR / "results" / "r1_low.csv"
-REPORT_MD = REPO_DIR / "results" / "model_fit_r1l.md"
+R1_LOW_CSV = REPO_DIR / "results" / "s8" / "r1_low.csv"
+REPORT_MD = REPO_DIR / "results" / "s8" / "model_fit_r1l.md"
 
 FIT_TEMPS_DEGC = (10, 0, -10, -20)  # the temperatures with a usable PausCycl file (decisions 1.37)
 FACTOR_LIMITS = (0.0, 2.0)  # a fitted factor outside (low, high] is a failed fit
@@ -147,7 +147,7 @@ def main():
 
     header = ["# Model fit, 2RC-Il (S8, step C)", "",
               "Written by `python/fit_r1_low.py` (`make fit-r1l`). Do not edit by hand.", "",
-              "The R1 table of the 2RC-Il model (docs/decisions.md 1.37): the 2RC-I table of `results/r1_current.csv` "
+              "The R1 table of the 2RC-Il model (docs/decisions.md 1.37): the 2RC-I table of `results/s7/r1_current.csv` "
               "scaled at low current by factors fitted on the PausCycl files, which are not in the evaluation set."]
     failed = [temp for temp, factor in factors.items() if not FACTOR_LIMITS[0] < factor <= FACTOR_LIMITS[1]]
     if failed:
@@ -163,7 +163,7 @@ def main():
     results_ri = [validate_us06(params_ri, temp) for temp in T_GRID_DEGC]
     results_rl = [validate_us06(params_rl, temp) for temp in T_GRID_DEGC]
     same = "yes" if unchanged_slices(params_ri, params_rl) else "NO"
-    lines = header + ["", f"The 40 and 25 degC slices equal those of `results/r1_current.csv`: {same}."]
+    lines = header + ["", f"The 40 and 25 degC slices equal those of `results/s7/r1_current.csv`: {same}."]
     for section in (factor_section(factors, offsets, runs, params_ri, params_rl), us06_section(results_ri, results_rl),
                     drive_section(params_ri, params_rl)):
         lines += ["", *section]

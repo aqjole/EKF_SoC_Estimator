@@ -21,9 +21,9 @@ from fit_r1_current import R1_CURRENT_CSV
 
 
 RESULTS = REPO_DIR / "results"
-PARAMS_3RCD_CSV = RESULTS / "params_3rcd.csv"
-NODES_CSV = RESULTS / "fit_nodes_3rcd.csv"
-FIT_MD = RESULTS / "model_fit_3rcd.md"
+PARAMS_3RCD_CSV = RESULTS / "s9" / "params_3rcd.csv"
+NODES_CSV = RESULTS / "s9" / "fit_nodes_3rcd.csv"
+FIT_MD = RESULTS / "s9" / "model_fit_3rcd.md"
 PLOTS = RESULTS / "plots" / "s9"
 SOC_NODES = np.array([0.0, 0.1, 0.4, 0.7, 1.0])
 TAU3 = 45.0

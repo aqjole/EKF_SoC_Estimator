@@ -4,11 +4,11 @@ Run from the repo root:  .venv/bin/python python/fit_r1_current.py   (or: make f
 
   1. The OCV table is built as in fit_all.py. Per HPPC level, fit (a) gives R0 and tau1 (fit_level_fast); per
      usable discharge pulse, R1 is then the least-squares solution in that pulse's window of fit (a), with
-     that R0 and tau1 held. Every pulse fit goes to results/fit_pulses_r1i.csv.
+     that R0 and tau1 held. Every pulse fit goes to results/s7/fit_pulses_r1i.csv.
   2. Per level, the pulse values are interpolated linearly in current onto the nodes of I_GRID_A and held
      beyond the level's smallest and largest pulse; per node they are resampled over SoC by the rule of
-     fit_all.py. The table goes to results/r1_current.csv; every other table stays that of results/params.csv.
-  3. results/model_fit_r1i.md gives R1 per pulse and temperature, the open-loop US06 check with the S1 gate,
+     fit_all.py. The table goes to results/s7/r1_current.csv; every other table stays that of results/s1/params.csv.
+  3. results/s7/model_fit_r1i.md gives R1 per pulse and temperature, the open-loop US06 check with the S1 gate,
      and the open-loop error pooled over every drive run, 2RC next to 2RC-I.
   4. results/plots/s7/r1_current.png draws R1 against current per temperature (decisions 1.14).
 """
@@ -30,9 +30,9 @@ from fit_3rc import drive_run_sse
 from fit_all import GATE_RMSE_MV, GATE_TEMP_DEGC, load_ocv_inputs, resample, validate_us06
 
 
-PULSES_CSV = REPO_DIR / "results" / "fit_pulses_r1i.csv"
-R1_CURRENT_CSV = REPO_DIR / "results" / "r1_current.csv"
-REPORT_MD = REPO_DIR / "results" / "model_fit_r1i.md"
+PULSES_CSV = REPO_DIR / "results" / "s7" / "fit_pulses_r1i.csv"
+R1_CURRENT_CSV = REPO_DIR / "results" / "s7" / "r1_current.csv"
+REPORT_MD = REPO_DIR / "results" / "s7" / "model_fit_r1i.md"
 R1_PNG = REPO_DIR / "results" / "plots" / "s7" / "r1_current.png"
 
 # The current axis of decisions 1.28: the discharge pulse currents of the campaign, in A.
@@ -64,7 +64,7 @@ def window_r1(current, dt, z, tau1, weights=None):
 
 
 def fit_level_pulses(run, level, ocv_table, temp):
-    """The rows of results/fit_pulses_r1i.csv for one level: one per usable discharge pulse."""
+    """The rows of results/s7/fit_pulses_r1i.csv for one level: one per usable discharge pulse."""
     fast = fit_level_fast(run, level, ocv_table)
     if not fast["fast_ok"]:
         return []
@@ -119,7 +119,7 @@ def pulse_section(pulses):
         "with R0 and tau1 held at the level's fit (a) values (docs/decisions.md 1.28). Medians over the levels; "
         "v1.0 R1 is the level fit of S1. D1 is the smallest current and also the only pulse that follows the move and "
         "its 1 h rest, so a current effect and a history effect on D1 cannot be told apart. Left out: pulses with "
-        "R1 at or below 0. Every pulse fit is in `results/fit_pulses_r1i.csv`.",
+        "R1 at or below 0. Every pulse fit is in `results/s7/fit_pulses_r1i.csv`.",
         "",
     ]
     header = ["T (degC)", "v1.0 R1 (mOhm)"]
@@ -136,7 +136,7 @@ def us06_section(results_2rc, results_ri):
     gate = next(result for result in results_ri if result["temp"] == GATE_TEMP_DEGC)
     verdict = "PASS" if gate["rmse_mv"] <= GATE_RMSE_MV else "FAIL"
     lines = ["## Open-loop voltage error on US06, 2RC and 2RC-I", "",
-             "As in `results/model_fit.md`: measured current and temperature, reference SoC, every branch voltage 0 "
+             "As in `results/s1/model_fit.md`: measured current and temperature, reference SoC, every branch voltage 0 "
              "at the first row, error = model minus measured voltage over the whole run.", ""]
     lines += md_table(["T (degC)", "2RC RMSE (mV)", "2RC-I RMSE (mV)", "change (mV)"], rows)
     lines += ["", f"Gate: the 2RC-I open-loop RMSE at {GATE_TEMP_DEGC} degC is {gate['rmse_mv']:.2f} mV against the "

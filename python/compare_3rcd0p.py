@@ -3,17 +3,17 @@
 Run from the repo root:  .venv/bin/python python/compare_3rcd0p.py
 (or: make ekf-3rcd0p; needs ekf-3rcd0 and diagnose-starts)
 
-  1. results/ekf_config_3rcd0p.json is the S2 settings of results/ekf_config.json plus p0_v_std_rested = 0.010 V:
+  1. results/s12/ekf_config_3rcd0p.json is the S2 settings of results/s2/ekf_config.json plus p0_v_std_rested = 0.010 V:
      a filter whose first processed row has an input current below 0.5 A starts its branches at 10 mV
      (ekfsoc.ekf.branch_std).
   2. Every case of experiments.experiment_runs (378 on the 63 runs) is computed by the Python filter; traces go to
-     results/runs/3rcd0p/ and are reused while fresh. The incumbent is read from results/ekf_results_3rcd0.csv and
+     results/runs/3rcd0p/ and are reused while fresh. The incumbent is read from results/s10/ekf_results_3rcd0.csv and
      results/runs/3rcd0/, after checking that the two agree.
-  3. results/ekf_results_3rcd0p.csv has the rows and columns of results/ekf_results_3rcd0.csv; as there, the tuning
-     run keeps its flag and every guard and table scores it with the others. results/model_compare_3rcd0p.md gives
+  3. results/s12/ekf_results_3rcd0p.csv has the rows and columns of results/s10/ekf_results_3rcd0.csv; as there, the tuning
+     run keeps its flag and every guard and table scores it with the others. results/s12/model_compare_3rcd0p.md gives
      the eight guards of 1.48, decided as 1.35 amends 1.32, the verdict and the tables 1.57 lists;
      results/plots/s12/model_compare_3rcd0p.png draws the experiment-1 means.
-  4. The Mix-run means of experiments 1, 2 and 4 must repeat step A part 3 (results/start_cases.md) to the printed
+  4. The Mix-run means of experiments 1, 2 and 4 must repeat step A part 3 (results/s12/start_cases.md) to the printed
      precision, or the script stops.
 """
 
@@ -47,12 +47,12 @@ from start_report import prior_label
 
 NEW = "3RC-D0-P"
 RESTED_PRIOR_V = 0.010  # decision 1.57: the qualifying value of lowest metric in step A part 3
-CONFIG = RESULTS / "ekf_config_3rcd0p.json"
+CONFIG = RESULTS / "s12" / "ekf_config_3rcd0p.json"
 RUNS = RESULTS / "runs" / "3rcd0p"
-CSV = RESULTS / "ekf_results_3rcd0p.csv"
-COMPARISON = RESULTS / "model_compare_3rcd0p.md"
+CSV = RESULTS / "s12" / "ekf_results_3rcd0p.csv"
+COMPARISON = RESULTS / "s12" / "model_compare_3rcd0p.md"
 PLOT = RESULTS / "plots" / "s12" / "model_compare_3rcd0p.png"
-START_CASES_MD = RESULTS / "start_cases.md"
+START_CASES_MD = RESULTS / "s12" / "start_cases.md"
 PART3_COLUMNS = {"exp1": "exp1", "exp2": "exp2_mean", "exp4": "exp4"}  # part 3 column -> temperature_table key
 
 
@@ -112,7 +112,7 @@ def restart_cases(frames, priors, specs):
 
 def part3_check(raw, mix):
     """Rows [T, experiment, part 3, this run] of the Mix means of experiments 1, 2 and 4 at the rested prior; raises
-    if any differs from step A part 3 (results/start_cases.md) at its printed precision."""
+    if any differs from step A part 3 (results/s12/start_cases.md) at its printed precision."""
     section = START_CASES_MD.read_text().split("## Part 3", 1)[1].split("### Per temperature", 1)[1]
     section = section.split("\n### ", 1)[0]
     label = prior_label(RESTED_PRIOR_V, EkfConfig.from_json(CONFIG_JSON).p0_v_std)
@@ -122,12 +122,12 @@ def part3_check(raw, mix):
         if cells[0] == label:
             printed[int(cells[1])] = dict(zip(PART3_COLUMNS, cells[3:6]))
     if set(printed) != set(T_GRID_DEGC):
-        raise ValueError(f"results/start_cases.md has no part-3 row of {label} at every temperature")
+        raise ValueError(f"results/s12/start_cases.md has no part-3 row of {label} at every temperature")
     table = temperature_table(subset(raw, mix))
     rows = [[str(temp), name, printed[temp][name], f"{table[temp][key]:.4f}"]
             for temp in T_GRID_DEGC for name, key in PART3_COLUMNS.items()]
     if any(row[2] != row[3] for row in rows):
-        raise ValueError("Mix-run means differ from step A part 3 in results/start_cases.md")
+        raise ValueError("Mix-run means differ from step A part 3 in results/s12/start_cases.md")
     return rows
 
 
@@ -149,7 +149,7 @@ def main():
                 print(f"Evaluated {i}/63", flush=True)
     raw = {name: scored_frame([scores[k] for scores, _ in results]) for k, name in enumerate((OLD, NEW))}
     priors = pd.DataFrame([row for _, rows in results for row in rows])
-    frozen = pd.read_csv(RESULTS / "ekf_results_3rcd0.csv")
+    frozen = pd.read_csv(RESULTS / "s10" / "ekf_results_3rcd0.csv")
     verify_incumbent(raw[OLD], frozen)
     raw[NEW].to_csv(CSV, index=False, float_format="%.4f")
     frames = {OLD: frozen, NEW: pd.read_csv(CSV)}

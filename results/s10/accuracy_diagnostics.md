@@ -67,7 +67,7 @@ Open-loop voltage is model minus measured at reference SoC. Experiment-1 innovat
 | US06 | 40 | tail | 6159 | 1 | -29.255 | 31.545 | 2.5513 | 6.2979 | 0.0082741 | 0.30879 |
 | US06 | 40 | window | 33801 | 1 | 4.8971 | 17.845 | 0.082704 | 9.2253 | -0.36962 | 0.97769 |
 
-See [cold US06 residual profiles](plots/s10/accuracy_residuals.png) for bias and transient shape.
+See [cold US06 residual profiles](../plots/s10/accuracy_residuals.png) for bias and transient shape.
 
 ## Timing and innovation persistence
 
@@ -176,13 +176,13 @@ The cold traces have the largest local RC covariance contributions. H and F bran
 
 | File in results/ | SHA-256 |
 |---|---|
-| params.csv | d51d1576e02c82a7f719e8029a78ff5937baf6e06eec2cd036524aa7da9f09a3 |
-| r1_current.csv | bc1e44b45aa98ea5942beb1a38600cfddacacd91c44f099efa70daa4f8ae9ec5 |
-| params_3rcd.csv | 8e6d4e73f7762be69cfe4c9d3c2cb1166daffa87af1f8f73064907eee43b3ea4 |
-| ekf_config.json | 64f0f9568f740b046910b9f09576275c40996bcd0e00103d1c39dae8d2a2d830 |
-| ekf_results.csv | e29cd6ffd0ee3442db5c0813f3b8c6e4f3cbbf63e1794345c17480d53e92fb2f |
-| ekf_results_r1i.csv | 4f39c31b644595b0c2b2839269c841cdc7aa1aa2b02773e8344650af914eb5e1 |
-| ekf_results_3rcd.csv | 877185308d6e7ecc8519b1682c56f18c4b23ebb09a81dfbe641a52b06fcd1ac0 |
+| s1/params.csv | d51d1576e02c82a7f719e8029a78ff5937baf6e06eec2cd036524aa7da9f09a3 |
+| s7/r1_current.csv | bc1e44b45aa98ea5942beb1a38600cfddacacd91c44f099efa70daa4f8ae9ec5 |
+| s9/params_3rcd.csv | 8e6d4e73f7762be69cfe4c9d3c2cb1166daffa87af1f8f73064907eee43b3ea4 |
+| s2/ekf_config.json | 64f0f9568f740b046910b9f09576275c40996bcd0e00103d1c39dae8d2a2d830 |
+| s2/ekf_results.csv | e29cd6ffd0ee3442db5c0813f3b8c6e4f3cbbf63e1794345c17480d53e92fb2f |
+| s7/ekf_results_r1i.csv | 4f39c31b644595b0c2b2839269c841cdc7aa1aa2b02773e8344650af914eb5e1 |
+| s9/ekf_results_3rcd.csv | 877185308d6e7ecc8519b1682c56f18c4b23ebb09a81dfbe641a52b06fcd1ac0 |
 
 ## Run membership
 

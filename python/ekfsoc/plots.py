@@ -63,7 +63,7 @@ def plot_ocv(ocv_table, correction, path):
     """ocv.png: per temperature the C/20 curve (dashed), the corrected OCV (solid) and the HPPC rest voltages (dots).
 
     The panel below shows the correction in mV: the smooth curve added to the C/20 curve, and delta at each rest
-    point (decisions 1.1). `correction` is the table of results/ocv_correction.csv.
+    point (decisions 1.1). `correction` is the table of results/s1/ocv_correction.csv.
     """
     fig, top, bottom = stacked_panels(7)
     soc_percent = 100.0 * ocv_table.soc_grid
@@ -100,7 +100,7 @@ def plot_params(levels, params, path, fitted_tables=FITTED_TABLES):
     """params.png: R0, R1, tau1, R2, tau2 (and R3, tau3 for FITTED_TABLES_3RC) against SoC, one panel each,
     one line per temperature.
 
-    Solid line with dots: the HPPC level fits (`levels`, the table of results/fit_levels.csv), each at the SoC
+    Solid line with dots: the HPPC level fits (`levels`, the table of results/s1/fit_levels.csv), each at the SoC
     its fit belongs to. Dashed: the table on the SoC grid (`params`) that was resampled from them.
     The last panel holds the legend: the sixth of a 2 x 3 grid for five tables, the eighth of 2 x 4 for seven.
     """
@@ -184,7 +184,7 @@ def plot_synthetic(path, t, soc_true, estimates, band_pp, title):
 
 
 def plot_summary(path, results_df, metric, title):
-    """summary_rmse.png, summary_convergence.png: a column of results/ekf_results.csv against temperature, one panel per experiment.
+    """summary_rmse.png, summary_convergence.png: a column of results/s2/ekf_results.csv against temperature, one panel per experiment.
 
     One dot per run; the tuning cycle is marked apart. A NaN (convergence not reached) is an x at the top of
     the panel. The metric is not negative, so the axis starts at 0. The rows of `results_df` are the experiments
@@ -224,7 +224,7 @@ def plot_r1_current(pulses, path):
     """r1_current.png: R1 against the pulse current, one line per temperature (S7, docs/decisions.md 1.28).
 
     Each dot is one pulse number (D1 to D4): the median current and the median R1 over the levels, from the
-    used pulses of `pulses` (the table of results/fit_pulses_r1i.csv). The current axis is logarithmic, because
+    used pulses of `pulses` (the table of results/s7/fit_pulses_r1i.csv). The current axis is logarithmic, because
     the pulse currents double from one pulse to the next.
     """
     fig, axis = plt.subplots(figsize=(6.5, 4.5))

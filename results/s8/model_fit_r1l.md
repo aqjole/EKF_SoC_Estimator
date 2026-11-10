@@ -2,9 +2,9 @@
 
 Written by `python/fit_r1_low.py` (`make fit-r1l`). Do not edit by hand.
 
-The R1 table of the 2RC-Il model (docs/decisions.md 1.37): the 2RC-I table of `results/r1_current.csv` scaled at low current by factors fitted on the PausCycl files, which are not in the evaluation set.
+The R1 table of the 2RC-Il model (docs/decisions.md 1.37): the 2RC-I table of `results/s7/r1_current.csv` scaled at low current by factors fitted on the PausCycl files, which are not in the evaluation set.
 
-The 40 and 25 degC slices equal those of `results/r1_current.csv`: yes.
+The 40 and 25 degC slices equal those of `results/s7/r1_current.csv`: yes.
 
 ## Factors
 

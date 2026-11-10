@@ -3,7 +3,7 @@
 - Puts python/ on sys.path so that `import ekfsoc` works whatever directory pytest starts from.
 - Defines the `needs_data` marker. A test marked with it needs the raw .mat files in data/raw/
   and is skipped when they are missing (CI has only the committed fixture).
-- data_checks_table: reads one table of results/data_checks.md for the tests that compare with it.
+- data_checks_table: reads one table of results/s0/data_checks.md for the tests that compare with it.
 """
 
 import sys
@@ -31,11 +31,11 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.fixture(scope="session")
 def data_checks_table():
-    """Return table(section, header_text) -> {folder: {column: cell text}}, read from results/data_checks.md.
+    """Return table(section, header_text) -> {folder: {column: cell text}}, read from results/s0/data_checks.md.
 
     The table is the first one under "## <section>. ..." whose header line "| folder | ..." contains header_text.
     """
-    text = (REPO_DIR / "results" / "data_checks.md").read_text()
+    text = (REPO_DIR / "results" / "s0" / "data_checks.md").read_text()
 
     def table(section, header_text):
         lines = text.split(f"\n## {section}. ")[1].split("\n## ")[0].splitlines()

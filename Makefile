@@ -20,63 +20,63 @@ all: data inventory checks fit ekf c equiv arm sensitivity octave fit-3rc fit-3r
 data:
 	bash data/download.sh
 
-# S0: write results/data_inventory.md and results/capacity.md.
+# S0: write results/s0/data_inventory.md and results/s0/capacity.md.
 inventory:
 	$(PYTHON) python/inventory.py
 
-# S0: write results/data_checks.md (measured dataset properties the docs cite).
+# S0: write results/s0/data_checks.md (measured dataset properties the docs cite).
 checks:
 	$(PYTHON) python/data_checks.py
 
 # S1: OCV and 2RC tables from the C/20 and HPPC files, then the US06 open-loop check.
-# Writes results/params.csv, fit_levels.csv, ocv_correction.csv, params.md, model_fit.md, plots/s1/ and the C tables in c/.
+# Writes results/s1/params.csv, fit_levels.csv, ocv_correction.csv, params.md, model_fit.md, plots/s1/ and the C tables in c/.
 fit:
 	$(PYTHON) python/fit_all.py
 
 # S6: the 3RC fit on the same HPPC files and OCV, and the open-loop check of both models on US06 (needs make fit).
-# Writes results/fit_levels_3rc.csv, params_3rc.csv, model_fit_3rc.md and plots/s6/params_3rc.png.
+# Writes results/s6/fit_levels_3rc.csv, params_3rc.csv, model_fit_3rc.md and plots/s6/params_3rc.png.
 fit-3rc:
 	$(PYTHON) python/fit_3rc.py
 
 # S6: the second 3RC fit, the middle branch alone on the whole HPPC pulse train (docs/decisions.md 1.26; needs make fit).
-# Writes results/fit_levels_3rc_rest.csv, params_3rc_rest.csv, model_fit_3rc_rest.md and plots/s6/params_3rc_rest.png.
+# Writes results/s6/fit_levels_3rc_rest.csv, params_3rc_rest.csv, model_fit_3rc_rest.md and plots/s6/params_3rc_rest.png.
 fit-3rc-rest:
 	$(PYTHON) python/fit_3rc_rest.py
 
 # S7: R1 over current, the 2RC-I model (docs/decisions.md 1.28; needs make fit).
-# Writes results/fit_pulses_r1i.csv, r1_current.csv, model_fit_r1i.md and plots/s7/r1_current.png.
+# Writes results/s7/fit_pulses_r1i.csv, r1_current.csv, model_fit_r1i.md and plots/s7/r1_current.png.
 fit-r1i:
 	$(PYTHON) python/fit_r1_current.py
 
 # S7: experiments 1 to 4 on the 2RC-I model and the adoption verdict (docs/decisions.md 1.29; needs ekf and fit-r1i).
-# Writes results/ekf_results_r1i.csv, model_compare_r1i.md and plots/s7/model_compare_r1i.png; traces in results/runs/r1i/.
+# Writes results/s7/ekf_results_r1i.csv, model_compare_r1i.md and plots/s7/model_compare_r1i.png; traces in results/runs/r1i/.
 ekf-r1i:
 	$(PYTHON) python/compare_r1i.py
 
 # S8 step A: experiments 1 to 4 on the 2RC-Id model, the guards and the test for step B (docs/decisions.md 1.32, 1.33;
-# needs ekf and ekf-r1i). Writes results/ekf_results_r1d.csv, model_compare_r1d.md and plots/s8/model_compare_r1d.png;
+# needs ekf and ekf-r1i). Writes results/s8/ekf_results_r1d.csv, model_compare_r1d.md and plots/s8/model_compare_r1d.png;
 # traces in results/runs/r1d/.
 ekf-r1d:
 	$(PYTHON) python/compare_r1d.py
 
 # S8 step B: the charge-side R1 of the 2RC-Ic model on the HPPC charge pulses (docs/decisions.md 1.35; needs fit and
-# fit-r1i). Writes results/fit_pulses_r1c.csv, r1_charge.csv, model_fit_r1c.md and plots/s8/r1_charge.png.
+# fit-r1i). Writes results/s8/fit_pulses_r1c.csv, r1_charge.csv, model_fit_r1c.md and plots/s8/r1_charge.png.
 fit-r1c:
 	$(PYTHON) python/fit_r1_charge.py
 
 # S8 step B: experiments 1 to 4 on the 2RC-Ic model and the guards of 1.32 (docs/decisions.md 1.35; needs ekf, ekf-r1i,
-# ekf-r1d and fit-r1c). Writes results/ekf_results_r1c.csv, model_compare_r1c.md and plots/s8/model_compare_r1c.png;
+# ekf-r1d and fit-r1c). Writes results/s8/ekf_results_r1c.csv, model_compare_r1c.md and plots/s8/model_compare_r1c.png;
 # traces in results/runs/r1c/.
 ekf-r1c:
 	$(PYTHON) python/compare_r1c.py
 
 # S8 step C: the low-current R1 of the 2RC-Il model, scaled by factors fitted on the PausCycl files (docs/decisions.md
-# 1.37; needs fit and fit-r1i). Writes results/r1_low.csv and model_fit_r1l.md.
+# 1.37; needs fit and fit-r1i). Writes results/s8/r1_low.csv and model_fit_r1l.md.
 fit-r1l:
 	$(PYTHON) python/fit_r1_low.py
 
 # S8 step C: experiments 1 to 4 on the 2RC-Il model and the guards of 1.32 (docs/decisions.md 1.37; needs ekf, ekf-r1i
-# and fit-r1l). Writes results/ekf_results_r1l.csv, model_compare_r1l.md and plots/s8/model_compare_r1l.png; traces in
+# and fit-r1l). Writes results/s8/ekf_results_r1l.csv, model_compare_r1l.md and plots/s8/model_compare_r1l.png; traces in
 # results/runs/r1l/.
 ekf-r1l:
 	$(PYTHON) python/compare_r1l.py
@@ -117,21 +117,21 @@ diagnose-regen:
 	$(PYTHON) python/diagnose_regen.py
 
 # S12 step A: history before each run, the 189 wrong-start cases and the branch prior alone on the Mix runs
-# (decision 1.56). Needs ekf-3rcd0 (results/runs/3rcd0/ and ekf_results_3rcd0.csv); builds the native evaluator of
-# decision 1.50 (c/tools/ekf_tuning.c, with cc) and runs the prior values through it. Writes results/start_cases.md,
-# start_cases.csv and plots/s12/start_cases.png.
+# (decision 1.56). Needs ekf-3rcd0 (results/runs/3rcd0/ and results/s10/ekf_results_3rcd0.csv); builds the native
+# evaluator of decision 1.50 (c/tools/ekf_tuning.c, with cc) and runs the prior values through it. Writes
+# results/s12/start_cases.md, start_cases.csv and plots/s12/start_cases.png.
 diagnose-starts:
 	$(PYTHON) python/diagnose_starts.py
 
 # S12 step B: the omitted Jacobian terms of the 3RC-D0 filter and the three variants on the Mix runs (decision 1.56).
-# Needs the ekf-3rcd0 traces (results/runs/3rcd0/) and results/accuracy_jacobian.csv of diagnose-accuracy. Writes
-# results/jacobian_3rcd0.md, jacobian_3rcd0.csv and plots/s12/jacobian_3rcd0.png.
+# Needs the ekf-3rcd0 traces (results/runs/3rcd0/) and results/s10/accuracy_jacobian.csv of diagnose-accuracy. Writes
+# results/s12/jacobian_3rcd0.md, jacobian_3rcd0.csv and plots/s12/jacobian_3rcd0.png.
 diagnose-jacobian:
 	$(PYTHON) python/diagnose_jacobian.py
 
 # S12 step C: 3RC-D0-P, the 10 mV branch prior for a start below 0.5 A, on all 378 cases of the 63 runs with the
 # Python filter, judged by the eight guards of 1.48 (decision 1.57). Needs ekf-3rcd0 and diagnose-starts. Writes
-# results/ekf_config_3rcd0p.json, ekf_results_3rcd0p.csv, model_compare_3rcd0p.md and
+# results/s12/ekf_config_3rcd0p.json, ekf_results_3rcd0p.csv, model_compare_3rcd0p.md and
 # plots/s12/model_compare_3rcd0p.png; traces in results/runs/3rcd0p/.
 ekf-3rcd0p:
 	$(PYTHON) python/compare_3rcd0p.py
@@ -148,7 +148,7 @@ c-3rcd0:
 	ctest --test-dir c/build/3rcd0-double --output-on-failure
 
 # S11 close: the 3RC-D0 C build against the Python traces, six experiments on all 63 runs (needs make ekf-3rcd0).
-# Writes results/equivalence_3rcd0.md and .csv; exits 1 when a build reaches its threshold.
+# Writes results/s11/equivalence_3rcd0.md and .csv; exits 1 when a build reaches its threshold.
 equiv-3rcd0:
 	$(PYTHON) python/compare_c_3rcd0.py
 
@@ -157,12 +157,12 @@ arm-3rcd0:
 	$(PYTHON) python/arm_footprint.py --model 3rcd0
 
 # S2: tune the EKF noise settings on the tuning cycle and freeze them (not part of "all": the frozen values are committed).
-# Writes results/tuning.md, results/ekf_config.json and section 1.15 of docs/decisions.md.
+# Writes results/s2/tuning.md, results/s2/ekf_config.json and section 1.15 of docs/decisions.md.
 tune:
 	$(PYTHON) python/tune.py
 
-# S2: the four experiments on the 62 evaluation runs and the tuning cycle, with the frozen noise settings (results/ekf_config.json).
-# Writes results/ekf_results.csv, ekf_summary.md, plots/s2/ and, git-ignored, results/runs/ (per-run traces, reused when still newer than the code).
+# S2: the four experiments on the 62 evaluation runs and the tuning cycle, with the frozen noise settings (results/s2/ekf_config.json).
+# Writes results/s2/ekf_results.csv, ekf_summary.md, plots/s2/ and, git-ignored, results/runs/ (per-run traces, reused when still newer than the code).
 ekf:
 	$(PYTHON) python/run_all.py
 
@@ -176,29 +176,29 @@ c:
 	ctest --test-dir c/build/double --output-on-failure
 
 # S3: the C filter against the Python one on every evaluation run, in both builds (needs data/raw/ and make ekf).
-# Writes results/equivalence.md and results/plots/s3/; the C inputs go to results/runs/c_inputs/ (git-ignored).
+# Writes results/s3/equivalence.md and results/plots/s3/; the C inputs go to results/runs/c_inputs/ (git-ignored).
 equiv:
 	$(PYTHON) python/compare_c.py
 
 # S3: cross-compile the library for a Cortex-M4 (c/cmake/arm-none-eabi.cmake) and check it uses no double-precision helper.
-# Writes results/c_footprint.md (.text/.data/.bss per library object, sizeof(ekf_t), the symbol check); fails on a helper.
+# Writes results/s3/c_footprint.md (.text/.data/.bss per library object, sizeof(ekf_t), the symbol check); fails on a helper.
 arm:
 	$(PYTHON) python/arm_footprint.py
 
 # S5: experiment 1 with the capacity at 0.95 and 1.05 Q_ref, and at 1 Hz (every 10th row), on every evaluation run (needs make ekf).
-# Writes results/sensitivity.csv, results/sensitivity.md and results/plots/s5/sensitivity_*.png.
+# Writes results/s5/sensitivity.csv, results/s5/sensitivity.md and results/plots/s5/sensitivity_*.png.
 sensitivity:
 	$(PYTHON) python/sensitivity.py
 
 # S5: the Octave filter (octave/) against the Python one on every evaluation run (needs GNU Octave on PATH and make ekf).
-# Writes results/equivalence_octave.md and results/plots/s5/equivalence_octave_25degC.png.
+# Writes results/s5/equivalence_octave.md and results/plots/s5/equivalence_octave_25degC.png.
 octave:
 	$(PYTHON) python/compare_octave.py
 
-# S4: copy the results tables from results/*.md into README.md and docs/results.md between their marker comments.
+# S4: copy the results tables from results/*/*.md into README.md and docs/results.md between their marker comments.
 readme:
 	$(PYTHON) python/update_readme.py
 
-# S4: fail if README.md or docs/results.md is out of sync with results/*.md (the check CI runs).
+# S4: fail if README.md or docs/results.md is out of sync with results/*/*.md (the check CI runs).
 readme-check:
 	$(PYTHON) python/update_readme.py --check

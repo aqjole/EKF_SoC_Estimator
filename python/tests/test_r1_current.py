@@ -1,5 +1,5 @@
 """Tests of the R1 table over current of the 2RC-I model (S7): Eq. 4b, its use in the open-loop simulation and the
-filter, the results/r1_current.csv round trip, and the one-line R1 fit of decisions 1.28. No raw data is needed."""
+filter, the results/s7/r1_current.csv round trip, and the one-line R1 fit of decisions 1.28. No raw data is needed."""
 
 from dataclasses import replace
 

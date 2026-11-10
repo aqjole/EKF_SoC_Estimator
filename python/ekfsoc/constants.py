@@ -18,7 +18,7 @@ REPO_DIR = Path(__file__).resolve().parents[2]
 RAW_DIR = REPO_DIR / "data" / "raw"
 
 # Q_ref in Ah: the C/20 discharge capacity at 25 degC, counted from the counter's zero at the
-# step start in 25degC/549_C20DisCh (results/capacity.md; docs/model.md C4). One value at every temperature.
+# step start in 25degC/549_C20DisCh (results/s0/capacity.md; docs/model.md C4). One value at every temperature.
 Q_REF_AH = 2.7807
 
 # SoC axis of every table: 0 to 1 in 1 % steps, 101 points (docs/model.md C15).

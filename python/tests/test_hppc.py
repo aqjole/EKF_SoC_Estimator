@@ -2,7 +2,7 @@
 
 Synthetic: a made-up HPPC current profile at 0.1 s with two levels and a recharge, built through
 loader.build_run, checks the pulse detector. Data (needs data/raw/): the six real HPPC files are
-segmented and compared with the tables of results/data_checks.md section 10.
+segmented and compared with the tables of results/s0/data_checks.md section 10.
 """
 
 import numpy as np

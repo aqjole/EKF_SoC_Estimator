@@ -2,13 +2,13 @@
 
 Run from the repo root:  .venv/bin/python python/fit_3rc_rest.py   (or: make fit-3rc-rest; needs make fit)
 
-  1. Every 2RC table of results/params.csv stays as it is. Per HPPC level, R3, tau3 and one offset are fitted
+  1. Every 2RC table of results/s1/params.csv stays as it is. Per HPPC level, R3, tau3 and one offset are fitted
      on the rest rows of the level's pulse train, from 20 s after each pulse, with the model simulated from
      the start of the previous level's move (level 1: the first row of the file) with every branch at 0.
      A level with a discharge pulse cut at 2.8 V is left out.
-  2. results/fit_levels_3rc_rest.csv holds the level fits. results/params_3rc_rest.csv is results/params.csv
+  2. results/s6/fit_levels_3rc_rest.csv holds the level fits. results/s6/params_3rc_rest.csv is results/s1/params.csv
      with R3 and tau3 added, resampled onto the SoC grid by the rule of fit_all.py.
-  3. results/model_fit_3rc_rest.md reports the level fits, the levels where the v1.0 tau2 is close to the
+  3. results/s6/model_fit_3rc_rest.md reports the level fits, the levels where the v1.0 tau2 is close to the
      tau3 bound, the open-loop US06 check with the S1 gate, and the open-loop error pooled over every drive
      run next to the 2RC value and the ceiling of decisions 1.25.
   4. results/plots/s6/params_3rc_rest.png draws R3 and tau3 against SoC (decisions 1.14).
@@ -31,11 +31,11 @@ from fit_3rc import drive_run_ceiling, drive_run_sse, grid_best, on_bound
 from fit_all import GATE_RMSE_MV, GATE_TEMP_DEGC, load_test, resample, validate_us06
 
 
-LEVELS_CSV = REPO_DIR / "results" / "fit_levels_3rc_rest.csv"
-PARAMS_REST_CSV = REPO_DIR / "results" / "params_3rc_rest.csv"
-REPORT_MD = REPO_DIR / "results" / "model_fit_3rc_rest.md"
+LEVELS_CSV = REPO_DIR / "results" / "s6" / "fit_levels_3rc_rest.csv"
+PARAMS_REST_CSV = REPO_DIR / "results" / "s6" / "params_3rc_rest.csv"
+REPORT_MD = REPO_DIR / "results" / "s6" / "model_fit_3rc_rest.md"
 PARAMS_PNG = REPO_DIR / "results" / "plots" / "s6" / "params_3rc_rest.png"
-V1_LEVELS_CSV = REPO_DIR / "results" / "fit_levels.csv"
+V1_LEVELS_CSV = REPO_DIR / "results" / "s1" / "fit_levels.csv"
 
 # The rules of decisions 1.26.
 REST_SKIP_S = 20.0                 # cost rows start this long after the last row of a pulse
@@ -73,7 +73,7 @@ def fit_middle_branch(params_2rc, current, voltage, temp, soc, dt, cost):
 
 
 def fit_level(params_2rc, run, reference_soc, levels, index):
-    """The row of results/fit_levels_3rc_rest.csv for levels[index] of one HPPC run."""
+    """The row of results/s6/fit_levels_3rc_rest.csv for levels[index] of one HPPC run."""
     level = levels[index]
     row = {"T_degC": None, "level": level.k, "soc_pulses": level.soc_pulses, "fit_ok": False, "R3_ohm": None,
            "tau3_s": None, "offset_mV": None, "rmse_rest_mV": None, "n_cost_rows": 0,
@@ -110,7 +110,7 @@ def fit_temperature(params_2rc, temp):
 
 
 def build_params_rest(params_2rc, level_rows):
-    """results/params.csv with R3 and tau3 resampled from the level fits that succeeded."""
+    """results/s1/params.csv with R3 and tau3 resampled from the level fits that succeeded."""
     tables = {name: np.array([resample([row for row in level_rows if row["T_degC"] == temp], soc_key, column)
                               for temp in T_GRID_DEGC])
               for name, soc_key, column in FITTED_TABLES_REST}
@@ -136,11 +136,11 @@ def level_section(level_rows):
         "## Level fits",
         "",
         "Per HPPC level, R3, tau3 and one offset fitted on the rest rows of the pulse train from "
-        f"{REST_SKIP_S:g} s after each pulse, every 2RC table of `results/params.csv` fixed (docs/decisions.md "
+        f"{REST_SKIP_S:g} s after each pulse, every 2RC table of `results/s1/params.csv` fixed (docs/decisions.md "
         f"1.26). R3 in [{LOWER[0]:g}, {UPPER[0]:g}] Ohm, tau3 in [{TAU3_BOUNDS_S[0]:g}, {TAU3_BOUNDS_S[1]:g}] s. "
         "Left out: levels with a discharge pulse cut at 2.8 V. A tau3 within 0.1 % of an end of its bounds counts "
         "as on the bound. Offset = measured minus model voltage, constant over the train. Every level fit is in "
-        "`results/fit_levels_3rc_rest.csv`.",
+        "`results/s6/fit_levels_3rc_rest.csv`.",
         "",
     ]
     lines += md_table(["T (degC)", "levels", "left out (cut pulse)", "failed fits", "tau3 on the lower bound",
@@ -171,7 +171,7 @@ def us06_section(results_2rc, results_rest):
     gate = next(result for result in results_rest if result["temp"] == GATE_TEMP_DEGC)
     verdict = "PASS" if gate["rmse_mv"] <= GATE_RMSE_MV else "FAIL"
     lines = ["## Open-loop voltage error on US06, 2RC and second 3RC fit", "",
-             "As in `results/model_fit_3rc.md`: measured current and temperature, reference SoC, every branch "
+             "As in `results/s6/model_fit_3rc.md`: measured current and temperature, reference SoC, every branch "
              "voltage 0 at the first row, error = model minus measured voltage over the whole run.", ""]
     lines += md_table(["T (degC)", "2RC RMSE (mV)", "second 3RC RMSE (mV)", "change (mV)"], rows)
     lines += ["", f"Gate: the second 3RC open-loop RMSE at {GATE_TEMP_DEGC} degC is {gate['rmse_mv']:.2f} mV against "
@@ -194,7 +194,7 @@ def drive_section(params_2rc, params_rest):
                      f"{100.0 * (rmse_rest / rmse_2rc - 1.0):+.1f}"])
     lines = ["## Open-loop error over every drive cycle", "",
              "Pooled over all rows of a temperature's runs, scored as in docs/decisions.md 1.25; the ceiling is the "
-             "one of `results/model_fit_3rc.md`.", ""]
+             "one of `results/s6/model_fit_3rc.md`.", ""]
     lines += md_table(["T (degC)", "runs", "2RC pooled RMSE (mV)", "ceiling of 1.25 (mV)",
                        "second 3RC pooled RMSE (mV)", "second 3RC change (%)"], rows)
     return lines

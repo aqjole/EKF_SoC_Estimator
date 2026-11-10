@@ -1,11 +1,11 @@
 """S0 data checks: measured dataset properties that the docs cite.
 
-Writes results/data_checks.md. docs/decisions.md and docs/model.md cite
+Writes results/s0/data_checks.md. docs/decisions.md and docs/model.md cite
 measured properties of the raw files: sampling steps, duplicate rows, gaps,
 the three damaged drive files, temperatures, run lengths, the charge
 procedure, the HPPC and C/20 structure, the Q_ref row, the Ah counter, the
-campaign order and the 10 degC current scaling. results/data_inventory.md and
-results/capacity.md (python/inventory.py) do not contain these, so this
+campaign order and the 10 degC current scaling. results/s0/data_inventory.md and
+results/s0/capacity.md (python/inventory.py) do not contain these, so this
 script measures them from data/raw/ and writes them out, each with the files
 it comes from.
 
@@ -28,7 +28,7 @@ from ekfsoc import rawio
 
 REPO_DIR = Path(__file__).resolve().parent.parent
 RAW_DIR = REPO_DIR / "data" / "raw"
-OUT_PATH = REPO_DIR / "results" / "data_checks.md"
+OUT_PATH = REPO_DIR / "results" / "s0" / "data_checks.md"
 
 # Folder name -> chamber temperature it stands for (degC); the temperature grid nodes.
 FOLDER_TEMPS_DEGC = {
@@ -43,7 +43,7 @@ FOLDER_TEMPS_DEGC = {
 DRIVE_TYPES = ("udds", "hwfet", "la92", "us06",
                "mixed1", "mixed2", "mixed3", "mixed4", "mixed5", "mixed6", "mixed7", "mixed8")
 
-# Thresholds used by the checks. The section texts in results/data_checks.md state the ones that shape a result.
+# Thresholds used by the checks. The section texts in results/s0/data_checks.md state the ones that shape a result.
 FLOW_CURRENT_A = 0.05        # |I| above this is a discharge (I < 0) or a charge (I > 0); below it is a rest
 REST_START_CURRENT_A = 0.10  # a drive file "opens at rest" when |I| on its first row is below this
 FULL_VOLTAGE_V = 4.15        # full-charge rule: first V above this ...
@@ -814,7 +814,7 @@ def section_steps(folders, records):
     lines = ["## 1. Drive-cycle sampling steps", ""]
     lines.append(f"Source: all {len(drives)} drive files (UDDS, HWFET, LA92, US06, Mixed1 to Mixed8; names in "
                  "section 7), every row as stored. A step is Time[k] - Time[k-1]. The median and the 1st and 99th "
-                 "percentiles are taken over the steps with dt > 0, as in `results/data_inventory.md`.")
+                 "percentiles are taken over the steps with dt > 0, as in `results/s0/data_inventory.md`.")
     lines.append("")
     lines.append(f"| folder | drive files | steps | steps in {DT_BAND_S[0]} to {DT_BAND_S[1]} s (%) | dt = 0 | dt < 0 "
                  f"| dt > {LONG_STEP_S} s | dt > {GAP_S:.0f} s | median dt (s) | 1st percentile (s) "
@@ -837,7 +837,7 @@ def section_duplicates(records):
     """Section 2: duplicate-Time rows in every file, per test type, in the HPPC files and at drive-file ends."""
     lines = ["## 2. Duplicate Time rows", ""]
     lines.append("Source: all files, every row as stored. A duplicate is a row whose Time equals the previous "
-                 "row's Time (the *dup* column of `results/data_inventory.md`). A duplicate pair *differs* when "
+                 "row's Time (the *dup* column of `results/s0/data_inventory.md`). A duplicate pair *differs* when "
                  "the two rows have different Current or Voltage; pairs with a NaN are counted apart.")
     lines.append("")
     with_duplicates = [r for r in records if r["n_duplicates"] > 0]
@@ -1620,7 +1620,7 @@ def section_counter_starts(folders, capacity_files):
                  "file's last Ah). *Capacity from the start value*: start value minus the counter at the end of the "
                  "discharge, where the start value is 0 (C20DisCh, Dis_2C: the step-start zero) or the C20DisCh "
                  "file's last Ah (Dis_0p5C: the carried counter). *Capacity -(Ah_end - Ah[0])*: logged rows only. "
-                 "`results/capacity.md` starts from *back one interval* instead; the two start values differ by at "
+                 "`results/s0/capacity.md` starts from *back one interval* instead; the two start values differ by at "
                  f"most {fmt(1000.0 * start_difference_ah(folders, capacity_files), 2)} mAh here, so its capacities can "
                  "differ from this column in the last digit.")
     lines.append("")
@@ -1841,7 +1841,7 @@ def header_lines(folders, records, q_ref):
                  "CC BY 4.0. Do not edit by hand. Every number is measured from the `.mat` files.")
     lines.append("")
     lines.append("These are the measured dataset properties that `docs/decisions.md` and `docs/model.md` cite and "
-                 "that `results/data_inventory.md` and `results/capacity.md` do not contain. Each section names the "
+                 "that `results/s0/data_inventory.md` and `results/s0/capacity.md` do not contain. Each section names the "
                  "files it reads.")
     lines.append("")
     lines.append("## Legend and conventions")
@@ -1866,7 +1866,7 @@ def header_lines(folders, records, q_ref):
                  "; ".join(f"{label(r)} ({run_role(r)})" for r in drives if run_role(r) != "evaluation") +
                  ". The six PausCycl files are not drive cycles and are not in it either.")
     lines.append("- **Drive files** are the UDDS, HWFET, LA92, US06 and Mixed1 to Mixed8 files; files are named "
-                 "`<folder>/<test number>_<descriptor>` (the full names are in `results/data_inventory.md`).")
+                 "`<folder>/<test number>_<descriptor>` (the full names are in `results/s0/data_inventory.md`).")
     lines.append("- Sections 1 to 15 are the checks the S0 decisions rely on; 16 to 19 are further measured facts "
                  "the docs cite.")
     lines.append("")
@@ -1874,7 +1874,7 @@ def header_lines(folders, records, q_ref):
 
 
 def main():
-    """Read every raw file, run the checks, write results/data_checks.md."""
+    """Read every raw file, run the checks, write results/s0/data_checks.md."""
     records = file_records()
 
     # Q_ref first: every SoC below depends on it.

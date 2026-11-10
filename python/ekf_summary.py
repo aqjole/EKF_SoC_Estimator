@@ -1,6 +1,6 @@
-"""results/ekf_summary.md: the 3 pp gate and the cycle x temperature tables of every experiment.
+"""results/s2/ekf_summary.md: the 3 pp gate and the cycle x temperature tables of every experiment.
 
-Written by python/run_all.py (`make ekf`). Every number is read back from results/ekf_results.csv, apart from the
+Written by python/run_all.py (`make ekf`). Every number is read back from results/s2/ekf_results.csv, apart from the
 synthetic-data section, which takes the data and the estimates of run_all.synthetic_runs.
 """
 
@@ -19,7 +19,7 @@ from export_params import md_table
 GATE_TEMP_DEGC = 25
 GATE_RMSE_PP = 3.0
 
-# A table is (column of results/ekf_results.csv, title, number format).
+# A table is (column of results/s2/ekf_results.csv, title, number format).
 RMSE_TABLE = ("rmse_pp", "SoC RMSE (pp)", "{:.2f}")
 CONV_TABLES = (
     RMSE_TABLE,
@@ -119,7 +119,7 @@ def synthetic_lines(data, estimates):
     return [
         "## Synthetic data",
         "",
-        f"Data from the model itself: the 2RC model at {data['temp'][0]:g} degC from `results/params.csv` on a made-up current "
+        f"Data from the model itself: the 2RC model at {data['temp'][0]:g} degC from `results/s1/params.csv` on a made-up current "
         f"({data['i'].min():.1f} to {data['i'].max():.1f} A), {data['t'][-1]:.0f} s at {data['dt'][1]:g} s, "
         f"true SoC starting at {PP * SOC_START:.0f} %, plus Gaussian voltage noise. This checks the filter apart from model mismatch. "
         f"The filter uses the settings of the test, not the frozen ones: q_soc = {SYNTHETIC_CFG.q_soc:g} 1/s, "
@@ -132,19 +132,19 @@ def synthetic_lines(data, estimates):
 
 
 def summary_text(results, cfg, data, estimates):
-    """Return the text of results/ekf_summary.md. Every number comes from the CSV rows or the synthetic run."""
+    """Return the text of results/s2/ekf_summary.md. Every number comes from the CSV rows or the synthetic run."""
     n_runs = results["file"].nunique()
     lines = [
         "# EKF results (S2)",
         "",
-        "Written by `python/run_all.py` (`make ekf`) from `results/ekf_results.csv`. Do not edit by hand.",
+        "Written by `python/run_all.py` (`make ekf`) from `results/s2/ekf_results.csv`. Do not edit by hand.",
         "",
         gate_text(results),
         "",
         "## Legend",
         "",
-        f"- {n_runs} runs (the evaluation set and the tuning cycle), one row per run and experiment in `results/ekf_results.csv`. "
-        f"The noise settings are the frozen ones of `results/ekf_config.json`: q_soc = {cfg.q_soc:g} 1/s, q_v = {cfg.q_v:g} V^2/s, "
+        f"- {n_runs} runs (the evaluation set and the tuning cycle), one row per run and experiment in `results/s2/ekf_results.csv`. "
+        f"The noise settings are the frozen ones of `results/s2/ekf_config.json`: q_soc = {cfg.q_soc:g} 1/s, q_v = {cfg.q_v:g} V^2/s, "
         f"r = {cfg.r:g} V^2, and the same for every experiment and temperature.",
         "- Error = estimate - reference; the reference follows the cycler's Ah counter (docs/model.md C4).",
         f"- Evaluation window: from the filter start to the last sample where the reference SoC is at least {PP * SOC_MIN:.0f} % "

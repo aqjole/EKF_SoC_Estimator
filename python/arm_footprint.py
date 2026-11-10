@@ -1,8 +1,8 @@
-"""Stage S3 footprint: cross-compile the C library for a Cortex-M4 and write results/c_footprint.md.
+"""Stage S3 footprint: cross-compile the C library for a Cortex-M4 and write results/s3/c_footprint.md.
 
 Run from the repo root:  .venv/bin/python python/arm_footprint.py   (or: make arm; needs arm-none-eabi-gcc on PATH)
 With --model 3rcd0 (make arm-3rcd0, decision 1.54) the four-state 3RC-D0 build is measured instead, compiled with
--fstack-usage, and results/c_footprint_3rcd0.md also lists the static stack frame of each library function.
+-fstack-usage, and results/s11/c_footprint_3rcd0.md also lists the static stack frame of each library function.
 
   1. c/ is configured with the toolchain file c/cmake/arm-none-eabi.cmake into c/build/arm, and only the ekf
      library is built (the spec, S3: library objects only, nothing is linked).
@@ -28,11 +28,11 @@ REPO_DIR = Path(__file__).resolve().parent.parent
 C_DIR = REPO_DIR / "c"
 TOOLCHAIN_FILE = C_DIR / "cmake" / "arm-none-eabi.cmake"
 
-# Model -> (build folder, extra CMake options, counted objects, report, make target).
+# Model -> (build folder, extra CMake options, counted objects, report path, make target).
 MODELS = {
-    "2rc": ("arm", (), ("ekf.c.obj", "ekf_params.c.obj"), "c_footprint.md", "make arm"),
+    "2rc": ("arm", (), ("ekf.c.obj", "ekf_params.c.obj"), REPO_DIR / "results" / "s3" / "c_footprint.md", "make arm"),
     "3rcd0": ("arm-3rcd0", ("-DEKF_USE_3RCD0=ON", "-DEKF_STACK_USAGE=ON"), ("ekf.c.obj", "ekf_params_3rcd0.c.obj"),
-              "c_footprint_3rcd0.md", "make arm-3rcd0"),
+              REPO_DIR / "results" / "s11" / "c_footprint_3rcd0.md", "make arm-3rcd0"),
 }
 MARKER_OBJECT = "ekf_size_marker.c.obj"
 DOUBLE_HELPERS = ("__aeabi_d*", "__aeabi_f2d", "__aeabi_i2d", "__aeabi_ui2d", "__aeabi_l2d", "__aeabi_ul2d")
@@ -146,7 +146,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--model", choices=MODELS, default="2rc")
     model = parser.parse_args().model
-    folder, options, objects, report, command = MODELS[model]
+    folder, options, objects, path, command = MODELS[model]
     build_dir = C_DIR / "build" / folder
     object_dir = build_dir / "CMakeFiles" / "ekf.dir" / "src"
     build_library(build_dir, options)
@@ -157,7 +157,6 @@ def main():
     frames = stack_frames(object_dir) if model == "3rcd0" else None
     text = footprint_md(compiler_version(), library_flags(build_dir), section_sizes(object_dir, objects),
                         ekf_t_size(object_dir), undefined, helpers, title, command, frames)
-    path = REPO_DIR / "results" / report
     path.write_text(text)
     print(f"wrote {path.relative_to(REPO_DIR)}")
     if helpers:

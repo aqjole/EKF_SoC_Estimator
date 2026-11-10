@@ -1,11 +1,11 @@
 # Sensitivity (S5)
 
-Written by `python/sensitivity.py` (`make sensitivity`) from `results/sensitivity.csv`. Do not edit by hand. Experiment 1 on the 63 runs (the evaluation set and the tuning cycle) with the frozen noise settings of `results/ekf_config.json` (q_soc = 1e-07 1/s, q_v = 1e-06 V^2/s, r = 0.01 V^2), with a wrong filter capacity (docs/decisions.md 1.18) and at 1 Hz (docs/decisions.md 1.19).
+Written by `python/sensitivity.py` (`make sensitivity`) from `results/s5/sensitivity.csv`. Do not edit by hand. Experiment 1 on the 63 runs (the evaluation set and the tuning cycle) with the frozen noise settings of `results/s2/ekf_config.json` (q_soc = 1e-07 1/s, q_v = 1e-06 V^2/s, r = 0.01 V^2), with a wrong filter capacity (docs/decisions.md 1.18) and at 1 Hz (docs/decisions.md 1.19).
 
 ## Capacity error: the filter capacity at -5 % and +5 %
 
 - The filter and the coulomb counter both believe 0.95 Q_ref and 1.05 Q_ref (Q_ref = 2.7807 Ah) and start from the reference SoC at the first row (experiment 1).
-- Every cell is the mean SoC RMSE in pp over the evaluation window of the folder's runs; nominal is the experiment-1 value of `results/ekf_results.csv`; the reference SoC does not change.
+- Every cell is the mean SoC RMSE in pp over the evaluation window of the folder's runs; nominal is the experiment-1 value of `results/s2/ekf_results.csv`; the reference SoC does not change.
 
 | T (degC) | runs | EKF -5 % | EKF nominal | EKF +5 % | coulomb counting -5 % | coulomb counting nominal | coulomb counting +5 % |
 |---|---|---|---|---|---|---|---|
@@ -24,7 +24,7 @@ Plot: `results/plots/s5/sensitivity_capacity.png`.
 ## Sample rate: every 10th row (1 Hz)
 
 - The 1 Hz run keeps rows 0, 10, 20, ... of the loader's run and recomputes dt between them. The kept sample's current is held over the whole step (docs/model.md C11), the reference SoC is read at the kept rows and the evaluation window is C14 on them.
-- RMSE cells are means over the folder's runs; max |error| cells are the largest over the folder's runs. The 0.1 s columns are experiment 1 of `results/ekf_results.csv`.
+- RMSE cells are means over the folder's runs; max |error| cells are the largest over the folder's runs. The 0.1 s columns are experiment 1 of `results/s2/ekf_results.csv`.
 
 | T (degC) | runs | EKF RMSE 0.1 s | EKF RMSE 1 s | EKF max \|error\| 0.1 s | EKF max \|error\| 1 s | coulomb counting RMSE 0.1 s | coulomb counting RMSE 1 s |
 |---|---|---|---|---|---|---|---|

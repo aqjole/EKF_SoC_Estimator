@@ -1,12 +1,12 @@
 # EKF results (S2)
 
-Written by `python/run_all.py` (`make ekf`) from `results/ekf_results.csv`. Do not edit by hand.
+Written by `python/run_all.py` (`make ekf`) from `results/s2/ekf_results.csv`. Do not edit by hand.
 
 Sanity gate: experiment 1 at 25 degC has a mean SoC RMSE of 0.87 pp over the 10 evaluation runs (tuning cycle excluded) and a maximum of 1.14 pp (Mix 3) over all 11 runs, against the limit of 3 pp. **PASS.** The limit is a bug check, not a published target.
 
 ## Legend
 
-- 63 runs (the evaluation set and the tuning cycle), one row per run and experiment in `results/ekf_results.csv`. The noise settings are the frozen ones of `results/ekf_config.json`: q_soc = 1e-07 1/s, q_v = 1e-06 V^2/s, r = 0.01 V^2, and the same for every experiment and temperature.
+- 63 runs (the evaluation set and the tuning cycle), one row per run and experiment in `results/s2/ekf_results.csv`. The noise settings are the frozen ones of `results/s2/ekf_config.json`: q_soc = 1e-07 1/s, q_v = 1e-06 V^2/s, r = 0.01 V^2, and the same for every experiment and temperature.
 - Error = estimate - reference; the reference follows the cycler's Ah counter (docs/model.md C4).
 - Evaluation window: from the filter start to the last sample where the reference SoC is at least 10 % (docs/model.md C14). Every metric is over this window. Times are in s since the filter start.
 - `*` marks the tuning cycle (Mix 1 at 25 degC), on which the noise settings were tuned for experiments 2 and 4 (the mean of their SoC RMSE, docs/decisions.md 1.16). `n/a`: no run exists. `not reached`: the error is outside the band at the end of the window, or the run is still apart from the run with the correct init; it is not an average.
@@ -310,7 +310,7 @@ The current seen by the filter and by coulomb counting is +0.200 A off (positive
 
 ## Synthetic data
 
-Data from the model itself: the 2RC model at 25 degC from `results/params.csv` on a made-up current (-2.0 to 6.0 A), 1500 s at 0.1 s, true SoC starting at 80 %, plus Gaussian voltage noise. This checks the filter apart from model mismatch. The filter uses the settings of the test, not the frozen ones: q_soc = 1e-08 1/s, q_v = 1e-08 V^2/s, r = 0.001 V^2.
+Data from the model itself: the 2RC model at 25 degC from `results/s1/params.csv` on a made-up current (-2.0 to 6.0 A), 1500 s at 0.1 s, true SoC starting at 80 %, plus Gaussian voltage noise. This checks the filter apart from model mismatch. The filter uses the settings of the test, not the frozen ones: q_soc = 1e-08 1/s, q_v = 1e-08 V^2/s, r = 0.001 V^2.
 
 | start | error stays within +-1 pp from (s) | RMSE after that (pp) |
 |---|---|---|

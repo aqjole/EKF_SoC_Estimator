@@ -41,7 +41,7 @@ The two 1C columns are the folder's first and second 1C run in the order they ra
 
 ## How to run: every target
 
-Requirements: Python 3.12, CMake and a C99 compiler. `make arm` also needs `arm-none-eabi-gcc`, the release named in `results/c_footprint.md`. `make octave` needs GNU Octave 8 or later with `octave-cli` on PATH; `results/equivalence_octave.md` was written with GNU Octave 8.4.0 (`docs/decisions.md` 1.20).
+Requirements: Python 3.12, CMake and a C99 compiler. `make arm` also needs `arm-none-eabi-gcc`, the release named in `results/s3/c_footprint.md`. `make octave` needs GNU Octave 8 or later with `octave-cli` on PATH; `results/s5/equivalence_octave.md` was written with GNU Octave 8.4.0 (`docs/decisions.md` 1.20).
 
 ```sh
 python3.12 -m venv .venv
@@ -53,40 +53,40 @@ make all         # every stage below, in order
 | target | stage | what it does | writes |
 |---|---|---|---|
 | `make data` | | fetches the dataset file by file and checks each file against `data/checksums.sha256` | `data/raw/` (git-ignored) |
-| `make inventory` | S0 | lists every file and measures the capacity tests | `results/data_inventory.md`, `results/capacity.md` |
-| `make checks` | S0 | measures the dataset properties the docs cite | `results/data_checks.md` |
-| `make fit` | S1 | fits the OCV and 2RC tables, runs the US06 open-loop check, generates the C tables | `results/params.*`, `results/model_fit.md`, `results/plots/s1/`, `c/src/ekf_params.c` |
-| `make tune` | S2 | tunes the noise settings on the tuning cycle and freezes them; not part of `make all` | `results/tuning.md`, `results/ekf_config.json` |
-| `make ekf` | S2 | runs the four experiments on the evaluation set and the tuning cycle | `results/ekf_results.csv`, `results/ekf_summary.md`, `results/plots/s2/` |
+| `make inventory` | S0 | lists every file and measures the capacity tests | `results/s0/data_inventory.md`, `results/s0/capacity.md` |
+| `make checks` | S0 | measures the dataset properties the docs cite | `results/s0/data_checks.md` |
+| `make fit` | S1 | fits the OCV and 2RC tables, runs the US06 open-loop check, generates the C tables | `results/s1/params.*`, `results/s1/model_fit.md`, `results/plots/s1/`, `c/src/ekf_params.c` |
+| `make tune` | S2 | tunes the noise settings on the tuning cycle and freezes them; not part of `make all` | `results/s2/tuning.md`, `results/s2/ekf_config.json` |
+| `make ekf` | S2 | runs the four experiments on the evaluation set and the tuning cycle | `results/s2/ekf_results.csv`, `results/s2/ekf_summary.md`, `results/plots/s2/` |
 | `make c` | S3 | builds the C library in the float and double builds and runs ctest | `c/build/` (git-ignored) |
-| `make equiv` | S3 | runs the C filter against the Python filter on every run | `results/equivalence.md`, `results/plots/s3/` |
-| `make arm` | S3 | cross-compiles for a Cortex-M4 and checks for double-precision helpers | `results/c_footprint.md` |
-| `make sensitivity` | S5 | runs experiment 1 with the filter capacity at -5 % and +5 % and at 1 Hz | `results/sensitivity.*`, `results/plots/s5/sensitivity_*.png` |
-| `make octave` | S5 | runs the Octave filter against the Python filter on every run; slow, because Octave runs the filter row by row | `results/equivalence_octave.md`, `results/plots/s5/equivalence_octave_25degC.png` |
-| `make fit-3rc` | S6 | fits the 3RC model from the same HPPC files, runs both models open loop on US06, and the third-branch ceiling check on US06 and on every drive run; needs `make fit` | `results/fit_levels_3rc.csv`, `results/params_3rc.csv`, `results/model_fit_3rc.md`, `results/plots/s6/` |
-| `make fit-3rc-rest` | S6 | fits the middle branch alone on the HPPC pulse trains with the 2RC tables fixed, and runs the result open loop on US06 and on every drive run; needs `make fit` | `results/fit_levels_3rc_rest.csv`, `results/params_3rc_rest.csv`, `results/model_fit_3rc_rest.md`, `results/plots/s6/params_3rc_rest.png` |
-| `make fit-r1i` | S7 | fits R1 per HPPC discharge pulse and builds the R1 table over current, then runs the 2RC-I model open loop on US06 and on every drive run; needs `make fit` | `results/fit_pulses_r1i.csv`, `results/r1_current.csv`, `results/model_fit_r1i.md`, `results/plots/s7/r1_current.png` |
-| `make ekf-r1i` | S7 | runs experiments 1 to 4 on the 2RC-I model and writes the comparison with the adoption verdict; needs `make ekf` and `make fit-r1i` | `results/ekf_results_r1i.csv`, `results/model_compare_r1i.md`, `results/plots/s7/model_compare_r1i.png` |
-| `make ekf-r1d` | S8 | runs experiments 1 to 4 on the 2RC-Id model (v1.0 R1 under regen) and writes the comparison with the guards and the verdict; needs `make ekf` and `make ekf-r1i` | `results/ekf_results_r1d.csv`, `results/model_compare_r1d.md`, `results/plots/s8/model_compare_r1d.png` |
-| `make fit-r1c` | S8 | fits a charge-side R1 per HPPC charge pulse and builds its table over current, then runs the 2RC-Ic model open loop on US06; needs `make fit` and `make fit-r1i` | `results/fit_pulses_r1c.csv`, `results/r1_charge.csv`, `results/model_fit_r1c.md`, `results/plots/s8/r1_charge.png` |
-| `make ekf-r1c` | S8 | runs experiments 1 to 4 on the 2RC-Ic model and writes the four-model comparison with the guards and the verdict; needs `make ekf`, `make ekf-r1i`, `make ekf-r1d` and `make fit-r1c` | `results/ekf_results_r1c.csv`, `results/model_compare_r1c.md`, `results/plots/s8/model_compare_r1c.png` |
-| `make fit-r1l` | S8 | fits one low-current R1 factor per temperature on the PausCycl files and builds the 2RC-Il table, then runs it open loop on US06 and on every drive run; needs `make fit` and `make fit-r1i` | `results/r1_low.csv`, `results/model_fit_r1l.md` |
-| `make ekf-r1l` | S8 | runs experiments 1 to 4 on the 2RC-Il model and writes the comparison with the guards and the verdict; needs `make ekf`, `make ekf-r1i` and `make fit-r1l` | `results/ekf_results_r1l.csv`, `results/model_compare_r1l.md`, `results/plots/s8/model_compare_r1l.png` |
-| `make fit-3rcd` | S9 | fits R3 and the R2 scale on the 40 Mix runs, then scores the exported model open loop on both splits and the US06 gate. Needs `make fit` and `make fit-r1i` | `results/fit_nodes_3rcd.csv`, `results/params_3rcd.csv`, `results/model_fit_3rcd.md`, `results/plots/s9/params_3rcd.png` |
-| `make ekf-3rcd` | S9 | runs experiments 1 to 4 with the frozen noise settings after the S1 gate passes and decides adoption on the 23 standard-cycle runs. Needs `make ekf`, `make ekf-r1i` and `make fit-3rcd` | `results/ekf_results_3rcd.csv`, `results/model_compare_3rcd.md`, `results/plots/s9/model_compare_3rcd.png` |
+| `make equiv` | S3 | runs the C filter against the Python filter on every run | `results/s3/equivalence.md`, `results/plots/s3/` |
+| `make arm` | S3 | cross-compiles for a Cortex-M4 and checks for double-precision helpers | `results/s3/c_footprint.md` |
+| `make sensitivity` | S5 | runs experiment 1 with the filter capacity at -5 % and +5 % and at 1 Hz | `results/s5/sensitivity.*`, `results/plots/s5/sensitivity_*.png` |
+| `make octave` | S5 | runs the Octave filter against the Python filter on every run; slow, because Octave runs the filter row by row | `results/s5/equivalence_octave.md`, `results/plots/s5/equivalence_octave_25degC.png` |
+| `make fit-3rc` | S6 | fits the 3RC model from the same HPPC files, runs both models open loop on US06, and the third-branch ceiling check on US06 and on every drive run; needs `make fit` | `results/s6/fit_levels_3rc.csv`, `results/s6/params_3rc.csv`, `results/s6/model_fit_3rc.md`, `results/plots/s6/` |
+| `make fit-3rc-rest` | S6 | fits the middle branch alone on the HPPC pulse trains with the 2RC tables fixed, and runs the result open loop on US06 and on every drive run; needs `make fit` | `results/s6/fit_levels_3rc_rest.csv`, `results/s6/params_3rc_rest.csv`, `results/s6/model_fit_3rc_rest.md`, `results/plots/s6/params_3rc_rest.png` |
+| `make fit-r1i` | S7 | fits R1 per HPPC discharge pulse and builds the R1 table over current, then runs the 2RC-I model open loop on US06 and on every drive run; needs `make fit` | `results/s7/fit_pulses_r1i.csv`, `results/s7/r1_current.csv`, `results/s7/model_fit_r1i.md`, `results/plots/s7/r1_current.png` |
+| `make ekf-r1i` | S7 | runs experiments 1 to 4 on the 2RC-I model and writes the comparison with the adoption verdict; needs `make ekf` and `make fit-r1i` | `results/s7/ekf_results_r1i.csv`, `results/s7/model_compare_r1i.md`, `results/plots/s7/model_compare_r1i.png` |
+| `make ekf-r1d` | S8 | runs experiments 1 to 4 on the 2RC-Id model (v1.0 R1 under regen) and writes the comparison with the guards and the verdict; needs `make ekf` and `make ekf-r1i` | `results/s8/ekf_results_r1d.csv`, `results/s8/model_compare_r1d.md`, `results/plots/s8/model_compare_r1d.png` |
+| `make fit-r1c` | S8 | fits a charge-side R1 per HPPC charge pulse and builds its table over current, then runs the 2RC-Ic model open loop on US06; needs `make fit` and `make fit-r1i` | `results/s8/fit_pulses_r1c.csv`, `results/s8/r1_charge.csv`, `results/s8/model_fit_r1c.md`, `results/plots/s8/r1_charge.png` |
+| `make ekf-r1c` | S8 | runs experiments 1 to 4 on the 2RC-Ic model and writes the four-model comparison with the guards and the verdict; needs `make ekf`, `make ekf-r1i`, `make ekf-r1d` and `make fit-r1c` | `results/s8/ekf_results_r1c.csv`, `results/s8/model_compare_r1c.md`, `results/plots/s8/model_compare_r1c.png` |
+| `make fit-r1l` | S8 | fits one low-current R1 factor per temperature on the PausCycl files and builds the 2RC-Il table, then runs it open loop on US06 and on every drive run; needs `make fit` and `make fit-r1i` | `results/s8/r1_low.csv`, `results/s8/model_fit_r1l.md` |
+| `make ekf-r1l` | S8 | runs experiments 1 to 4 on the 2RC-Il model and writes the comparison with the guards and the verdict; needs `make ekf`, `make ekf-r1i` and `make fit-r1l` | `results/s8/ekf_results_r1l.csv`, `results/s8/model_compare_r1l.md`, `results/plots/s8/model_compare_r1l.png` |
+| `make fit-3rcd` | S9 | fits R3 and the R2 scale on the 40 Mix runs, then scores the exported model open loop on both splits and the US06 gate. Needs `make fit` and `make fit-r1i` | `results/s9/fit_nodes_3rcd.csv`, `results/s9/params_3rcd.csv`, `results/s9/model_fit_3rcd.md`, `results/plots/s9/params_3rcd.png` |
+| `make ekf-3rcd` | S9 | runs experiments 1 to 4 with the frozen noise settings after the S1 gate passes and decides adoption on the 23 standard-cycle runs. Needs `make ekf`, `make ekf-r1i` and `make fit-3rcd` | `results/s9/ekf_results_3rcd.csv`, `results/s9/model_compare_3rcd.md`, `results/plots/s9/model_compare_3rcd.png` |
 | `make accuracy` | S10 | runs the fit and evaluation followed by the separate diagnosis under decisions 1.44 and 1.47 | the following three targets |
-| `make diagnose-accuracy` | S10 | checks residuals and timing and measures local Jacobian terms on all 63 incumbent experiment-1 trajectories | `results/accuracy_diagnostics.md`, `results/accuracy_residual_bins.csv`, `results/accuracy_jacobian.csv`, `results/plots/s10/accuracy_residuals.png` |
-| `make fit-3rcd0` | S10 | fits the S9 parameterization using v1.0 R1 and the frozen inputs | `results/params_3rcd0.csv`, `results/fit_nodes_3rcd0.csv`, `results/model_fit_3rcd0.md`, `results/plots/s10/params_3rcd0.png` |
-| `make ekf-3rcd0` | S10 | applies the S1 gate, runs the frozen experiments and guards, and scores the unfitted S9 R1 substitution and sensitivity | `results/ekf_results_3rcd0.csv`, `results/model_compare_3rcd0.md`, `results/sensitivity_3rcd0.csv`, `results/plots/s10/model_compare_3rcd0.png` |
-| `make tune-3rcd0` | S11 A | searches 864 grid points and 81 refinement points on 40 Mix runs; not in `make all` | `results/tuning_3rcd0.md`, `results/ekf_config_3rcd0.json`, `results/plots/s11/tuning_3rcd0.png` |
-| `make ekf-3rcd0n` | S11 A | evaluates the settings candidate in Python on all 63 runs, eight adoption guards and wrong-start diagnostics | `results/model_compare_3rcd0n.md`, `results/ekf_results_3rcd0n.csv`, `results/plots/s11/model_compare_3rcd0n.png` |
-| `make diagnose-regen` | S11 B | finds the regen rows at the 4.2 V limit in all 63 runs and reports each model's experiment-1 SoC error change across them, from the stored traces | `results/regen_limit.md`, `results/regen_limit.csv`, `results/plots/s11/regen_limit.png` |
-| `make diagnose-starts` | S12 A | the history before each run, the 189 wrong-start cases of 3RC-D0 replayed with their start measures, and the branch prior alone on the 40 Mix runs through the native evaluator | `results/start_cases.md`, `results/start_cases.csv`, `results/plots/s12/start_cases.png` |
-| `make diagnose-jacobian` | S12 B | the omitted Jacobian terms of the 3RC-D0 filter on all 63 runs and the 30 guard-7 cases, and the three Jacobian variants on the 40 Mix runs | `results/jacobian_3rcd0.md`, `results/jacobian_3rcd0.csv`, `results/plots/s12/jacobian_3rcd0.png` |
-| `make ekf-3rcd0p` | S12 C | evaluates 3RC-D0-P (a 10 mV branch prior when the first input current is below 0.5 A) in Python on all 378 cases of the 63 runs against the eight adoption guards | `results/model_compare_3rcd0p.md`, `results/ekf_results_3rcd0p.csv`, `results/ekf_config_3rcd0p.json`, `results/plots/s12/model_compare_3rcd0p.png` |
+| `make diagnose-accuracy` | S10 | checks residuals and timing and measures local Jacobian terms on all 63 incumbent experiment-1 trajectories | `results/s10/accuracy_diagnostics.md`, `results/s10/accuracy_residual_bins.csv`, `results/s10/accuracy_jacobian.csv`, `results/plots/s10/accuracy_residuals.png` |
+| `make fit-3rcd0` | S10 | fits the S9 parameterization using v1.0 R1 and the frozen inputs | `results/s10/params_3rcd0.csv`, `results/s10/fit_nodes_3rcd0.csv`, `results/s10/model_fit_3rcd0.md`, `results/plots/s10/params_3rcd0.png` |
+| `make ekf-3rcd0` | S10 | applies the S1 gate, runs the frozen experiments and guards, and scores the unfitted S9 R1 substitution and sensitivity | `results/s10/ekf_results_3rcd0.csv`, `results/s10/model_compare_3rcd0.md`, `results/s10/sensitivity_3rcd0.csv`, `results/plots/s10/model_compare_3rcd0.png` |
+| `make tune-3rcd0` | S11 A | searches 864 grid points and 81 refinement points on 40 Mix runs; not in `make all` | `results/s11/tuning_3rcd0.md`, `results/s11/ekf_config_3rcd0.json`, `results/plots/s11/tuning_3rcd0.png` |
+| `make ekf-3rcd0n` | S11 A | evaluates the settings candidate in Python on all 63 runs, eight adoption guards and wrong-start diagnostics | `results/s11/model_compare_3rcd0n.md`, `results/s11/ekf_results_3rcd0n.csv`, `results/plots/s11/model_compare_3rcd0n.png` |
+| `make diagnose-regen` | S11 B | finds the regen rows at the 4.2 V limit in all 63 runs and reports each model's experiment-1 SoC error change across them, from the stored traces | `results/s11/regen_limit.md`, `results/s11/regen_limit.csv`, `results/plots/s11/regen_limit.png` |
+| `make diagnose-starts` | S12 A | the history before each run, the 189 wrong-start cases of 3RC-D0 replayed with their start measures, and the branch prior alone on the 40 Mix runs through the native evaluator | `results/s12/start_cases.md`, `results/s12/start_cases.csv`, `results/plots/s12/start_cases.png` |
+| `make diagnose-jacobian` | S12 B | the omitted Jacobian terms of the 3RC-D0 filter on all 63 runs and the 30 guard-7 cases, and the three Jacobian variants on the 40 Mix runs | `results/s12/jacobian_3rcd0.md`, `results/s12/jacobian_3rcd0.csv`, `results/plots/s12/jacobian_3rcd0.png` |
+| `make ekf-3rcd0p` | S12 C | evaluates 3RC-D0-P (a 10 mV branch prior when the first input current is below 0.5 A) in Python on all 378 cases of the 63 runs against the eight adoption guards | `results/s12/model_compare_3rcd0p.md`, `results/s12/ekf_results_3rcd0p.csv`, `results/s12/ekf_config_3rcd0p.json`, `results/plots/s12/model_compare_3rcd0p.png` |
 | `make c-3rcd0` | S11 | regenerates the 3RC-D0 C tables and test vectors, builds float and double with `-DEKF_USE_3RCD0=ON` and runs the unit tests | `c/src/ekf_params_3rcd0.c`, `c/include/ekf_params_3rcd0.h`, `c/tests/vectors/vectors_3rcd0.h` |
-| `make equiv-3rcd0` | S11 | compares both 3RC-D0 builds with the Python traces in six experiment cases on all 63 runs | `results/equivalence_3rcd0.md`, `results/equivalence_3rcd0.csv` |
-| `make arm-3rcd0` | S11 | cross-compiles the 3RC-D0 build for a Cortex-M4 with `-fstack-usage` | `results/c_footprint_3rcd0.md` |
+| `make equiv-3rcd0` | S11 | compares both 3RC-D0 builds with the Python traces in six experiment cases on all 63 runs | `results/s11/equivalence_3rcd0.md`, `results/s11/equivalence_3rcd0.csv` |
+| `make arm-3rcd0` | S11 | cross-compiles the 3RC-D0 build for a Cortex-M4 with `-fstack-usage` | `results/s11/c_footprint_3rcd0.md` |
 | `make readme` | S4 | copies the results tables into `README.md` and this file | `README.md`, `docs/results.md` |
 | `make readme-check` | S4 | fails if `README.md` or this file is out of sync with `results/` | |
 
@@ -112,7 +112,7 @@ What drives the simulation:
 
 - the measured current (positive = discharge) and the measured cell temperature of every row;
 - the reference SoC from the cycler's Ah counter, `SoC0 - Ah_removed / Q_ref` (Eq. 3, C13), so only the voltage model is under test, not the SoC estimate;
-- the tables of `results/params.csv` (the numbers the C file holds), read with the clamped bilinear lookup of Eq. 4;
+- the tables of `results/s1/params.csv` (the numbers the C file holds), read with the clamped bilinear lookup of Eq. 4;
 - V1 = V2 = 0 at the first row: the model starts relaxed.
 
 Error = model voltage minus measured voltage. RMSE and max |error| run over all rows used after the loader rules, and the gate uses this RMSE (docs/decisions.md 1.1). The last column is the RMSE over the rows up to the last one with reference SoC >= 10 % (the evaluation window of the EKF experiments, docs/model.md C14), for information only: no window is chosen to pass the gate. Duration is the last Time minus the first Time of the rows used.
@@ -219,13 +219,13 @@ At each rest point (the last row of every 1 h rest after a move, and the last ro
 
 ### S2: EKF experiments
 
-Four experiments run on every evaluation run and the tuning cycle with the same frozen noise settings. Experiment 1 starts at the correct SoC. Experiment 2 starts with the SoC too low. Experiment 3 restarts the filter mid-run with a start too low and one too high. Experiment 4 adds a constant offset to the current seen by the filter and by coulomb counting. The experiment 3 start values are in the table titles below. The offset size is set in `docs/decisions.md` 1.7 and stated in the experiment 4 section of `results/ekf_summary.md`.
+Four experiments run on every evaluation run and the tuning cycle with the same frozen noise settings. Experiment 1 starts at the correct SoC. Experiment 2 starts with the SoC too low. Experiment 3 restarts the filter mid-run with a start too low and one too high. Experiment 4 adds a constant offset to the current seen by the filter and by coulomb counting. The experiment 3 start values are in the table titles below. The offset size is set in `docs/decisions.md` 1.7 and stated in the experiment 4 section of `results/s2/ekf_summary.md`.
 
 <!-- results:ekf_legend:begin -->
 
 **Legend**
 
-- 63 runs (the evaluation set and the tuning cycle), one row per run and experiment in `results/ekf_results.csv`. The noise settings are the frozen ones of `results/ekf_config.json`: q_soc = 1e-07 1/s, q_v = 1e-06 V^2/s, r = 0.01 V^2, and the same for every experiment and temperature.
+- 63 runs (the evaluation set and the tuning cycle), one row per run and experiment in `results/s2/ekf_results.csv`. The noise settings are the frozen ones of `results/s2/ekf_config.json`: q_soc = 1e-07 1/s, q_v = 1e-06 V^2/s, r = 0.01 V^2, and the same for every experiment and temperature.
 - Error = estimate - reference; the reference follows the cycler's Ah counter (docs/model.md C4).
 - Evaluation window: from the filter start to the last sample where the reference SoC is at least 10 % (docs/model.md C14). Every metric is over this window. Times are in s since the filter start.
 - `*` marks the tuning cycle (Mix 1 at 25 degC), on which the noise settings were tuned for experiments 2 and 4 (the mean of their SoC RMSE, docs/decisions.md 1.16). `n/a`: no run exists. `not reached`: the error is outside the band at the end of the window, or the run is still apart from the run with the correct init; it is not an average.
@@ -460,11 +460,11 @@ The C filter (`c/tools/ekf_run_csv`) runs experiment 1 on every evaluation run a
 
 ![Python minus C SoC at -20 degC](../results/plots/s3/equivalence_n20degC.png)
 
-The per-run table is in `results/equivalence.md`.
+The per-run table is in `results/s3/equivalence.md`.
 
 ### S5: sensitivity
 
-Experiment 1 again on the same 63 runs, with the frozen noise settings, changing one thing at a time (`docs/decisions.md` 1.18, 1.19). These S5 averages include the 62 evaluation runs and the tuning cycle; the S2 evaluation averages above exclude the tuning cycle. The tables are in `results/sensitivity.md`.
+Experiment 1 again on the same 63 runs, with the frozen noise settings, changing one thing at a time (`docs/decisions.md` 1.18, 1.19). These S5 averages include the 62 evaluation runs and the tuning cycle; the S2 evaluation averages above exclude the tuning cycle. The tables are in `results/s5/sensitivity.md`.
 
 **Capacity error.** A stand-in for ageing (`docs/decisions.md` 1.18).
 
@@ -473,7 +473,7 @@ Experiment 1 again on the same 63 runs, with the frozen noise settings, changing
 **Capacity error: the filter capacity at -5 % and +5 %**
 
 - The filter and the coulomb counter both believe 0.95 Q_ref and 1.05 Q_ref (Q_ref = 2.7807 Ah) and start from the reference SoC at the first row (experiment 1).
-- Every cell is the mean SoC RMSE in pp over the evaluation window of the folder's runs; nominal is the experiment-1 value of `results/ekf_results.csv`; the reference SoC does not change.
+- Every cell is the mean SoC RMSE in pp over the evaluation window of the folder's runs; nominal is the experiment-1 value of `results/s2/ekf_results.csv`; the reference SoC does not change.
 
 | T (degC) | runs | EKF -5 % | EKF nominal | EKF +5 % | coulomb counting -5 % | coulomb counting nominal | coulomb counting +5 % |
 |---|---|---|---|---|---|---|---|
@@ -493,7 +493,7 @@ Plot: `results/plots/s5/sensitivity_capacity.png`.
 
 ![Mean SoC RMSE per temperature with the filter capacity at -5 %, nominal and +5 %](../results/plots/s5/sensitivity_capacity.png)
 
-On the folder means, the capacity error moves the EKF far less than it moves coulomb counting at every temperature. From 40 to 0 degC the EKF with the wrong capacity still has a lower mean RMSE than coulomb counting with it. At -10 and -20 degC coulomb counting with the wrong capacity has the lower mean: there the EKF's mean error at the nominal capacity is already larger than the mean drift of a 5 % capacity error. Single runs can go the other way at a given temperature; `results/sensitivity.csv` lists every run.
+On the folder means, the capacity error moves the EKF far less than it moves coulomb counting at every temperature. From 40 to 0 degC the EKF with the wrong capacity still has a lower mean RMSE than coulomb counting with it. At -10 and -20 degC coulomb counting with the wrong capacity has the lower mean: there the EKF's mean error at the nominal capacity is already larger than the mean drift of a 5 % capacity error. Single runs can go the other way at a given temperature; `results/s5/sensitivity.csv` lists every run.
 
 **Sample rate.** Every 10th row is kept (1 Hz), dt is recomputed between the kept rows and each kept current is held over the whole step.
 
@@ -502,7 +502,7 @@ On the folder means, the capacity error moves the EKF far less than it moves cou
 **Sample rate: every 10th row (1 Hz)**
 
 - The 1 Hz run keeps rows 0, 10, 20, ... of the loader's run and recomputes dt between them. The kept sample's current is held over the whole step (docs/model.md C11), the reference SoC is read at the kept rows and the evaluation window is C14 on them.
-- RMSE cells are means over the folder's runs; max |error| cells are the largest over the folder's runs. The 0.1 s columns are experiment 1 of `results/ekf_results.csv`.
+- RMSE cells are means over the folder's runs; max |error| cells are the largest over the folder's runs. The 0.1 s columns are experiment 1 of `results/s2/ekf_results.csv`.
 
 | T (degC) | runs | EKF RMSE 0.1 s | EKF RMSE 1 s | EKF max \|error\| 0.1 s | EKF max \|error\| 1 s | coulomb counting RMSE 0.1 s | coulomb counting RMSE 1 s |
 |---|---|---|---|---|---|---|---|
@@ -520,7 +520,7 @@ Plot: `results/plots/s5/sensitivity_rate.png`.
 
 ![Mean SoC RMSE per temperature at 0.1 s and 1 s, EKF and coulomb counting](../results/plots/s5/sensitivity_rate.png)
 
-At 1 Hz the EKF's mean RMSE is lower in every folder except -20 degC, and its largest |error| is lower in all six. Coulomb counting gets clearly worse, because holding one current sample for a whole second misses the changes in between. The EKF's mean RMSE over all runs does not rise with it, although single runs do get worse at 1 Hz (`results/sensitivity.csv`); this run does not separate the reasons.
+At 1 Hz the EKF's mean RMSE is lower in every folder except -20 degC, and its largest |error| is lower in all six. Coulomb counting gets clearly worse, because holding one current sample for a whole second misses the changes in between. The EKF's mean RMSE over all runs does not rise with it, although single runs do get worse at 1 Hz (`results/s5/sensitivity.csv`); this run does not separate the reasons.
 
 ### S5: Octave port
 
@@ -549,7 +549,7 @@ The Octave filter (`octave/ekf_run_csv.m`, double precision, plain GNU Octave) f
 
 ![Python minus Octave SoC on US06 at 25 degC](../results/plots/s5/equivalence_octave_25degC.png)
 
-The per-run table is in `results/equivalence_octave.md`.
+The per-run table is in `results/s5/equivalence_octave.md`.
 
 ### S6: a third RC branch (negative result)
 
@@ -559,7 +559,7 @@ S6 asked whether a third, middle RC branch between the fast and the slow one imp
 
 **Open-loop voltage error on US06, 2RC and 3RC**
 
-Both models run without feedback on the US06 file of each temperature, as in `results/model_fit.md`: measured current and temperature, reference SoC, every branch voltage 0 at the first row, the tables of `results/params.csv` (2RC) and `results/params_3rc.csv` (3RC). Error = model minus measured voltage. The window columns run up to the last row with reference SoC >= 10 % (docs/model.md C14).
+Both models run without feedback on the US06 file of each temperature, as in `results/s1/model_fit.md`: measured current and temperature, reference SoC, every branch voltage 0 at the first row, the tables of `results/s1/params.csv` (2RC) and `results/s6/params_3rc.csv` (3RC). Error = model minus measured voltage. The window columns run up to the last row with reference SoC >= 10 % (docs/model.md C14).
 
 | T (degC) | 2RC RMSE (mV) | 3RC RMSE (mV) | 3RC - 2RC (mV) | 2RC RMSE, SoC_ref >= 10 % (mV) | 3RC RMSE, SoC_ref >= 10 % (mV) |
 |---|---|---|---|---|---|
@@ -605,15 +605,15 @@ The 3RC model fails the sanity gate and is worse than the 2RC model open loop on
 - The middle branch takes part of the slow branch's change inside each pulse window, so its resistance comes out too high; a synthetic check with a known slow branch shows the same bias (`docs/decisions.md` 1.24).
 - US06 asks for little middle-branch resistance. The first ceiling table adds the best constant third branch from a small grid to the unchanged 2RC model, chosen on the US06 file itself: the gain is small at every temperature, and the best resistance is far below what the HPPC fit gives.
 
-The second reason holds for US06 only. US06 has the lowest mean open-loop error of all drive cycles at every temperature, while nearly every other run has a positive one: the model drops too little voltage under sustained discharge, which is what a middle branch adds. The second ceiling table repeats the check on every drive run, pooled per temperature. There a constant third branch lowers the open-loop error at every temperature, most at -10 and -20 degC, and the resistance it asks for is of the same order as the HPPC fit's (`docs/decisions.md` 1.25; `results/model_fit_3rc.md` also lists the level fits and every run). So the drive cycles do ask for a middle branch; what failed first is fitting it from 50 s pulse windows.
+The second reason holds for US06 only. US06 has the lowest mean open-loop error of all drive cycles at every temperature, while nearly every other run has a positive one: the model drops too little voltage under sustained discharge, which is what a middle branch adds. The second ceiling table repeats the check on every drive run, pooled per temperature. There a constant third branch lowers the open-loop error at every temperature, most at -10 and -20 degC, and the resistance it asks for is of the same order as the HPPC fit's (`docs/decisions.md` 1.25; `results/s6/model_fit_3rc.md` also lists the level fits and every run). So the drive cycles do ask for a middle branch; what failed first is fitting it from 50 s pulse windows.
 
-A second fit, recorded before it ran, kept every 2RC table and fitted only the middle branch, on the rests of the whole HPPC pulse train, which resolve its time constant (`docs/decisions.md` 1.26). It follows the pulse train closely, but it fails the gate as well. The branch it finds is larger and slower than the drive cycles ask for, so it lowers the pooled error at -10 and -20 degC and raises the US06 error at every temperature (`docs/decisions.md` 1.27; `results/model_fit_3rc_rest.md` also lists the level fits). An independent reimplementation reproduced these numbers. Under the rule fixed in advance this ends the middle branch in S6, and the 2RC model stays.
+A second fit, recorded before it ran, kept every 2RC table and fitted only the middle branch, on the rests of the whole HPPC pulse train, which resolve its time constant (`docs/decisions.md` 1.26). It follows the pulse train closely, but it fails the gate as well. The branch it finds is larger and slower than the drive cycles ask for, so it lowers the pooled error at -10 and -20 degC and raises the US06 error at every temperature (`docs/decisions.md` 1.27; `results/s6/model_fit_3rc_rest.md` also lists the level fits). An independent reimplementation reproduced these numbers. Under the rule fixed in advance this ends the middle branch in S6, and the 2RC model stays.
 
 <!-- results:model_fit_3rc_rest:begin -->
 
 **Open-loop voltage error on US06, 2RC and second 3RC fit**
 
-As in `results/model_fit_3rc.md`: measured current and temperature, reference SoC, every branch voltage 0 at the first row, error = model minus measured voltage over the whole run.
+As in `results/s6/model_fit_3rc.md`: measured current and temperature, reference SoC, every branch voltage 0 at the first row, error = model minus measured voltage over the whole run.
 
 | T (degC) | 2RC RMSE (mV) | second 3RC RMSE (mV) | change (mV) |
 |---|---|---|---|
@@ -628,7 +628,7 @@ Gate: the second 3RC open-loop RMSE at 25 degC is 39.70 mV against the sanity li
 
 **Open-loop error over every drive cycle**
 
-Pooled over all rows of a temperature's runs, scored as in docs/decisions.md 1.25; the ceiling is the one of `results/model_fit_3rc.md`.
+Pooled over all rows of a temperature's runs, scored as in docs/decisions.md 1.25; the ceiling is the one of `results/s6/model_fit_3rc.md`.
 
 | T (degC) | runs | 2RC pooled RMSE (mV) | ceiling of 1.25 (mV) | second 3RC pooled RMSE (mV) | second 3RC change (%) |
 |---|---|---|---|---|---|
@@ -653,7 +653,7 @@ S7 asked whether the cold error comes from a resistance that falls as the curren
 
 **R1 per pulse**
 
-Per usable HPPC discharge pulse, R1 in the window of fit (a) (the pulse and its 40 s rest, one free constant) with R0 and tau1 held at the level's fit (a) values (docs/decisions.md 1.28). Medians over the levels; v1.0 R1 is the level fit of S1. D1 is the smallest current and also the only pulse that follows the move and its 1 h rest, so a current effect and a history effect on D1 cannot be told apart. Left out: pulses with R1 at or below 0. Every pulse fit is in `results/fit_pulses_r1i.csv`.
+Per usable HPPC discharge pulse, R1 in the window of fit (a) (the pulse and its 40 s rest, one free constant) with R0 and tau1 held at the level's fit (a) values (docs/decisions.md 1.28). Medians over the levels; v1.0 R1 is the level fit of S1. D1 is the smallest current and also the only pulse that follows the move and its 1 h rest, so a current effect and a history effect on D1 cannot be told apart. Left out: pulses with R1 at or below 0. Every pulse fit is in `results/s7/fit_pulses_r1i.csv`.
 
 | T (degC) | v1.0 R1 (mOhm) | D1 I (A) | D1 R1 (mOhm) | D2 I (A) | D2 R1 (mOhm) | D3 I (A) | D3 R1 (mOhm) | D4 I (A) | D4 R1 (mOhm) | pulses used | left out |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -721,11 +721,11 @@ Lower at 5 of 6 temperatures; higher by more than 0.10 pp at: none. **ADOPTED.**
 
 ![2RC and 2RC-I against temperature](../results/plots/s7/model_compare_r1i.png)
 
-The gain is a cold one. At 0 to -20 degC the experiment-1 mean falls by 0.2 to 0.5 pp; at the warmer temperatures it moves by a few hundredths. Most runs end lower at every temperature, but in the cold part of the mean gain comes from a few runs that improve a lot, Mix 8 and Mix 4 among them, which open under load; the cold medians barely move. US06, the cycle with the highest currents, gets worse from 10 degC down, with its error roughly doubled (`docs/decisions.md` 1.31, `results/ekf_results_r1i.csv`), so the 2RC-I model is better on average, not for every load. An independent reimplementation reproduced the fit, the table and the filter runs. The C library is not ported yet: the R1 table over current adds about 12 kB, and the port gets its own decision first (1.30).
+The gain is a cold one. At 0 to -20 degC the experiment-1 mean falls by 0.2 to 0.5 pp; at the warmer temperatures it moves by a few hundredths. Most runs end lower at every temperature, but in the cold part of the mean gain comes from a few runs that improve a lot, Mix 8 and Mix 4 among them, which open under load; the cold medians barely move. US06, the cycle with the highest currents, gets worse from 10 degC down, with its error roughly doubled (`docs/decisions.md` 1.31, `results/s7/ekf_results_r1i.csv`), so the 2RC-I model is better on average, not for every load. An independent reimplementation reproduced the fit, the table and the filter runs. The C library is not ported yet: the R1 table over current adds about 12 kB, and the port gets its own decision first (1.30).
 
 ### S8: R1 by the sign of the current and at low current (three negative results)
 
-S8 asked why the 2RC-I model makes US06 worse from 10 degC down. Under regen the model reads R1 from the discharge table at the size of the current, and at low current that value is well above the v1.0 R1 (about 1.3 times at 25 degC and 2 times at -10 degC at 1.5 A, `results/model_compare_r1d.md`). The rules were fixed in `docs/decisions.md` 1.32 before any S8 result existed: a new model must pass the S1 gate, the rule of S6 and S7, and four guards against 2RC-I. No single run or cycle may get worse beyond a fixed limit, the worst run may not rise, and the experiment-4 mean and the experiment 2 and 3 reached counts may not get worse beyond theirs. These 62 runs have been inspected in every stage since S2, so S8 is a comparison on a repeatedly inspected set, not a confirmation.
+S8 asked why the 2RC-I model makes US06 worse from 10 degC down. Under regen the model reads R1 from the discharge table at the size of the current, and at low current that value is well above the v1.0 R1 (about 1.3 times at 25 degC and 2 times at -10 degC at 1.5 A, `results/s8/model_compare_r1d.md`). The rules were fixed in `docs/decisions.md` 1.32 before any S8 result existed: a new model must pass the S1 gate, the rule of S6 and S7, and four guards against 2RC-I. No single run or cycle may get worse beyond a fixed limit, the worst run may not rise, and the experiment-4 mean and the experiment 2 and 3 reached counts may not get worse beyond theirs. These 62 runs have been inspected in every stage since S2, so S8 is a comparison on a repeatedly inspected set, not a confirmation.
 
 - **Step A, 2RC-Id** (1.33, 1.34): the v1.0 R1 under regen, nothing refitted. US06 comes back to about the 2RC values at 0 to -20 degC (about half way at 10 degC), but Mix 8 at 0 to -20 degC and Mix 6 at -20 degC get worse beyond the limit, the worst run rises, and fewer -20 degC runs reach the 2 pp band. Not adopted.
 - **Step B, 2RC-Ic** (1.35, 1.36): a charge-side R1 fitted on the HPPC charge pulses. US06 recovers only at -20 degC, while LA92 and Mix 8 in the cold, the worst run and the -20 degC reached counts get worse. Its open-loop voltage error under regen is closer to zero than 2RC-Id's at 10 and 0 degC, yet its US06 SoC error stays near 2RC-I there, so the regen voltage error does not predict the US06 SoC error. Not adopted. In the US06 table below, the change column is 2RC-Ic minus 2RC-I.
@@ -826,7 +826,7 @@ Guards recomputed from unrounded values: 2. rule of 1.22 (unrounded margin 0.00e
 
 ![2RC, 2RC-I and 2RC-Il against temperature](../results/plots/s8/model_compare_r1l.png)
 
-2RC-I stays the adopted model. None of the three R1 changes recovers US06 in the cold without costing Mix 8 and the -20 degC runs beyond the guards. S8 is closed after these three steps (`decisions.md` 1.39); step D, noise settings that depend on conditions, was not run and is left as future work. The fits, the per-cycle tables and the open-loop error by current band are in `results/model_fit_r1c.md`, `results/model_fit_r1l.md`, `results/model_compare_r1c.md` and `results/model_compare_r1l.md`.
+2RC-I stays the adopted model. None of the three R1 changes recovers US06 in the cold without costing Mix 8 and the -20 degC runs beyond the guards. S8 is closed after these three steps (`decisions.md` 1.39); step D, noise settings that depend on conditions, was not run and is left as future work. The fits, the per-cycle tables and the open-loop error by current band are in `results/s8/model_fit_r1c.md`, `results/s8/model_fit_r1l.md`, `results/s8/model_compare_r1c.md` and `results/s8/model_compare_r1l.md`.
 
 ### S9: slow-branch resistances fitted on drive data
 
@@ -942,7 +942,7 @@ Guard inputs from unrounded traces. SoC changes are in pp and temperatures follo
 
 ![Open-loop voltage and SoC RMSE on the standard and Mix runs](../results/plots/s9/model_compare_3rcd.png)
 
-The [fit report](../results/model_fit_3rcd.md) gives the fitted nodes, solver checks and leave-one-Mix-run-out voltage errors. The [comparison report](../results/model_compare_3rcd.md) includes the in-sample Mix results. See also the [fitted node plot](../results/plots/s9/params_3rcd.png).
+The [fit report](../results/s9/model_fit_3rcd.md) gives the fitted nodes, solver checks and leave-one-Mix-run-out voltage errors. The [comparison report](../results/s9/model_compare_3rcd.md) includes the in-sample Mix results. See also the [fitted node plot](../results/plots/s9/params_3rcd.png).
 
 ### S10 · Drive-fitted third branch with v1.0 R1
 
@@ -1080,12 +1080,12 @@ Guard inputs from unrounded traces. SoC changes are in pp and temperatures follo
 
 <!-- results:s10_results:end -->
 
-The [residual diagnosis](../results/accuracy_diagnostics.md) records run
+The [residual diagnosis](../results/s10/accuracy_diagnostics.md) records run
 membership, input hashes, timing and Jacobian measurements for all 63 incumbent
 experiment-1 runs.
-The [fit report](../results/model_fit_3rcd0.md) gives solver checks, fitted nodes,
+The [fit report](../results/s10/model_fit_3rcd0.md) gives solver checks, fitted nodes,
 both splits' voltage scores and the 40 diagnostic Mix folds. The
-[comparison report](../results/model_compare_3rcd0.md) also gives the Mix
+[comparison report](../results/s10/model_compare_3rcd0.md) also gives the Mix
 in-sample scores and the standard-run peak error, convergence and sensitivity
 diagnostics.
 
@@ -1135,17 +1135,17 @@ Guard 2 uses the 23 standard runs; guards 3–7 use all 63; guard 8 uses the 40 
 
 **NOT ADOPTED.** The S2 settings remain the incumbent; the candidate JSON is experimental.
 
-See [the complete search](../results/tuning_3rcd0.md) and [per-run results](../results/ekf_results_3rcd0n.csv).
+See the complete search in `results/s11/tuning_3rcd0.md` and per-run results in `results/s11/ekf_results_3rcd0n.csv`.
 
 <!-- results:s11_settings:end -->
 
-The [search report](../results/tuning_3rcd0.md) lists all 945 objectives, the
+The [search report](../results/s11/tuning_3rcd0.md) lists all 945 objectives, the
 grid winner at each p0_v_std value and the input hashes, and states that the native
 evaluator passed its checks against the Python filter (decision 1.50). The
-[comparison report](../results/model_compare_3rcd0n.md) holds every experiment, the
+[comparison report](../results/s11/model_compare_3rcd0n.md) holds every experiment, the
 guard-7 counts of the three grid winners and the state replays of the wrong-start
-cases. `results/ekf_config_3rcd0.json` keeps the candidate for reproduction;
-`results/ekf_config.json` stays the frozen S2 configuration.
+cases. `results/s11/ekf_config_3rcd0.json` keeps the candidate for reproduction;
+`results/s2/ekf_config.json` stays the frozen S2 configuration.
 
 What the candidate shows (decision 1.51): the objective pushed the initial branch
 standard deviation to the end of the searched range, 5 mV. At a rested start
@@ -1251,7 +1251,7 @@ On the Mix runs every branch prior from 5 to 30 mV halves the cases above 25 pp 
 The pre-screen of decision 1.56 picks 10 mV, whose metric (the mean over the six
 temperatures of the experiment-1, -2 and -4 Mix means) is the lowest, 1.2835 pp
 against 2.3452 pp at 50 mV. These Mix-run numbers are in sample. The
-[diagnostic](../results/start_cases.md) lists every run's history and every case
+[diagnostic](../results/s12/start_cases.md) lists every run's history and every case
 above 25 pp with its start measures.
 
 ![S12 wrong starts and the branch prior on the Mix runs](../results/plots/s12/start_cases.png)
@@ -1289,7 +1289,7 @@ at 0 and -10 degC. The measurement term alone lowers the experiment-1 Mix mean o
 the 40 runs from 1.2736 to 1.1861 pp, but raises it at -20 degC by 0.1110 pp, above
 the 0.10 pp limit, and raises the largest Mix peak to 48.4113 pp, above 46.7341 pp.
 The result covers these three variants under the S2 settings only. The
-[diagnostic](../results/jacobian_3rcd0.md) has every term per split and temperature
+[diagnostic](../results/s12/jacobian_3rcd0.md) has every term per split and temperature
 and the 30 wrong-start cases above 25 pp.
 
 ![S12 Jacobian terms and variants](../results/plots/s12/jacobian_3rcd0.png)
@@ -1310,7 +1310,7 @@ outcome), so this result is a regression check, not an independent validation.
 
 **Guards and verdict**
 
-The eight guards of decision 1.48 against 3RC-D0 under `results/ekf_config.json`, evaluated as 1.35 amends 1.32: on the values of the results CSVs, recomputed from the unrounded traces where the margin (the smallest distance of a compared value from its limit, or of two compared values from each other, taken over the RMSE and peak values, not over the integer counts) is below 1e-4. Guard 2 uses the 23 standard runs, guards 3 to 7 all 63, guard 8 the 40 Mix runs; the tuning run is scored with the others. Guard 1 is recomputed from the unchanged 3RC-D0 tables.
+The eight guards of decision 1.48 against 3RC-D0 under `results/s2/ekf_config.json`, evaluated as 1.35 amends 1.32: on the values of the results CSVs, recomputed from the unrounded traces where the margin (the smallest distance of a compared value from its limit, or of two compared values from each other, taken over the RMSE and peak values, not over the integer counts) is below 1e-4. Guard 2 uses the 23 standard runs, guards 3 to 7 all 63, guard 8 the 40 Mix runs; the tuning run is scored with the others. Guard 1 is recomputed from the unchanged 3RC-D0 tables.
 
 | Guard | Value | Limit | Margin | Result |
 |---|---|---|---|---|
@@ -1357,7 +1357,7 @@ In experiment 2 the rule does what it was built for: the mean at -20 degC falls 
 wrong-start cases). The two experiment-2 cases still above 25 pp open under load and
 keep 50 mV; the 11 experiment-3-low cases are unchanged. The cost is on the cold
 standard runs: their correct start, and with the current offset US06 at -20 degC, whose
-experiment-4 RMSE rises from 1.9131 to 6.8700 pp (`results/ekf_results_3rcd0p.csv`). A
+experiment-4 RMSE rises from 1.9131 to 6.8700 pp (`results/s12/ekf_results_3rcd0p.csv`). A
 likely cause, seen in a replay of HWFET at -20 degC but not in the reports: with the 50
 mV prior the branches absorb the error of the first cold pulses; with a small prior the
 SoC state takes it. The standard-run experiment-1 mean rises by 0.1424 pp at -10 degC
@@ -1373,7 +1373,7 @@ experiment type, so this data cannot tell a physical rule from one that learned 
 labels. The result does not show that no start-dependent prior can pass: an earlier
 scratch look, not reproduced by a script here, found larger priors that might, but the
 rule of 1.56 did not select them, and running one now would select on the standard runs
-after their result is known. The [comparison report](../results/model_compare_3rcd0p.md)
+after their result is known. The [comparison report](../results/s12/model_compare_3rcd0p.md)
 holds every experiment, every case above 25 pp and the prior each case received.
 
 ![S12 3RC-D0 and 3RC-D0-P, experiment 1](../results/plots/s12/model_compare_3rcd0p.png)
@@ -1398,7 +1398,7 @@ ekf_status_t ekf_step(ekf_t *e, ekf_real_t i_a, ekf_real_t v_v, ekf_real_t t_deg
 ekf_real_t   ekf_get_soc(const ekf_t *e);
 ```
 
-`ekf_step` predicts over `dt_s` with the held current, updates with the new sample, then holds its current. `dt_s = 0` means update only, as on the first sample of a run; a negative `dt_s` or a non-finite input (NaN or an infinity) is rejected and leaves the state unchanged. A temperature outside the table range is clamped and returns a warning status (`docs/decisions.md` 1.17). The parameter tables in `c/src/ekf_params.c` are generated from `results/params.csv` by `python/export_params.py`. The 3RC-D0 tables in `c/src/ekf_params_3rcd0.c` are generated from `results/params_3rcd0.csv` by `python/export_3rcd0.py`, which refuses a third-branch time constant other than 45 s.
+`ekf_step` predicts over `dt_s` with the held current, updates with the new sample, then holds its current. `dt_s = 0` means update only, as on the first sample of a run; a negative `dt_s` or a non-finite input (NaN or an infinity) is rejected and leaves the state unchanged. A temperature outside the table range is clamped and returns a warning status (`docs/decisions.md` 1.17). The parameter tables in `c/src/ekf_params.c` are generated from `results/s1/params.csv` by `python/export_params.py`. The 3RC-D0 tables in `c/src/ekf_params_3rcd0.c` are generated from `results/s10/params_3rcd0.csv` by `python/export_3rcd0.py`, which refuses a third-branch time constant other than 45 s.
 
 **Builds.** `ekf_real_t` is `float` by default; `-DEKF_USE_DOUBLE=ON` makes it `double`. `-DEKF_SANITIZE=ON` adds AddressSanitizer and UndefinedBehaviorSanitizer to the host build. ctest runs the Unity unit tests (`c/tests/test_ekf.c`) and the three committed US06 fixtures in `c/tests/fixtures/`, where the C SoC must match the Python SoC within the same thresholds as the full equivalence run. `-DEKF_USE_3RCD0=ON` builds the four-state 3RC-D0 filter, the deployment model (`docs/decisions.md` 1.46, 1.54); ctest then runs the unit tests on four-state vectors, and the 2RC fixtures are not built.
 
@@ -1514,17 +1514,17 @@ The largest frames belong to `ekf_predict` and `ekf_update`, each of which holds
 
 **CI** (`.github/workflows/ci.yml`) has four jobs. None of them downloads the raw data.
 
-- `python`: the unit tests; the generated C tables must match `results/params.csv`; `README.md` and this file must be in sync with `results/` (`python python/update_readme.py --check`).
+- `python`: the unit tests; the generated C tables must match `results/s1/params.csv`; `README.md` and this file must be in sync with `results/` (`python python/update_readme.py --check`).
 - `c-host`: the float build with ASan and UBSan and the double build, each with its unit tests and fixture equivalence; the same two builds of 3RC-D0 with their unit tests.
-- `c-arm`: installs the pinned Arm GNU Toolchain (checked by sha256), cross-compiles, runs the double-precision helper check for both models, and requires the committed `results/c_footprint.md` and `results/c_footprint_3rcd0.md` to match byte for byte.
+- `c-arm`: installs the pinned Arm GNU Toolchain (checked by sha256), cross-compiles, runs the double-precision helper check for both models, and requires the committed `results/s3/c_footprint.md` and `results/s11/c_footprint_3rcd0.md` to match byte for byte.
 - `octave`: installs Ubuntu's GNU Octave and runs the Octave filter in `octave/` on the three committed fixtures against their expected SoC (`python python/compare_octave.py --fixtures`).
 
 CI runs on every push to GitHub.
 
 ## Limitations in full
 
-- In the cold the SoC estimate of 3RC-D0 moves by about 3 to 5 pp per run across the regen rows that the cycler holds at its 4.2 V limit near full charge ([`results/regen_limit.md`](../results/regen_limit.md)). S11 found no model or settings change that removes this within the adoption guards.
-- Under the deployment filter, 30 of the 189 wrong-start cases peak above 25 pp, 19 in experiment 2 and 11 in experiment 3 low ([`results/start_cases.md`](../results/start_cases.md)). S12 measured them and adopted nothing: a 10 mV branch prior for a start below 0.5 A cuts the experiment-2 error but fails guards 2 and 3 on the cold standard runs ([`results/model_compare_3rcd0p.md`](../results/model_compare_3rcd0p.md)). A rule that reads one current sample cannot tell a rest from a quiet sample inside a drive.
+- In the cold the SoC estimate of 3RC-D0 moves by about 3 to 5 pp per run across the regen rows that the cycler holds at its 4.2 V limit near full charge ([`results/s11/regen_limit.md`](../results/s11/regen_limit.md)). S11 found no model or settings change that removes this within the adoption guards.
+- Under the deployment filter, 30 of the 189 wrong-start cases peak above 25 pp, 19 in experiment 2 and 11 in experiment 3 low ([`results/s12/start_cases.md`](../results/s12/start_cases.md)). S12 measured them and adopted nothing: a 10 mV branch prior for a start below 0.5 A cuts the experiment-2 error but fails guards 2 and 3 on the cold standard runs ([`results/s12/model_compare_3rcd0p.md`](../results/s12/model_compare_3rcd0p.md)). A rule that reads one current sample cannot tell a rest from a quiet sample inside a drive.
 - S9 used one cell and shared drive segments across the two splits. The standard runs also informed prior diagnostics and the low-SoC boundary choice.
 - Accuracy work on this dataset ends with S12. The 23 standard runs were inspected before S9 and before every stage since, and they share segments with the 40 Mix runs, so no unseen run is left; whether a table or a rule transfers is a question only another cell can answer (`docs/decisions.md` 1.58).
 - This is a personal project. It validates offline on public data from one new cell.
@@ -1532,16 +1532,16 @@ CI runs on every push to GitHub.
 - No SOH or SOP estimation, and no Simulink model.
 - The 2RC-I model of S7 reads R1 at the current but holds it below the smallest HPPC pulse current, about 3 A at 40 to 0 degC, where drive cycles run often. Its smallest pulse is always the first after a 1 h rest, so a current effect and a history effect cannot be told apart there (`docs/decisions.md` 1.28). It lowers the mean SoC error in the cold but makes US06, the cycle with the highest currents, worse from 10 degC down (1.31). It runs in the Python reference only; the C library runs the 2RC model.
 - The model has no hysteresis and no ageing or capacity fade, and it takes coulombic efficiency as 1. The C/20 charge put back more Ah than the discharge removed at every temperature except -20 degC, where it put back less (the charge / discharge column of the capacity table). The cause is unexplained.
-- The cell aged over the campaign, which ran 25, 40, 10, 0, -10 and -20 degC in that order. It also lost capacity inside the 25 degC block (the two 25 degC 1C runs in the capacity table). One Q_ref, from the freshest cell, is used at every temperature. Missing and off-temperature 1C tests are marked in `results/capacity.md`.
+- The cell aged over the campaign, which ran 25, 40, 10, 0, -10 and -20 degC in that order. It also lost capacity inside the 25 degC block (the two 25 degC 1C runs in the capacity table). One Q_ref, from the freshest cell, is used at every temperature. Missing and off-temperature 1C tests are marked in `results/s0/capacity.md`.
 - The reference SoC is itself coulomb counting, on the cycler's Ah counter. The baseline counts the logged current; the two agree closely (the coulomb-counting table of experiment 1, `docs/model.md` C13). The cycler's stated accuracy is 0.1 % of full scale, so a real sensor offset in the data would be invisible to this comparison.
 - The OCV table is the C/20 discharge branch, corrected onto the HPPC 1 h rest voltages. The correction rests on the few rest points of each temperature and is held flat beyond the first and last of them. The cold rests have not fully relaxed after 1 h, which leaves a small bias in those points (`docs/decisions.md` 1.1, 1.12). The charge half of the C/20 test is not used, because the two halves do not share an Ah axis.
-- The 2RC fit assumes two separable branches: R0, R1 and tau1 from the discharge pulses, R2 and tau2 from the 1 h rests, with V2 = 0 at the start of each move. A third branch fitted from the same pulses made the US06 voltage worse at most temperatures (S6), so the model keeps no time constant between the fast and the slow branch, although the drive cycles ask for one of 20 to 50 s (`docs/decisions.md` 1.25). A second fit of the middle branch alone, on the HPPC pulse trains, failed the US06 gate too (1.27). Charge pulses are fitted only for the 2RC-Ic model of S8, which is not adopted, so regen uses discharge parameters in the adopted model too; the low-current R1 of the 2RC-Il model of S8, fitted on the PausCycl files, is not adopted either. The EKF Jacobians leave out dR0/dSoC and the SoC dependence of the RC parameters (`docs/decisions.md` 1.12, `docs/model.md` Eq. 7, Eq. 8). S12 measured these terms on 3RC-D0; none of three variants that put them back passed the Mix pre-screen ([`results/jacobian_3rcd0.md`](../results/jacobian_3rcd0.md)).
+- The 2RC fit assumes two separable branches: R0, R1 and tau1 from the discharge pulses, R2 and tau2 from the 1 h rests, with V2 = 0 at the start of each move. A third branch fitted from the same pulses made the US06 voltage worse at most temperatures (S6), so the model keeps no time constant between the fast and the slow branch, although the drive cycles ask for one of 20 to 50 s (`docs/decisions.md` 1.25). A second fit of the middle branch alone, on the HPPC pulse trains, failed the US06 gate too (1.27). Charge pulses are fitted only for the 2RC-Ic model of S8, which is not adopted, so regen uses discharge parameters in the adopted model too; the low-current R1 of the 2RC-Il model of S8, fitted on the PausCycl files, is not adopted either. The EKF Jacobians leave out dR0/dSoC and the SoC dependence of the RC parameters (`docs/decisions.md` 1.12, `docs/model.md` Eq. 7, Eq. 8). S12 measured these terms on 3RC-D0; none of three variants that put them back passed the Mix pre-screen ([`results/s12/jacobian_3rcd0.md`](../results/s12/jacobian_3rcd0.md)).
 - The 25 degC open-loop voltage error passes the sanity limit by a thin margin (the gate line under the model-fit table).
 - The noise settings were tuned on one cycle at one temperature. The eight mixes are built from segments of the four standard cycles, so the tuning cycle and the evaluation runs share segments (`docs/decisions.md` 1.11).
 - Errors grow in the cold. Experiment 1 errors are clearly larger at 0, -10 and -20 degC than at 40, 25 and 10 degC, and at -10 and -20 degC many runs of experiments 2 and 3 never settle inside the +-2 pp band.
 - The largest cold outliers are Mix 8 (and Mix 4 at -20 degC). These runs open under load (`docs/model.md` C13), while the filter starts with V1 = V2 = 0.
-- In experiment 4 some cold runs at -10 and -20 degC have a larger SoC RMSE with the EKF than with coulomb counting; `results/ekf_results.csv` lists both per run (`rmse_pp` and `cc_rmse_pp`, experiment `exp4`). US06 at -10 degC also ends with a slightly larger EKF error than coulomb counting.
-- The cycler caps the cold currents: discharge and regen are much lower at -10 and -20 degC than at the warm temperatures, and regen is already reduced at 0 degC (`results/data_inventory.md`, summary per folder). The cold drive cycles are therefore not the same loads as the warm ones.
+- In experiment 4 some cold runs at -10 and -20 degC have a larger SoC RMSE with the EKF than with coulomb counting; `results/s2/ekf_results.csv` lists both per run (`rmse_pp` and `cc_rmse_pp`, experiment `exp4`). US06 at -10 degC also ends with a slightly larger EKF error than coulomb counting.
+- The cycler caps the cold currents: discharge and regen are much lower at -10 and -20 degC than at the warm temperatures, and regen is already reduced at 0 degC (`results/s0/data_inventory.md`, summary per folder). The cold drive cycles are therefore not the same loads as the warm ones.
 - The evaluation set is 62 runs. Where no run exists (HWFET at 25 degC, Mix 4 to 8 at 40 degC, Mix 4 at -10 degC, Mix 3 at 10 and 0 degC) the tables show `n/a`.
 - The C and Octave equivalence checks cover experiment 1 only. The other experiments run the same filter with other start values and inputs, but they are not compared run by run.
 - The capacity sensitivity scales only the filter's capacity. Real ageing also changes the resistances and the OCV, while the model's tables stay as fitted.

@@ -29,7 +29,7 @@ import numpy as np
 TABLE_NAMES = ("ocv", "docv", "r0", "r1", "tau1", "r2", "tau2")
 TABLE_NAMES_3RC = TABLE_NAMES + ("r3", "tau3")
 
-# Column order of results/params.csv (2RC) and results/params_3rc.csv: the two axes, then the tables.
+# Column order of results/s1/params.csv (2RC) and results/s6/params_3rc.csv: the two axes, then the tables.
 CSV_COLUMNS = ("T_degC", "soc", "ocv_V", "docv_V_per_soc", "R0_ohm", "R1_ohm", "tau1_s", "R2_ohm", "tau2_s")
 CSV_COLUMNS_3RC = CSV_COLUMNS + ("R3_ohm", "tau3_s")
 
@@ -249,7 +249,7 @@ class Params:
 
     @classmethod
     def from_csv(cls, path):
-        """Read results/params.csv or params_3rc.csv: one row per (T, soc), T-major.
+        """Read results/s1/params.csv or results/s6/params_3rc.csv: one row per (T, soc), T-major.
 
         The rows hold all SoC of the first T, then the next T.
 

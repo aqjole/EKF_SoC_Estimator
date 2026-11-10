@@ -4,10 +4,10 @@ Run from the repo root:  .venv/bin/python python/fit_3rc.py   (or: make fit-3rc;
 
   1. The OCV table is built as in fit_all.py, so the 3RC fits see the OCV the 2RC fits saw.
   2. The six HPPC files are fitted with the 3RC bounds of docs/decisions.md 1.21 (fit.py, model "3rc").
-  3. results/fit_levels_3rc.csv holds the level fits. results/params_3rc.csv is results/params.csv with
+  3. results/s6/fit_levels_3rc.csv holds the level fits. results/s6/params_3rc.csv is results/s1/params.csv with
      OCV, dOCV/dSoC and R0 unchanged, R1, tau1, R2, tau2 replaced and R3, tau3 added, each resampled
      onto the SoC grid by the rule of fit_all.py.
-  4. Both models run open-loop on US06 (decisions 1.4) from their CSV tables. results/model_fit_3rc.md
+  4. Both models run open-loop on US06 (decisions 1.4) from their CSV tables. results/s6/model_fit_3rc.md
      compares them, counts failed fits and time constants that end on a bound, and applies the 25 degC
      gate of S1 to the 3RC model. It also gives the ceiling of decisions 1.24: the best open-loop RMSE
      when a constant third branch from a small grid is added to the unchanged 2RC tables. Decisions 1.25
@@ -30,12 +30,12 @@ from export_params import PARAMS_CSV, md_table, write_text
 from fit_all import GATE_RMSE_MV, GATE_TEMP_DEGC, LEVEL_COLUMNS, load_ocv_inputs, resample, validate_us06
 
 
-LEVELS_3RC_CSV = REPO_DIR / "results" / "fit_levels_3rc.csv"
-PARAMS_3RC_CSV = REPO_DIR / "results" / "params_3rc.csv"
-MODEL_FIT_3RC_MD = REPO_DIR / "results" / "model_fit_3rc.md"
+LEVELS_3RC_CSV = REPO_DIR / "results" / "s6" / "fit_levels_3rc.csv"
+PARAMS_3RC_CSV = REPO_DIR / "results" / "s6" / "params_3rc.csv"
+MODEL_FIT_3RC_MD = REPO_DIR / "results" / "s6" / "model_fit_3rc.md"
 PARAMS_3RC_PNG = REPO_DIR / "results" / "plots" / "s6" / "params_3rc.png"
 
-# Columns of results/fit_levels_3rc.csv: those of fit_levels.csv with R3 and tau3 after tau1.
+# Columns of results/s6/fit_levels_3rc.csv: those of fit_levels.csv with R3 and tau3 after tau1.
 LEVEL_COLUMNS_3RC = LEVEL_COLUMNS[:6] + ("R3_ohm", "tau3_s") + LEVEL_COLUMNS[6:]
 
 # A fitted time constant within this fraction of an end of its bounds counts as on the bound.
@@ -55,7 +55,7 @@ HELPED_FRACTION = 0.10
 
 
 def build_params_3rc(level_rows):
-    """results/params.csv with every fitted table but R0 taken from the 3RC level fits (decisions 1.21)."""
+    """results/s1/params.csv with every fitted table but R0 taken from the 3RC level fits (decisions 1.21)."""
     fitted = {name: np.array([resample(level_rows[temp], soc_key, value_key) for temp in T_GRID_DEGC])
               for name, soc_key, value_key in FITTED_TABLES_3RC if name != "r0"}
     return replace(Params.from_csv(PARAMS_CSV), **fitted)
@@ -78,9 +78,9 @@ def comparison_section(results_2rc, results_3rc):
     lines = [
         "## Open-loop voltage error on US06, 2RC and 3RC",
         "",
-        "Both models run without feedback on the US06 file of each temperature, as in `results/model_fit.md`: measured "
+        "Both models run without feedback on the US06 file of each temperature, as in `results/s1/model_fit.md`: measured "
         "current and temperature, reference SoC, every branch voltage 0 at the first row, the tables of "
-        "`results/params.csv` (2RC) and `results/params_3rc.csv` (3RC). Error = model minus measured voltage. "
+        "`results/s1/params.csv` (2RC) and `results/s6/params_3rc.csv` (3RC). Error = model minus measured voltage. "
         "The window columns run up to the last row with reference SoC >= 10 % (docs/model.md C14).",
         "",
     ]
@@ -116,9 +116,9 @@ def fit_section(level_rows):
         "",
         "Fit (a) gives R1, tau1, R3 and tau3 from the discharge pulses with tau1 in [0.5, 10] s and "
         "tau3 in [10, 50] s; fit (b) gives R2 and tau2 from the 1 h rest with tau2 in [50, 3600] s; "
-        "R0 is that of `results/params.csv` "
+        "R0 is that of `results/s1/params.csv` "
         f"(docs/decisions.md 1.21). A time constant within {100 * ON_BOUND_REL:g} % of an end of its bounds counts as on "
-        "the bound; tau2 is counted over the levels with a 1 h rest. Every level fit is in `results/fit_levels_3rc.csv`.",
+        "the bound; tau2 is counted over the levels with a 1 h rest. Every level fit is in `results/s6/fit_levels_3rc.csv`.",
         "",
     ]
     lines += md_table(["T (degC)", "levels", "failed fast fits", "failed slow fits", "tau1 on a bound",
@@ -253,7 +253,7 @@ def pooled_ceiling_sections(drive_runs):
 
 
 def model_fit_3rc_text(results_2rc, results_3rc, level_rows, ceilings, drive_runs):
-    """Return the text of results/model_fit_3rc.md. Every number comes from the arguments."""
+    """Return the text of results/s6/model_fit_3rc.md. Every number comes from the arguments."""
     lines = ["# Model fit, 3RC (S6)", "", "Written by `python/fit_3rc.py` (`make fit-3rc`). Do not edit by hand."]
     sections = (comparison_section(results_2rc, results_3rc), fit_section(level_rows),
                 ceiling_section(results_2rc, ceilings), pooled_ceiling_sections(drive_runs))

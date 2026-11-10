@@ -1,6 +1,6 @@
 """Tests of the 2RC-Il table and its factor fit (decisions 1.37): the scale s(I) per level, and the joint linear fit
 recovering known factors from voltages the model itself made. No raw data is needed: the pulse rows are those of the
-committed results/fit_pulses_r1i.csv, and the runs are synthetic."""
+committed results/s7/fit_pulses_r1i.csv, and the runs are synthetic."""
 
 from types import SimpleNamespace
 
@@ -17,8 +17,8 @@ from fit_r1_low import FIT_TEMPS_DEGC, fit_factors, low_params, scaled_level_nod
 
 
 def pulse_rows():
-    """The 2RC-I pulse fits of results/fit_pulses_r1i.csv as row dicts."""
-    return pd.read_csv(REPO_DIR / "results" / "fit_pulses_r1i.csv").to_dict("records")
+    """The 2RC-I pulse fits of results/s7/fit_pulses_r1i.csv as row dicts."""
+    return pd.read_csv(REPO_DIR / "results" / "s7" / "fit_pulses_r1i.csv").to_dict("records")
 
 
 def level(temp, currents):

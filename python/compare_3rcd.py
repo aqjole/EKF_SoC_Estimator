@@ -24,8 +24,8 @@ from s8_compare import decided_guards, exp1_by_run, guard_rows, guard_table
 
 
 RUNS_DIR = RESULTS / "runs" / "3rcd"
-CANDIDATE_CSV = RESULTS / "ekf_results_3rcd.csv"
-COMPARE_MD = RESULTS / "model_compare_3rcd.md"
+CANDIDATE_CSV = RESULTS / "s9" / "ekf_results_3rcd.csv"
+COMPARE_MD = RESULTS / "s9" / "model_compare_3rcd.md"
 MODELS = ("2RC", "2RC-I", "3RC-D")
 INCUMBENT, CANDIDATE = MODELS[1:]
 

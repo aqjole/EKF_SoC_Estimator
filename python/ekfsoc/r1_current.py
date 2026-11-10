@@ -1,7 +1,7 @@
-"""results/r1_current.csv and results/r1_charge.csv: the R1 tables over current of the 2RC-I model (S7,
+"""results/s7/r1_current.csv and results/s8/r1_charge.csv: the R1 tables over current of the 2RC-I model (S7,
 docs/decisions.md 1.28) and of the charge side of the 2RC-Ic model (S8, 1.35).
 
-One row per (T, I, SoC), T-major, then current, then SoC. The T and SoC axes are those of results/params.csv,
+One row per (T, I, SoC), T-major, then current, then SoC. The T and SoC axes are those of results/s1/params.csv,
 so the table is added to a 2RC Params read from that file. Numbers have 6 significant digits, as there.
 """
 

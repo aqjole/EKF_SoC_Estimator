@@ -20,8 +20,8 @@ from tune import GRIDS, refine_points
 
 
 AXES = GRIDS | {"p0_v_std": (.015, .05, .15)}
-CONFIG = RESULTS / "ekf_config_3rcd0.json"
-REPORT = RESULTS / "tuning_3rcd0.md"
+CONFIG = RESULTS / "s11" / "ekf_config_3rcd0.json"
+REPORT = RESULTS / "s11" / "tuning_3rcd0.md"
 CHECKPOINT = RESULTS / "runs" / "s11_tuning" / "search.json"
 PLOT = RESULTS / "plots" / "s11" / "tuning_3rcd0.png"
 
@@ -33,8 +33,8 @@ def fingerprint():
               ("tune_3rcd0.py", "s11_search.py", "s11_native.py", "tune.py", "s10_protocol.py",
                "fit_3rcd0.py", "fit_3rcd.py")]
     paths += list((REPO_DIR / "python" / "ekfsoc").glob("*.py"))
-    paths += [REPO_DIR / "c/tools/ekf_tuning.c", RESULTS / "params_3rcd0.csv",
-              RESULTS / "ekf_config.json"]
+    paths += [REPO_DIR / "c/tools/ekf_tuning.c", RESULTS / "s10" / "params_3rcd0.csv",
+              RESULTS / "s2" / "ekf_config.json"]
     return {str(p.relative_to(REPO_DIR)): sha256(p.read_bytes()).hexdigest() for p in sorted(set(paths))}
 
 

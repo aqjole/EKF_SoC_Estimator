@@ -1,5 +1,5 @@
 function params = read_params(path)
-  % Read results/params.csv into the two axes and the seven tables, as python/ekfsoc/model.py
+  % Read results/s1/params.csv into the two axes and the seven tables, as python/ekfsoc/model.py
   % Params.from_csv. The file has one row per (T, soc), T-major; table row j is temperature t_grid(j)
   % and column m is SoC soc_grid(m).
   columns = {'T_degC', 'soc', 'ocv_V', 'docv_V_per_soc', 'R0_ohm', 'R1_ohm', 'tau1_s', 'R2_ohm', 'tau2_s'};

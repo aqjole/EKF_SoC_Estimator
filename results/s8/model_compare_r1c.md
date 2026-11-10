@@ -2,7 +2,7 @@
 
 Written by `python/compare_r1c.py` (`make ekf-r1c`). Do not edit by hand.
 
-2RC-Ic is the 2RC-I model with R1 from the charge-side table of `results/r1_charge.csv` when the held current is negative (docs/decisions.md 1.35). The four filters run experiments 1 to 4 on the 63 runs with the frozen noise settings of `results/ekf_config.json`; the numbers come from `results/ekf_results.csv`, `results/ekf_results_r1i.csv`, `results/ekf_results_r1d.csv` and `results/ekf_results_r1c.csv`. SoC statistics are over the evaluation runs (tuning cycle excluded). These 62 runs have been inspected in every stage since S2, so this is a comparison on a repeatedly inspected set, not a confirmation (1.32).
+2RC-Ic is the 2RC-I model with R1 from the charge-side table of `results/s8/r1_charge.csv` when the held current is negative (docs/decisions.md 1.35). The four filters run experiments 1 to 4 on the 63 runs with the frozen noise settings of `results/s2/ekf_config.json`; the numbers come from `results/s2/ekf_results.csv`, `results/s7/ekf_results_r1i.csv`, `results/s8/ekf_results_r1d.csv` and `results/s8/ekf_results_r1c.csv`. SoC statistics are over the evaluation runs (tuning cycle excluded). These 62 runs have been inspected in every stage since S2, so this is a comparison on a repeatedly inspected set, not a confirmation (1.32).
 
 ## Open loop
 

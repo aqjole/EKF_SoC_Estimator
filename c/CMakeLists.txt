@@ -45,10 +45,10 @@ if(NOT CMAKE_CROSSCOMPILING)
 
   if(NOT EKF_USE_3RCD0)
     # Fixture equivalence: max |SoC - soc_expected| below 0.1 pp (float) or 1e-3 pp (double), as fractions.
-    # The noise settings are the frozen ones of results/ekf_config.json; soc0 = 1 for all three fixtures
+    # The noise settings are the frozen ones of results/s2/ekf_config.json; soc0 = 1 for all three fixtures
     # (the reference SoC at their first row, c/tests/fixtures/README.md).
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
-    file(READ ${CMAKE_CURRENT_SOURCE_DIR}/../results/ekf_config.json EKF_CONFIG_JSON)
+    file(READ ${CMAKE_CURRENT_SOURCE_DIR}/../results/s2/ekf_config.json EKF_CONFIG_JSON)
     string(JSON EKF_Q_SOC GET "${EKF_CONFIG_JSON}" q_soc)
     string(JSON EKF_Q_V GET "${EKF_CONFIG_JSON}" q_v)
     string(JSON EKF_R_MEAS GET "${EKF_CONFIG_JSON}" r)

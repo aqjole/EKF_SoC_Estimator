@@ -1,6 +1,6 @@
 """HPPC segmentation: finds the levels, pulses, moves and rests of one HPPC Run.
 
-Structure of the file (docs/decisions.md 1.2, results/data_checks.md section 10). A *level* is
+Structure of the file (docs/decisions.md 1.2, results/s0/data_checks.md section 10). A *level* is
 eight 10 s pulses at one SoC, D1 C1 D2 C2 D3 C3 D4 C4, each followed by a rest (40 s after a
 discharge pulse D, 610 s after a charge pulse C). Then comes a *move*, a long discharge at about
 0.9 A, and a 1 h rest, and the next level starts. The last move runs to the 2.8 V cutoff.
@@ -200,7 +200,7 @@ def segment_hppc(run):
     """Return the Levels of an HPPC Run, in file order.
 
     Raises ValueError for a level that is not D1 C1 D2 C2 D3 C3 D4 C4 with a rest after each pulse;
-    all six dataset files have that structure (results/data_checks.md section 10).
+    all six dataset files have that structure (results/s0/data_checks.md section 10).
     """
     segments = split_by_current(run)
     soc = soc_ref(run)

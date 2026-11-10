@@ -6,10 +6,10 @@ Run from the repo root:  .venv/bin/python python/fit_r1_charge.py   (or: make fi
      one window: the pulse and the first 40 s of its rest, every logged row. The slow-branch decay carried in from
      the pulses before (2RC-I model, simulated from a zero state at the level's first pulse row, current set to zero
      from the window on) is removed, and R1 is the one-line fit of decisions 1.28 with R0 and tau1 held at the
-     level's discharge values. Every pulse goes to results/fit_pulses_r1c.csv.
+     level's discharge values. Every pulse goes to results/s8/fit_pulses_r1c.csv.
   2. Per level, R1 is interpolated onto the charge current nodes, then resampled over SoC (decisions 1.12), into
-     results/r1_charge.csv.
-  3. results/model_fit_r1c.md gives the charge R1 per pulse number next to the discharge values, the pulses left out,
+     results/s8/r1_charge.csv.
+  3. results/s8/model_fit_r1c.md gives the charge R1 per pulse number next to the discharge values, the pulses left out,
      and the open-loop US06 RMSE of 2RC-Ic with the S1 gate; results/plots/s8/r1_charge.png draws the tables.
 """
 
@@ -29,9 +29,9 @@ from fit_all import GATE_RMSE_MV, GATE_TEMP_DEGC, load_ocv_inputs, validate_us06
 from fit_r1_current import r1_table, window_r1
 
 
-PULSES_CSV = REPO_DIR / "results" / "fit_pulses_r1c.csv"
-R1_CHARGE_CSV = REPO_DIR / "results" / "r1_charge.csv"
-REPORT_MD = REPO_DIR / "results" / "model_fit_r1c.md"
+PULSES_CSV = REPO_DIR / "results" / "s8" / "fit_pulses_r1c.csv"
+R1_CHARGE_CSV = REPO_DIR / "results" / "s8" / "r1_charge.csv"
+REPORT_MD = REPO_DIR / "results" / "s8" / "model_fit_r1c.md"
 R1_PNG = REPO_DIR / "results" / "plots" / "s8" / "r1_charge.png"
 
 I_GRID_CHARGE_A = (0.375, 0.75, 1.5, 3.0, 6.0)  # the charge current nodes of decisions 1.35
@@ -71,7 +71,7 @@ def carried_decay(run, level, rows, params_ri):
 
 
 def fit_level_charge(run, level, ocv_table, params_ri, temp):
-    """The rows of results/fit_pulses_r1c.csv for one level: one per charge pulse, used or with its reason."""
+    """The rows of results/s8/fit_pulses_r1c.csv for one level: one per charge pulse, used or with its reason."""
     fast = fit_level_fast(run, level, ocv_table)
     read_discharge_r1 = R1Reader(params_ri)
     soc = soc_ref(run)
@@ -122,7 +122,7 @@ def pulse_section(pulses):
              "value, so the charge R1 takes up any charge-discharge difference in R0: the step-rule column gives the "
              "charge pulse's step-rule R0 minus the level's R0, over the pulses that have one (pulses that miss the 0.3 s "
              "rule have none); the count of pulses with one is in brackets. v1.0 R1 is the level's fit (a) value; the 2RC-I discharge R1 is read from "
-             "`results/r1_current.csv` at the pulse's current and the level's SoC. The R0 + R1 columns compare charge "
+             "`results/s7/r1_current.csv` at the pulse's current and the level's SoC. The R0 + R1 columns compare charge "
              "and discharge as the model reads them, both with the level's R0. Pulse numbers mix SoC levels, because "
              "the pulses in the fit differ by level.", ""]
     lines += md_table(["T (degC)", "pulse", "pulses", "median I (A)", "R1 (mOhm)", "uncorrected (mOhm)",
@@ -181,7 +181,7 @@ def main():
     lines = ["# Model fit, 2RC-Ic (S8, step B)", "",
              "Written by `python/fit_r1_charge.py` (`make fit-r1c`). Do not edit by hand.", "",
              "The charge-side R1 of the 2RC-Ic model (docs/decisions.md 1.35), read under a negative held current; "
-             "the discharge side is the 2RC-I table of `results/r1_current.csv`."]
+             "the discharge side is the 2RC-I table of `results/s7/r1_current.csv`."]
     for section in (pulse_section(pulses), coverage_section(pulses), us06_section(results_ri, results_rc)):
         lines += ["", *section]
     write_text(REPORT_MD, "\n".join(lines) + "\n")

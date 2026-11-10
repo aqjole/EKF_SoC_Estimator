@@ -10,7 +10,7 @@ What drives the simulation:
 
 - the measured current (positive = discharge) and the measured cell temperature of every row;
 - the reference SoC from the cycler's Ah counter, `SoC0 - Ah_removed / Q_ref` (Eq. 3, C13), so only the voltage model is under test, not the SoC estimate;
-- the tables of `results/params.csv` (the numbers the C file holds), read with the clamped bilinear lookup of Eq. 4;
+- the tables of `results/s1/params.csv` (the numbers the C file holds), read with the clamped bilinear lookup of Eq. 4;
 - V1 = V2 = 0 at the first row: the model starts relaxed.
 
 Error = model voltage minus measured voltage. RMSE and max |error| run over all rows used after the loader rules, and the gate uses this RMSE (docs/decisions.md 1.1). The last column is the RMSE over the rows up to the last one with reference SoC >= 10 % (the evaluation window of the EKF experiments, docs/model.md C14), for information only: no window is chosen to pass the gate. Duration is the last Time minus the first Time of the rows used.
@@ -45,6 +45,6 @@ Plot: `results/plots/s1/params.png`, R0, R1, tau1, R2 and tau2 against SoC, the 
 
 ## OCV
 
-The OCV table is the C/20 discharge curve plus a correction onto the HPPC rest voltages (docs/decisions.md 1.1; the correction at every rest point is in `results/ocv_correction.csv`). OCV fallback (the 25 degC curve used at every temperature): no. Monotone on the measured range at 6 of 6 temperatures. The valid SoC range per temperature is in `results/params.md`.
+The OCV table is the C/20 discharge curve plus a correction onto the HPPC rest voltages (docs/decisions.md 1.1; the correction at every rest point is in `results/s1/ocv_correction.csv`). OCV fallback (the 25 degC curve used at every temperature): no. Monotone on the measured range at 6 of 6 temperatures. The valid SoC range per temperature is in `results/s1/params.md`.
 
 Plots: `results/plots/s1/ocv.png`, the C/20 curve (dashed), the corrected OCV (solid) and the HPPC rest voltages (dots) with the correction in mV below; `results/plots/s1/docv.png`, dOCV/dSoC on the SoC grid.

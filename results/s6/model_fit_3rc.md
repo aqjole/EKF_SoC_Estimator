@@ -4,7 +4,7 @@ Written by `python/fit_3rc.py` (`make fit-3rc`). Do not edit by hand.
 
 ## Open-loop voltage error on US06, 2RC and 3RC
 
-Both models run without feedback on the US06 file of each temperature, as in `results/model_fit.md`: measured current and temperature, reference SoC, every branch voltage 0 at the first row, the tables of `results/params.csv` (2RC) and `results/params_3rc.csv` (3RC). Error = model minus measured voltage. The window columns run up to the last row with reference SoC >= 10 % (docs/model.md C14).
+Both models run without feedback on the US06 file of each temperature, as in `results/s1/model_fit.md`: measured current and temperature, reference SoC, every branch voltage 0 at the first row, the tables of `results/s1/params.csv` (2RC) and `results/s6/params_3rc.csv` (3RC). Error = model minus measured voltage. The window columns run up to the last row with reference SoC >= 10 % (docs/model.md C14).
 
 | T (degC) | 2RC RMSE (mV) | 3RC RMSE (mV) | 3RC - 2RC (mV) | 2RC RMSE, SoC_ref >= 10 % (mV) | 3RC RMSE, SoC_ref >= 10 % (mV) |
 |---|---|---|---|---|---|
@@ -19,7 +19,7 @@ Gate: the 3RC open-loop RMSE at 25 degC is 46.79 mV against the sanity limit of 
 
 ## 3RC level fits
 
-Fit (a) gives R1, tau1, R3 and tau3 from the discharge pulses with tau1 in [0.5, 10] s and tau3 in [10, 50] s; fit (b) gives R2 and tau2 from the 1 h rest with tau2 in [50, 3600] s; R0 is that of `results/params.csv` (docs/decisions.md 1.21). A time constant within 0.1 % of an end of its bounds counts as on the bound; tau2 is counted over the levels with a 1 h rest. Every level fit is in `results/fit_levels_3rc.csv`.
+Fit (a) gives R1, tau1, R3 and tau3 from the discharge pulses with tau1 in [0.5, 10] s and tau3 in [10, 50] s; fit (b) gives R2 and tau2 from the 1 h rest with tau2 in [50, 3600] s; R0 is that of `results/s1/params.csv` (docs/decisions.md 1.21). A time constant within 0.1 % of an end of its bounds counts as on the bound; tau2 is counted over the levels with a 1 h rest. Every level fit is in `results/s6/fit_levels_3rc.csv`.
 
 | T (degC) | levels | failed fast fits | failed slow fits | tau1 on a bound | tau3 on a bound | tau2 on a bound | median tau3 (s) | median R3 (mOhm) |
 |---|---|---|---|---|---|---|---|---|

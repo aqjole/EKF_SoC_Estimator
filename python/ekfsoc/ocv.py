@@ -33,7 +33,7 @@ from ekfsoc.constants import Q_REF_AH
 
 
 # A row counts as "discharging" when the current is above this (A, loader sign: positive = discharge).
-# It is the 50 mA of results/data_checks.md section 11, which found the discharge half the same way.
+# It is the 50 mA of results/s0/data_checks.md section 11, which found the discharge half the same way.
 DISCHARGE_MIN_A = 0.05
 
 # The fallback curve, used at every temperature when a temperature fails the monotonicity check.

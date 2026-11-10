@@ -1,6 +1,6 @@
 # Octave port of the filter
 
-The extended Kalman filter of `python/ekfsoc/ekf.py` and its table lookup from `python/ekfsoc/model.py`, in plain GNU Octave (double precision, no packages, Octave 8 or newer). Only the filter is ported: it reads the parameter tables from `results/params.csv` and the filter inputs from the CSV format of `c/tools/ekf_run_csv`. The rules of the port are in `docs/decisions.md` 1.20; the equations are those of `docs/model.md`.
+The extended Kalman filter of `python/ekfsoc/ekf.py` and its table lookup from `python/ekfsoc/model.py`, in plain GNU Octave (double precision, no packages, Octave 8 or newer). Only the filter is ported: it reads the parameter tables from `results/s1/params.csv` and the filter inputs from the CSV format of `c/tools/ekf_run_csv`. The rules of the port are in `docs/decisions.md` 1.20; the equations are those of `docs/model.md`.
 
 ## Command line
 
@@ -8,7 +8,7 @@ The extended Kalman filter of `python/ekfsoc/ekf.py` and its table lookup from `
 octave-cli octave/ekf_run_csv.m <in.csv> <out.csv> <q_soc> <q_v> <r> <soc0>
 ```
 
-The arguments are those of `c/tools/ekf_run_csv`. `in.csv` names the columns `dt_s`, `i_a`, `v_v` and `t_degc` in its header, in any order; other columns are ignored. `out.csv` gets a header `soc` and one SoC per input row with 17 significant digits. The script finds its sibling functions and `results/params.csv` from its own location, so it runs from any directory.
+The arguments are those of `c/tools/ekf_run_csv`. `in.csv` names the columns `dt_s`, `i_a`, `v_v` and `t_degc` in its header, in any order; other columns are ignored. `out.csv` gets a header `soc` and one SoC per input row with 17 significant digits. The script finds its sibling functions and `results/s1/params.csv` from its own location, so it runs from any directory.
 
 ## Files
 
@@ -28,4 +28,4 @@ The arguments are those of `c/tools/ekf_run_csv`. `in.csv` names the columns `dt
 
 ## Checks
 
-`python/compare_octave.py` (`make octave`) runs the port on every evaluation run and compares its SoC with the Python trace, writing `results/equivalence_octave.md`. `python/compare_octave.py --fixtures` runs it on the three fixtures of `c/tests/fixtures/` against their `soc_expected`; CI runs that mode with Ubuntu's Octave.
+`python/compare_octave.py` (`make octave`) runs the port on every evaluation run and compares its SoC with the Python trace, writing `results/s5/equivalence_octave.md`. `python/compare_octave.py --fixtures` runs it on the three fixtures of `c/tests/fixtures/` against their `soc_expected`; CI runs that mode with Ubuntu's Octave.

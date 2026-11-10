@@ -6,11 +6,11 @@ The 23 standard runs are a previously inspected regression suite. They informed 
 
 The standard runs were inspected before this run (decision 1.57 lists the earlier looks), so they serve here as regression runs, not as independent validation.
 
-3RC-D0-P is 3RC-D0 under `results/ekf_config.json` with one change (`results/ekf_config_3rcd0p.json`): when the size of the filter's input current on the first row it processes is below 0.5 A, every branch starts with a standard deviation of 10 mV instead of 50 mV. All 378 cases are computed by the Python filter.
+3RC-D0-P is 3RC-D0 under `results/s2/ekf_config.json` with one change (`results/s12/ekf_config_3rcd0p.json`): when the size of the filter's input current on the first row it processes is below 0.5 A, every branch starts with a standard deviation of 10 mV instead of 50 mV. All 378 cases are computed by the Python filter.
 
 ## Guards and verdict
 
-The eight guards of decision 1.48 against 3RC-D0 under `results/ekf_config.json`, evaluated as 1.35 amends 1.32: on the values of the results CSVs, recomputed from the unrounded traces where the margin (the smallest distance of a compared value from its limit, or of two compared values from each other, taken over the RMSE and peak values, not over the integer counts) is below 1e-4. Guard 2 uses the 23 standard runs, guards 3 to 7 all 63, guard 8 the 40 Mix runs; the tuning run is scored with the others. Guard 1 is recomputed from the unchanged 3RC-D0 tables.
+The eight guards of decision 1.48 against 3RC-D0 under `results/s2/ekf_config.json`, evaluated as 1.35 amends 1.32: on the values of the results CSVs, recomputed from the unrounded traces where the margin (the smallest distance of a compared value from its limit, or of two compared values from each other, taken over the RMSE and peak values, not over the integer counts) is below 1e-4. Guard 2 uses the 23 standard runs, guards 3 to 7 all 63, guard 8 the 40 Mix runs; the tuning run is scored with the others. Guard 1 is recomputed from the unchanged 3RC-D0 tables.
 
 | Guard | Value | Limit | Margin | Result |
 |---|---|---|---|---|
@@ -149,7 +149,7 @@ The restart cases whose first current is below the threshold, so that the candid
 
 ## Agreement with step A part 3
 
-Mix-run means of experiments 1, 2 and 4 at the rested prior: step A part 3 (`results/start_cases.md`, the native evaluator) against this run (the Python filter). The script stops if any printed value differs.
+Mix-run means of experiments 1, 2 and 4 at the rested prior: step A part 3 (`results/s12/start_cases.md`, the native evaluator) against this run (the Python filter). The script stops if any printed value differs.
 
 | T (degC) | Experiment | Part 3 (pp) | This run (pp) |
 |---|---|---|---|

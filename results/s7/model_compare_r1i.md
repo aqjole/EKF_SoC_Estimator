@@ -2,7 +2,7 @@
 
 Written by `python/compare_r1i.py` (`make ekf-r1i`). Do not edit by hand.
 
-2RC-I is the 2RC model with R1 read over current (docs/decisions.md 1.28). Both filters run experiments 1 to 4 on the 63 runs with the frozen noise settings of `results/ekf_config.json`; the 2RC numbers come from `results/ekf_results.csv`, the 2RC-I numbers from `results/ekf_results_r1i.csv`. SoC statistics are over the evaluation runs (tuning cycle excluded).
+2RC-I is the 2RC model with R1 read over current (docs/decisions.md 1.28). Both filters run experiments 1 to 4 on the 63 runs with the frozen noise settings of `results/s2/ekf_config.json`; the 2RC numbers come from `results/s2/ekf_results.csv`, the 2RC-I numbers from `results/s7/ekf_results_r1i.csv`. SoC statistics are over the evaluation runs (tuning cycle excluded).
 
 ## Open loop
 

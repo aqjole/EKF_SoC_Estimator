@@ -4,11 +4,11 @@ Run from the repo root:  .venv/bin/python python/compare_r1l.py
 (or: make ekf-r1l; needs make ekf, ekf-r1i and fit-r1l)
 
   1. Every run of experiments.evaluation_runs() runs experiments 1 to 4 with the 2RC-Il tables (the 2RC-I tables with
-     the R1 table of results/r1_low.csv) and the frozen noise settings. Traces go to results/runs/r1l/ (not committed)
+     the R1 table of results/s8/r1_low.csv) and the frozen noise settings. Traces go to results/runs/r1l/ (not committed)
      and are reused while fresh.
-  2. results/ekf_results_r1l.csv holds one row per run and experiment, in the columns of results/ekf_results.csv. Its
-     40 degC rows must equal those of results/ekf_results_r1i.csv, since the 40 degC runs read only unscaled slices.
-  3. results/model_compare_r1l.md puts 2RC, 2RC-I and 2RC-Il side by side, gives the US06 share of steps where 2RC-Il
+  2. results/s8/ekf_results_r1l.csv holds one row per run and experiment, in the columns of results/s2/ekf_results.csv. Its
+     40 degC rows must equal those of results/s7/ekf_results_r1i.csv, since the 40 degC runs read only unscaled slices.
+  3. results/s8/model_compare_r1l.md puts 2RC, 2RC-I and 2RC-Il side by side, gives the US06 share of steps where 2RC-Il
      reads a scaled R1 and the R1 ratio of 1.32 for both current models, every guard of 1.32, 2RC-Il against 2RC-I,
      with the rounding rule of 1.35, and the verdict. results/plots/s8/model_compare_r1l.png draws the open-loop and
      experiment-1 columns.
@@ -38,8 +38,8 @@ from s8_compare import (RATIO_CURRENT_A, RATIO_SOC, RECOMPUTE_WITHIN, comparison
 
 
 RUNS_DIR = REPO_DIR / "results" / "runs" / "r1l"
-RESULTS_RL_CSV = REPO_DIR / "results" / "ekf_results_r1l.csv"
-COMPARE_MD = REPO_DIR / "results" / "model_compare_r1l.md"
+RESULTS_RL_CSV = REPO_DIR / "results" / "s8" / "ekf_results_r1l.csv"
+COMPARE_MD = REPO_DIR / "results" / "s8" / "model_compare_r1l.md"
 COMPARE_PNG = REPO_DIR / "results" / "plots" / "s8" / "model_compare_r1l.png"
 MODELS = ("2RC", "2RC-I", "2RC-Il")
 CANDIDATE, INCUMBENT = "2RC-Il", "2RC-I"
@@ -47,7 +47,7 @@ UNSCALED_TEMP_DEGC = 40  # its runs read only slices with r = 1 (decisions 1.37)
 
 
 def load_params_rl():
-    """The 2RC-Il tables: results/params.csv with the R1 table over current of results/r1_low.csv (decisions 1.37)."""
+    """The 2RC-Il tables: results/s1/params.csv with the R1 table over current of results/s8/r1_low.csv (decisions 1.37)."""
     return read_r1_current(Params.from_csv(PARAMS_CSV), R1_LOW_CSV)
 
 
@@ -94,19 +94,19 @@ def low_share_lines(params, ratios):
 
 
 def compare_text(results, tables, open_loop, bands, share_lines, guards):
-    """Text of results/model_compare_r1l.md."""
+    """Text of results/s8/model_compare_r1l.md."""
     adopted = all(passed for _, _, passed, _ in guards)
     lines = [
         "# Model comparison: 2RC, 2RC-I and 2RC-Il (S8, step C)", "",
         "Written by `python/compare_r1l.py` (`make ekf-r1l`). Do not edit by hand.", "",
-        "2RC-Il is the 2RC-I model with R1 from `results/r1_low.csv`: the 2RC-I table scaled at and below each level's "
+        "2RC-Il is the 2RC-I model with R1 from `results/s8/r1_low.csv`: the 2RC-I table scaled at and below each level's "
         "smallest discharge pulse current by factors fitted on the PausCycl files, ramping back to the 2RC-I values at "
         "the level's second pulse (docs/decisions.md 1.37). The table is read at the held |I|, so regen below the "
         "second pulse current reads the scaled R1 too, and a US06 change cannot be credited to the discharge rows "
         "alone. The three "
-        "filters run experiments 1 to 4 on the 63 runs with the frozen noise settings of `results/ekf_config.json`; "
-        "the numbers come from `results/ekf_results.csv`, `results/ekf_results_r1i.csv` and "
-        "`results/ekf_results_r1l.csv`. SoC statistics are over the evaluation runs (tuning cycle excluded). The "
+        "filters run experiments 1 to 4 on the 63 runs with the frozen noise settings of `results/s2/ekf_config.json`; "
+        "the numbers come from `results/s2/ekf_results.csv`, `results/s7/ekf_results_r1i.csv` and "
+        "`results/s8/ekf_results_r1l.csv`. SoC statistics are over the evaluation runs (tuning cycle excluded). The "
         f"{UNSCALED_TEMP_DEGC} degC runs read only unscaled slices and equal 2RC-I (checked). These 62 runs have been "
         "inspected in every stage since S2, so this is a comparison on a repeatedly inspected set, not a confirmation "
         "(1.32).", "",

@@ -2,7 +2,7 @@
 S2 settings, and the branch prior alone on the 40 Mix runs. No filter equation changes, and no standard run is
 filtered under a changed setting.
 
-Writes results/start_cases.csv (one row per wrong-start case, with its run's history), results/start_cases.md and
+Writes results/s12/start_cases.csv (one row per wrong-start case, with its run's history), results/s12/start_cases.md and
 results/plots/s12/start_cases.png. `start_cases.py` holds parts 1 and 2, `start_prior.py` part 3, `start_report.py`
 the report text.
 """
@@ -28,10 +28,10 @@ from start_prior import NATIVE_TOLERANCE, PRIORS_V, prior_frame, prior_run, prio
 from start_report import report_text
 
 
-CSV = RESULTS / "start_cases.csv"
-REPORT = RESULTS / "start_cases.md"
+CSV = RESULTS / "s12" / "start_cases.csv"
+REPORT = RESULTS / "s12" / "start_cases.md"
 PLOT = RESULTS / "plots" / "s12" / "start_cases.png"
-STORED_RESULTS = RESULTS / "ekf_results_3rcd0.csv"
+STORED_RESULTS = RESULTS / "s10" / "ekf_results_3rcd0.csv"
 
 
 def history_frame(specs, splits_of, records):
@@ -59,13 +59,13 @@ def case_frame(history, replays):
 
 
 def check_guard7(cases):
-    """The cases above PEAK_LIMIT_PP must be those of results/ekf_results_3rcd0.csv, whose peaks they reproduce."""
+    """The cases above PEAK_LIMIT_PP must be those of results/s10/ekf_results_3rcd0.csv, whose peaks they reproduce."""
     stored = pd.read_csv(STORED_RESULTS)
     stored = stored[stored.experiment.isin(WRONG)].merge(cases, on=["folder", "file", "experiment"])
     if len(stored) != len(cases) or not np.allclose(stored.max_abs_pp, stored.peak_abs_pp, rtol=0, atol=5.01e-5):
-        raise ValueError("the replayed peaks differ from results/ekf_results_3rcd0.csv; rerun make ekf-3rcd0")
+        raise ValueError("the replayed peaks differ from results/s10/ekf_results_3rcd0.csv; rerun make ekf-3rcd0")
     if not (stored.max_abs_pp > PEAK_LIMIT_PP).equals(stored.peak_abs_pp > PEAK_LIMIT_PP):
-        raise ValueError("the guard-7 cases differ from those of results/ekf_results_3rcd0.csv")
+        raise ValueError("the guard-7 cases differ from those of results/s10/ekf_results_3rcd0.csv")
 
 
 def plot(cases, tables, screens, metrics):

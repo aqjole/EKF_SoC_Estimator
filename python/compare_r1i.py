@@ -2,11 +2,11 @@
 
 Run from the repo root:  .venv/bin/python python/compare_r1i.py   (or: make ekf-r1i; needs make ekf and make fit-r1i)
 
-  1. Every run of experiments.evaluation_runs() runs experiments 1 to 4 with the 2RC-I tables (results/params.csv
-     plus results/r1_current.csv) and the frozen noise settings of results/ekf_config.json, as run_all.py does for
+  1. Every run of experiments.evaluation_runs() runs experiments 1 to 4 with the 2RC-I tables (results/s1/params.csv
+     plus results/s7/r1_current.csv) and the frozen noise settings of results/s2/ekf_config.json, as run_all.py does for
      the 2RC model. Traces go to results/runs/r1i/ (not committed) and are reused while they are fresh.
-  2. results/ekf_results_r1i.csv holds one row per run and experiment, in the columns of results/ekf_results.csv.
-  3. results/model_compare_r1i.md puts 2RC next to 2RC-I per temperature: open-loop US06 and pooled drive-run
+  2. results/s7/ekf_results_r1i.csv holds one row per run and experiment, in the columns of results/s2/ekf_results.csv.
+  3. results/s7/model_compare_r1i.md puts 2RC next to 2RC-I per temperature: open-loop US06 and pooled drive-run
      RMSE, experiment-1 and experiment-4 mean SoC RMSE, the reached counts of experiments 2 and 3, and the
      adoption verdict of decisions 1.29, computed here. results/plots/s7/model_compare_r1i.png draws it.
 """
@@ -30,8 +30,8 @@ from run_all import CONFIG_JSON, DEPENDENCIES, RESULTS_CSV, is_fresh, load_trace
 
 
 RUNS_DIR = REPO_DIR / "results" / "runs" / "r1i"
-RESULTS_RI_CSV = REPO_DIR / "results" / "ekf_results_r1i.csv"
-COMPARE_MD = REPO_DIR / "results" / "model_compare_r1i.md"
+RESULTS_RI_CSV = REPO_DIR / "results" / "s7" / "ekf_results_r1i.csv"
+COMPARE_MD = REPO_DIR / "results" / "s7" / "model_compare_r1i.md"
 COMPARE_PNG = REPO_DIR / "results" / "plots" / "s7" / "model_compare_r1i.png"
 
 # The adoption rule of decisions 1.29 (the rule of 1.22): lower at this many temperatures or more, and higher at
@@ -41,7 +41,7 @@ MAX_HIGHER_PP = 0.10
 
 
 def load_params_ri():
-    """The 2RC-I tables: results/params.csv with the R1 table over current of results/r1_current.csv."""
+    """The 2RC-I tables: results/s1/params.csv with the R1 table over current of results/s7/r1_current.csv."""
     return read_r1_current(Params.from_csv(PARAMS_CSV), R1_CURRENT_CSV)
 
 
@@ -84,7 +84,7 @@ def verdict(old, new):
 
 
 def compare_text(old, new, open_loop):
-    """Text of results/model_compare_r1i.md."""
+    """Text of results/s7/model_compare_r1i.md."""
     open_rows, exp1_rows, other_rows = [], [], []
     for temp in T_GRID_DEGC:
         o, n, (us06_old, us06_new, pooled_old, pooled_new) = old[temp], new[temp], open_loop[temp]
@@ -101,8 +101,8 @@ def compare_text(old, new, open_loop):
         "# Model comparison: 2RC and 2RC-I (S7)", "",
         "Written by `python/compare_r1i.py` (`make ekf-r1i`). Do not edit by hand.", "",
         "2RC-I is the 2RC model with R1 read over current (docs/decisions.md 1.28). Both filters run experiments 1 to 4 "
-        "on the 63 runs with the frozen noise settings of `results/ekf_config.json`; the 2RC numbers come from "
-        "`results/ekf_results.csv`, the 2RC-I numbers from `results/ekf_results_r1i.csv`. SoC statistics are over the "
+        "on the 63 runs with the frozen noise settings of `results/s2/ekf_config.json`; the 2RC numbers come from "
+        "`results/s2/ekf_results.csv`, the 2RC-I numbers from `results/s7/ekf_results_r1i.csv`. SoC statistics are over the "
         "evaluation runs (tuning cycle excluded).", "",
         "## Open loop", "",
         "The US06 RMSE and the RMSE pooled over every drive run, model minus measured voltage (docs/decisions.md 1.25).",

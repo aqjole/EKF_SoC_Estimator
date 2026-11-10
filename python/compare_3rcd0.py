@@ -27,9 +27,9 @@ from sensitivity import capacity_columns, rate_columns
 
 
 RUNS_DIR = RESULTS / "runs" / "3rcd0"
-CANDIDATE_CSV = RESULTS / "ekf_results_3rcd0.csv"
-SENSITIVITY_CSV = RESULTS / "sensitivity_3rcd0.csv"
-COMPARE_MD = RESULTS / "model_compare_3rcd0.md"
+CANDIDATE_CSV = RESULTS / "s10" / "ekf_results_3rcd0.csv"
+SENSITIVITY_CSV = RESULTS / "s10" / "sensitivity_3rcd0.csv"
+COMPARE_MD = RESULTS / "s10" / "model_compare_3rcd0.md"
 SCORED_MODELS = MODELS[:-1]
 SENSITIVITY_COLUMNS = ("ekf_rmse_pp_095", "ekf_rmse_pp_105", "ekf_rmse_pp_1hz")
 

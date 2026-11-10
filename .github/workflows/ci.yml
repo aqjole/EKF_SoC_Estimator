@@ -20,7 +20,7 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Unit tests
         run: python -m pytest python/tests -q
-      - name: Generated C tables match results/params.csv
+      - name: Generated C tables match results/s1/params.csv
         run: |
           python python/export_params.py
           git diff --exit-code c/src/ekf_params.c c/include/ekf_params.h
@@ -54,7 +54,7 @@ jobs:
           cmake --build c/build/3rcd0-double
           ctest --test-dir c/build/3rcd0-double --output-on-failure
 
-  # The committed results/c_footprint.md names the compiler and its section sizes, so CI must use the same
+  # The committed results/s3/c_footprint.md names the compiler and its section sizes, so CI must use the same
   # release that wrote it: the pinned Arm GNU Toolchain 15.3.Rel1 (Ubuntu's gcc-arm-none-eabi is an older GCC).
   c-arm:
     runs-on: ubuntu-latest
@@ -79,16 +79,16 @@ jobs:
         if: always()
         with:
           name: c_footprint
-          path: results/c_footprint.md
+          path: results/s3/c_footprint.md
       - name: 3RC-D0 footprint, stack frames and double-precision helper check
         run: python3 python/arm_footprint.py --model 3rcd0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: c_footprint_3rcd0
-          path: results/c_footprint_3rcd0.md
+          path: results/s11/c_footprint_3rcd0.md
       - name: Committed footprint tables match
-        run: git diff --exit-code results/c_footprint.md results/c_footprint_3rcd0.md
+        run: git diff --exit-code results/s3/c_footprint.md results/s11/c_footprint_3rcd0.md
 
   octave:
     runs-on: ubuntu-latest

@@ -1,4 +1,4 @@
-"""Text of results/model_compare_3rcd0p.md, the S12 step C comparison (docs/decisions.md 1.57).
+"""Text of results/s12/model_compare_3rcd0p.md, the S12 step C comparison (docs/decisions.md 1.57).
 
 frames maps "3RC-D0" (the incumbent under the S2 settings) and then "3RC-D0-P" to its results frame; the split and
 experiment-1 tables are those of the S11 A report (s11_report).
@@ -52,7 +52,7 @@ def guard_lines(decided):
              "PASS" if passed else "FAIL"] for (_, value, passed, margin), (name, limit) in zip(decided, GUARDS)]
     verdict = "ADOPTED" if all(row[2] for row in decided) else "NOT ADOPTED"
     return ["## Guards and verdict", "",
-            "The eight guards of decision 1.48 against 3RC-D0 under `results/ekf_config.json`, evaluated as 1.35 amends "
+            "The eight guards of decision 1.48 against 3RC-D0 under `results/s2/ekf_config.json`, evaluated as 1.35 amends "
             "1.32: on the values of the results CSVs, recomputed from the unrounded traces where the margin (the "
             "smallest distance of a compared value from its limit, or of two compared values from each other, taken "
             "over the RMSE and peak values, not over the integer counts) is below 1e-4. Guard 2 uses the 23 standard runs, guards 3 to 7 all 63, guard 8 the 40 Mix runs; the "
@@ -142,7 +142,7 @@ def restart_lines(restarts, frames):
 
 def part3_lines(rows):
     return ["## Agreement with step A part 3", "",
-            "Mix-run means of experiments 1, 2 and 4 at the rested prior: step A part 3 (`results/start_cases.md`, "
+            "Mix-run means of experiments 1, 2 and 4 at the rested prior: step A part 3 (`results/s12/start_cases.md`, "
             "the native evaluator) against this run (the Python filter). The script stops if any printed value "
             "differs.", "",
             *md_table(["T (degC)", "Experiment", "Part 3 (pp)", "This run (pp)"], rows), ""]
@@ -156,7 +156,7 @@ def report_text(frames, mix, standard, decided, priors, restarts, part3, rested_
              DISCLOSURE, "",
              "The standard runs were inspected before this run (decision 1.57 lists the earlier looks), so they serve "
              "here as regression runs, not as independent validation.", "",
-             f"{new} is 3RC-D0 under `results/ekf_config.json` with one change (`results/ekf_config_3rcd0p.json`): "
+             f"{new} is 3RC-D0 under `results/s2/ekf_config.json` with one change (`results/s12/ekf_config_3rcd0p.json`): "
              f"when the size of the filter's input current on the first row it processes is below "
              f"{RESTED_CURRENT_A} A, every branch starts with a standard deviation of {1000 * rested_v:.0f} mV "
              f"instead of {1000 * load_v:.0f} mV. All 378 cases are computed by the Python filter.", "",

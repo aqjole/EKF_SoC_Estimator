@@ -21,8 +21,8 @@ from s8_compare import decided_guards
 from tune_3rcd0 import CONFIG, REPORT
 
 
-CSV = RESULTS / "ekf_results_3rcd0n.csv"
-COMPARISON = RESULTS / "model_compare_3rcd0n.md"
+CSV = RESULTS / "s11" / "ekf_results_3rcd0n.csv"
+COMPARISON = RESULTS / "s11" / "model_compare_3rcd0n.md"
 
 
 def verify_settings():
@@ -76,7 +76,7 @@ def main():
             if i % 7 == 0:
                 print(f"Evaluated {i}/63", flush=True)
         raw = {name: scored_frame([row[k] for row in scored]) for k, name in enumerate((OLD, NEW))}
-        frozen = pd.read_csv(RESULTS / "ekf_results_3rcd0.csv")
+        frozen = pd.read_csv(RESULTS / "s10" / "ekf_results_3rcd0.csv")
         verify_incumbent(raw[OLD], frozen)
         raw[NEW].to_csv(CSV, index=False, float_format="%.4f")
         frames = {OLD: frozen, NEW: pd.read_csv(CSV)}

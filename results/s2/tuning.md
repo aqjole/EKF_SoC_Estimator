@@ -10,7 +10,7 @@ The noise settings q_soc, q_v and r of the filter (docs/model.md Eq. 7 and Eq. 9
 - Objective: the mean of the SoC RMSE in pp of experiments 2 and 4 over the evaluation window (docs/model.md C14), both run by `experiments.experiment_runs` (docs/decisions.md 1.16):
   - experiment 2: the filter starts at the first row with the initial SoC 20 pp below the reference, V1 = V2 = 0, and is not told the init is wrong;
   - experiment 4: the initial SoC is the reference, and 0.200 A is added to the current the filter sees (docs/decisions.md 1.7).
-- Fixed: P0 = diag(0.2^2, 0.05^2, 0.05^2); the 2RC tables of `results/params.csv`.
+- Fixed: P0 = diag(0.2^2, 0.05^2, 0.05^2); the 2RC tables of `results/s1/params.csv`.
 - Grid: one point per decade, q_soc 1e-12 to 1e-05 1/s, q_v 1e-08 to 1e-03 V^2/s, r 1e-06 to 1e-01 V^2: 8 x 6 x 6 = 288 points. The q_soc range is two decades longer than the spec's (docs/decisions.md 1.16).
 - Refinement: the 3 x 3 x 3 = 27 points at factors 1/3, 1 and 3 of the best grid point, each value rounded to 3 significant digits. The refinement may leave the grid.
 - Ties go to the point that comes first in the order of evaluation (q_soc slowest, r fastest).
@@ -24,7 +24,7 @@ The noise settings q_soc, q_v and r of the filter (docs/model.md Eq. 7 and Eq. 9
 
 The best grid point is at the edge of the grid in: none. The refined point is at the end of the refinement range in: none.
 
-The frozen values are written to `results/ekf_config.json`; no later stage tunes again.
+The frozen values are written to `results/s2/ekf_config.json`; no later stage tunes again.
 
 ## Refinement (27 points, best first)
 

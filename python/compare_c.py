@@ -7,10 +7,10 @@ Run from the repo root:  .venv/bin/python python/compare_c.py   (or: make equiv;
      with 17 significant digits so the double build reads exactly the float64 values Python used, to
      results/runs/c_inputs/<folder>__<file>.csv (dt_s, i_a, v_v, t_degc; git-ignored with results/runs/).
   3. c/tools/ekf_run_csv runs experiment 1 (soc0 = the reference SoC at row 0) with the frozen noise settings of
-     results/ekf_config.json in each build. Its SoC is compared with the Python experiment 1 SoC saved by
+     results/s2/ekf_config.json in each build. Its SoC is compared with the Python experiment 1 SoC saved by
      run_all.py in results/runs/<folder>__<file>.npz; Python is not run again. A trace that no longer matches the
      code or the settings shows up as a failure of the double build, whose threshold is far below any such change.
-  4. results/equivalence.md gets max and RMS |delta SoC| in pp per run and build, per temperature and overall,
+  4. results/s3/equivalence.md gets max and RMS |delta SoC| in pp per run and build, per temperature and overall,
      against the spec's thresholds; results/plots/s3/ gets Python minus C SoC over time for US06 at each
      temperature (docs/decisions.md 1.14). A run whose delta is not finite is an error, and the command exits
      with status 1 when a build fails its threshold, so make equiv and CI cannot pass on a failed table.
@@ -41,7 +41,7 @@ from run_all import CONFIG_JSON, RUNS_DIR, load_traces
 
 C_DIR = REPO_DIR / "c"
 INPUTS_DIR = RUNS_DIR / "c_inputs"
-EQUIVALENCE_MD = REPO_DIR / "results" / "equivalence.md"
+EQUIVALENCE_MD = REPO_DIR / "results" / "s3" / "equivalence.md"
 PLOTS_DIR = REPO_DIR / "results" / "plots" / "s3"
 
 # Build name -> the EKF_USE_DOUBLE setting.
@@ -56,10 +56,10 @@ PLOT_CYCLE = "US06"
 
 
 def frozen_config():
-    """Return the frozen settings of results/ekf_config.json, checked against the P0 the tools hard-code."""
+    """Return the frozen settings of results/s2/ekf_config.json, checked against the P0 the tools hard-code."""
     cfg = EkfConfig.from_json(CONFIG_JSON)
     if (cfg.p0_soc_std, cfg.p0_v_std) != TOOL_P0_STDS:
-        raise RuntimeError(f"the tools use p0 stds {TOOL_P0_STDS}, results/ekf_config.json has others")
+        raise RuntimeError(f"the tools use p0 stds {TOOL_P0_STDS}, results/s2/ekf_config.json has others")
     return cfg
 
 
@@ -227,7 +227,7 @@ def equivalence_text(table, cfg):
     intro = (
         "Written by `python/compare_c.py` (`make equiv`). The C filter (`c/tools/ekf_run_csv`) runs experiment 1 "
         f"(soc0 = the reference SoC at row 0) on the {len(table)} runs of the evaluation set and the tuning cycle, "
-        "with the frozen noise settings of `results/ekf_config.json` "
+        "with the frozen noise settings of `results/s2/ekf_config.json` "
         f"(q_soc = {cfg.q_soc:g}, q_v = {cfg.q_v:g}, r = {cfg.r:g}), "
         "on the filter inputs as the loader gives them (dt computed in float64 by Python, written with 17 significant "
         "digits). delta SoC = Python SoC - C SoC over every row of a run, in pp; the Python SoC is the experiment 1 "

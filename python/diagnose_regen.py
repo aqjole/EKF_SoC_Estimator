@@ -36,8 +36,8 @@ MODELS = {
     "2RC": RUNS_2RC, "2RC-I": RUNS_RI, "2RC-Id": RUNS_RD, "2RC-Ic": RUNS_RC, "2RC-Il": RUNS_RL,
     "3RC-D": RUNS_3RCD, "3RC-D0": RUNS_3RCD0, "3RC-D0-N": RUNS_3RCD0N,
 }
-CSV = RESULTS / "regen_limit.csv"
-REPORT = RESULTS / "regen_limit.md"
+CSV = RESULTS / "s11" / "regen_limit.csv"
+REPORT = RESULTS / "s11" / "regen_limit.md"
 PLOT = RESULTS / "plots" / "s11" / "regen_limit.png"
 
 

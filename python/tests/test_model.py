@@ -257,7 +257,7 @@ def test_simulate_rejects_arrays_of_different_length():
         simulate_open_loop(params, np.zeros(3), np.zeros(3), np.zeros(2), np.zeros(3))
 
 
-# --- Params and results/params.csv ----------------------------------------------------------------
+# --- Params and results/s1/params.csv ----------------------------------------------------------------
 
 
 def synthetic_params():
@@ -281,7 +281,7 @@ def synthetic_params():
 
 @pytest.fixture
 def csv_path(tmp_path):
-    """results/params.csv-style file written from synthetic_params()."""
+    """results/s1/params.csv-style file written from synthetic_params()."""
     path = tmp_path / "params.csv"
     synthetic_params().to_csv(path)
     return path
@@ -353,7 +353,7 @@ def test_from_csv_rejects_a_soc_value_that_changes_in_a_later_block(csv_path, tm
 
 @pytest.fixture
 def csv_path_3rc(tmp_path):
-    """results/params_3rc.csv-style file: synthetic_params() plus constant r3 and tau3 tables."""
+    """results/s6/params_3rc.csv-style file: synthetic_params() plus constant r3 and tau3 tables."""
     path = tmp_path / "params_3rc.csv"
     replace(synthetic_params(), r3=np.full((3, 4), 0.004), tau3=np.full((3, 4), 25.0)).to_csv(path)
     return path

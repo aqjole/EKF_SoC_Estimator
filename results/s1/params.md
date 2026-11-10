@@ -1,6 +1,6 @@
 # Model parameters
 
-Written by `python/export_params.py` from `results/params.csv` (the tables on the 101-point SoC grid, which the C file is generated from) and `results/fit_levels.csv` (the HPPC level fits before resampling). Do not edit by hand.
+Written by `python/export_params.py` from `results/s1/params.csv` (the tables on the 101-point SoC grid, which the C file is generated from) and `results/s1/fit_levels.csv` (the HPPC level fits before resampling). Do not edit by hand.
 
 Units: SoC in %, R in mOhm, tau in s, C = tau / R in F, RMSE in mV. `n/a` is a missing value: a failed fit, or R2 and tau2 of the last level, which has no 1 h rest.
 

@@ -20,8 +20,8 @@ from s10_jacobian import replay_case, summarize_jacobian
 from s10_protocol import COLD, DIAGNOSTIC_MD, DISCLOSURE, PLOTS, RESULTS, provenance, splits, verify_baseline
 
 
-BINS_CSV = RESULTS / "accuracy_residual_bins.csv"
-JACOBIAN_CSV = RESULTS / "accuracy_jacobian.csv"
+BINS_CSV = RESULTS / "s10" / "accuracy_residual_bins.csv"
+JACOBIAN_CSV = RESULTS / "s10" / "accuracy_jacobian.csv"
 JACOBIAN_COLUMNS = (
     "split", "folder", "file", "cycle", "T_degC", "scope", "samples", "ratio_samples",
     "H_abs_median_V_per_soc", "H_abs_p95_V_per_soc", "H_abs_max_V_per_soc", "H_over_OCV_slope_p95",
@@ -220,7 +220,7 @@ def report(outputs, data, jacobian, mix, standard):
         *md_table(["Split", "T (degC)", "scope", "rows", "runs", "open mean (mV)", "open RMSE (mV)",
                    "innovation mean (mV)", "innovation RMSE (mV)", "SoC mean (pp)", "SoC RMSE (pp)"],
                   fmt(baseline.itertuples(index=False, name=None))), "",
-        "See [cold US06 residual profiles](plots/s10/accuracy_residuals.png) for bias and transient shape.", "",
+        "See [cold US06 residual profiles](../plots/s10/accuracy_residuals.png) for bias and transient shape.", "",
         "## Timing and innovation persistence", "",
         "The open-loop model applies the new current immediately to the ohmic drop and holds the previous "
         "current over the elapsed RC step. The EKF uses the current row's measured temperature for predict "

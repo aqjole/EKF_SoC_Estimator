@@ -3,7 +3,7 @@ made-up arrays, and (when data/raw/ exists) the files that need a cut.
 
 The fixture python/tests/fixtures/lghg2_excerpt.mat is a copy of 25degC/551_Cap_1C (see its README),
 a 1C discharge logged every 10 s. The expected numbers in the data tests come from
-results/data_checks.md section 4, results/data_inventory.md and results/capacity.md.
+results/s0/data_checks.md section 4, results/s0/data_inventory.md and results/s0/capacity.md.
 """
 
 import datetime
@@ -56,7 +56,7 @@ def test_fixture_units_are_plausible(fixture_run):
 
 
 def test_fixture_counter_starts_at_zero_and_ends_at_the_1c_capacity(fixture_run):
-    """ah_removed is 0 at the first row, never falls, and ends at the 2.7264 Ah of 551_Cap_1C in results/capacity.md."""
+    """ah_removed is 0 at the first row, never falls, and ends at the 2.7264 Ah of 551_Cap_1C in results/s0/capacity.md."""
     run = fixture_run
     assert run.ah_removed[0] == 0.0
     assert np.all(np.diff(run.ah_removed) >= 0.0)
@@ -334,7 +334,7 @@ def test_c20_25degc_counts_from_the_step_start_zero():
 
 @pytest.mark.needs_data
 def test_571_mixed6_starts_at_row_391_with_soc0_below_one():
-    """results/data_checks.md 4a: the run starts at stored row 391 (Time 38.957 s, 4.1657 V, 0 A), SoC0 = 0.99638."""
+    """results/s0/data_checks.md 4a: the run starts at stored row 391 (Time 38.957 s, 4.1657 V, 0 A), SoC0 = 0.99638."""
     (path,) = [p for p in find_runs(RAW_DIR, test_type="mixed6", folder="10degC") if "571_Mixed6" in p.name]
     run = load_run(path)
     stored = rawio.load_mat(path)
@@ -343,7 +343,7 @@ def test_571_mixed6_starts_at_row_391_with_soc0_below_one():
     assert run.soc0 == pytest.approx(1.0 + stored["Ah"][391] / Q_REF_AH, abs=0.00001)  # 1 - 0.01008 Ah / Q_ref
 
     assert "391" in run.meta["cut"]
-    assert run.meta["n_rows_raw"] == 73921  # results/data_inventory.md
+    assert run.meta["n_rows_raw"] == 73921  # results/s0/data_inventory.md
     assert run.meta["n_dropped_rows"] == 0
     assert run.meta["n_cut_rows"] == 391
 
@@ -356,7 +356,7 @@ def test_571_mixed6_starts_at_row_391_with_soc0_below_one():
 
 @pytest.mark.needs_data
 def test_582_la92_keeps_only_the_rows_dated_26_11_2018():
-    """results/data_checks.md 4b: 89701 rows used, Time 102.937 to 9082.415 s, 5 steps above 1 s, SoC0 = 0.99484."""
+    """results/s0/data_checks.md 4b: 89701 rows used, Time 102.937 to 9082.415 s, 5 steps above 1 s, SoC0 = 0.99484."""
     (path,) = [p for p in find_runs(RAW_DIR, test_type="la92", folder="10degC") if "582_LA92" in p.name]
     run = load_run(path)
     stored = rawio.load_mat(path)

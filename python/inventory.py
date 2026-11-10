@@ -1,9 +1,9 @@
 """S0 data inventory: walk data/raw/ and describe every file.
 
 Writes two files:
-- results/data_inventory.md: one row per .mat file (time base, ranges, flags)
+- results/s0/data_inventory.md: one row per .mat file (time base, ranges, flags)
   plus a summary per temperature folder.
-- results/capacity.md: every capacity test in campaign order, the C/20 and 1C
+- results/s0/capacity.md: every capacity test in campaign order, the C/20 and 1C
   capacities per folder, and a check of the drive-cycle stop rule.
 
 Run from the repo root:  .venv/bin/python python/inventory.py   (or: make inventory)
@@ -627,7 +627,7 @@ def file_row(r):
 
 
 def write_inventory(folders, records_by_folder, failures, out_path):
-    """Write results/data_inventory.md."""
+    """Write results/s0/data_inventory.md."""
     all_records = [r for folder in folders for r in records_by_folder[folder]]
     lines = []
     lines.append("# Data inventory (S0)")
@@ -1107,7 +1107,7 @@ def c20_ratio_note(folders, records_by_folder):
 
 
 def write_capacity(folders, records_by_folder, out_path):
-    """Write results/capacity.md."""
+    """Write results/s0/capacity.md."""
     all_records = [r for folder in folders for r in records_by_folder[folder]]
     capacity_records = sorted((r for r in all_records if r["capacity"] is not None), key=lambda r: r["start"])
 
@@ -1296,10 +1296,10 @@ def main():
                      key=lambda f: min(r["start"] for r in records_by_folder[f]))
 
     RESULTS_DIR.mkdir(exist_ok=True)
-    write_inventory(folders, records_by_folder, failures, RESULTS_DIR / "data_inventory.md")
-    write_capacity(folders, records_by_folder, RESULTS_DIR / "capacity.md")
+    write_inventory(folders, records_by_folder, failures, RESULTS_DIR / "s0" / "data_inventory.md")
+    write_capacity(folders, records_by_folder, RESULTS_DIR / "s0" / "capacity.md")
     total = sum(len(records) for records in records_by_folder.values())
-    print(f"wrote results/data_inventory.md ({total} files, {len(failures)} failed) and results/capacity.md")
+    print(f"wrote results/s0/data_inventory.md ({total} files, {len(failures)} failed) and results/s0/capacity.md")
     for path, error in failures:
         print(f"failed: {path}: {error}")
 

@@ -4,17 +4,17 @@ Run from the repo root:  .venv/bin/python python/fit_all.py   (or: make fit)
 
   1. OCV(SoC, T) and dOCV/dSoC from the six C/20 discharge halves, corrected onto the voltages at the
      end of the HPPC rests (ocv.py, hppc.py; docs/decisions.md 1.1). The correction at every rest point
-     is written to results/ocv_correction.csv.
+     is written to results/s1/ocv_correction.csv.
   2. The six HPPC files are segmented and fitted level by level (hppc.py, fit.py; rules in
      docs/decisions.md 1.12), on the corrected OCV.
   3. Each level fit is resampled onto the 101-point SoC grid: linear in SoC, the first and last level
      value held beyond the measured range. R0, R1, tau1 sit at the SoC of the level's pulses,
      R2, tau2 at the SoC where the move ended.
-  4. results/params.csv and results/fit_levels.csv are written, then export_params.py makes
-     results/params.md (with the correction table) and the C source and header from them.
+  4. results/s1/params.csv and results/s1/fit_levels.csv are written, then export_params.py makes
+     results/s1/params.md (with the correction table) and the C source and header from them.
   5. The tables are read back from params.csv, so the validation uses the same 6-digit numbers as the
      C file, and the 2RC model runs open-loop on US06 at each temperature (decisions 1.4): measured
-     current and temperature, reference SoC. results/model_fit.md and results/plots/s1/model_fit_<folder>.png
+     current and temperature, reference SoC. results/s1/model_fit.md and results/plots/s1/model_fit_<folder>.png
      report the voltage error.
   6. results/plots/s1/ocv.png, docv.png and params.png draw the three tables (plots.py; decisions 1.14).
 
@@ -34,7 +34,7 @@ from ekfsoc.plots import plot_docv, plot_model_fit, plot_ocv, plot_params
 from export_params import LEVELS_CSV, OCV_CORRECTION_CSV, PARAMS_CSV, export_params, md_table, write_text
 
 
-MODEL_FIT_MD = REPO_DIR / "results" / "model_fit.md"
+MODEL_FIT_MD = REPO_DIR / "results" / "s1" / "model_fit.md"
 PLOTS_DIR = REPO_DIR / "results" / "plots" / "s1"
 
 FOLDER_OF = {temp: folder for folder, temp in FOLDER_TEMP.items()}
@@ -46,7 +46,7 @@ GATE_RMSE_MV = 30.0
 # The evaluation window of the EKF experiments (docs/model.md C14): rows up to the last one with reference SoC at or above this.
 WINDOW_MIN_SOC = 0.10
 
-# Columns of results/fit_levels.csv: the keys of fit_hppc_run, with the two convergence flags last.
+# Columns of results/s1/fit_levels.csv: the keys of fit_hppc_run, with the two convergence flags last.
 LEVEL_COLUMNS = ("T_degC", "level", "soc_pulses", "R0_ohm", "R1_ohm", "tau1_s", "rmse_fast_mV", "n_pulses_used",
                  "soc_rest", "R2_ohm", "tau2_s", "rmse_slow_mV", "fast_ok", "slow_ok")
 
@@ -105,13 +105,13 @@ def build_params(ocv_table, level_rows):
 
 
 def write_levels_csv(level_rows):
-    """Write results/fit_levels.csv: one row per HPPC level, 6 significant digits, empty cell = no value."""
+    """Write results/s1/fit_levels.csv: one row per HPPC level, 6 significant digits, empty cell = no value."""
     rows = [row for temp in T_GRID_DEGC for row in level_rows[temp]]
     pd.DataFrame(rows, columns=LEVEL_COLUMNS).to_csv(LEVELS_CSV, index=False, float_format="%.6g", lineterminator="\n")
 
 
 def write_ocv_correction_csv(c20_runs, rest_points_by_temp):
-    """Write results/ocv_correction.csv: one row per HPPC rest point, SoC falling within a temperature (decisions 1.1)."""
+    """Write results/s1/ocv_correction.csv: one row per HPPC rest point, SoC falling within a temperature (decisions 1.1)."""
     frames = []
     for temp in T_GRID_DEGC:
         soc_curve, v_curve = discharge_curve(c20_runs[temp])
@@ -153,7 +153,7 @@ def validate_us06(params, temp):
     }
 
 
-# --- results/model_fit.md ------------------------------------------------------------------------
+# --- results/s1/model_fit.md ------------------------------------------------------------------------
 
 
 def validation_section(results):
@@ -179,7 +179,7 @@ def validation_section(results):
         "- the measured current (positive = discharge) and the measured cell temperature of every row;",
         "- the reference SoC from the cycler's Ah counter, `SoC0 - Ah_removed / Q_ref` (Eq. 3, C13), "
         "so only the voltage model is under test, not the SoC estimate;",
-        "- the tables of `results/params.csv` (the numbers the C file holds), read with the clamped bilinear lookup of Eq. 4;",
+        "- the tables of `results/s1/params.csv` (the numbers the C file holds), read with the clamped bilinear lookup of Eq. 4;",
         "- V1 = V2 = 0 at the first row: the model starts relaxed.",
         "",
         "Error = model voltage minus measured voltage. RMSE and max |error| run over all rows used after the loader rules, "
@@ -240,10 +240,10 @@ def ocv_section(ocv_table):
         "## OCV",
         "",
         "The OCV table is the C/20 discharge curve plus a correction onto the HPPC rest voltages "
-        "(docs/decisions.md 1.1; the correction at every rest point is in `results/ocv_correction.csv`). "
+        "(docs/decisions.md 1.1; the correction at every rest point is in `results/s1/ocv_correction.csv`). "
         f"OCV fallback (the 25 degC curve used at every temperature): {'yes' if ocv_table.fallback_used else 'no'}. "
         f"Monotone on the measured range at {int(np.sum(ocv_table.monotone))} of {len(ocv_table.monotone)} temperatures. "
-        "The valid SoC range per temperature is in `results/params.md`.",
+        "The valid SoC range per temperature is in `results/s1/params.md`.",
         "",
         "Plots: `results/plots/s1/ocv.png`, the C/20 curve (dashed), the corrected OCV (solid) and the HPPC rest voltages "
         "(dots) with the correction in mV below; `results/plots/s1/docv.png`, dOCV/dSoC on the SoC grid.",
@@ -251,7 +251,7 @@ def ocv_section(ocv_table):
 
 
 def model_fit_text(results, counts, level_rows, ocv_table):
-    """Return the text of results/model_fit.md. Every number comes from the arguments."""
+    """Return the text of results/s1/model_fit.md. Every number comes from the arguments."""
     lines = ["# Model fit", "", "Written by `python/fit_all.py` (`make fit`). Do not edit by hand."]
     for section in (validation_section(results), pulse_section(counts, level_rows), ocv_section(ocv_table)):
         lines += ["", *section]

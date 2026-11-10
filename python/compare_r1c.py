@@ -4,10 +4,10 @@ Run from the repo root:  .venv/bin/python python/compare_r1c.py
 (or: make ekf-r1c; needs make ekf, ekf-r1i, ekf-r1d and fit-r1c)
 
   1. Every run of experiments.evaluation_runs() runs experiments 1 to 4 with the 2RC-Ic tables (the 2RC-I tables plus
-     the charge-side R1 of results/r1_charge.csv) and the frozen noise settings. Traces go to results/runs/r1c/ (not
+     the charge-side R1 of results/s8/r1_charge.csv) and the frozen noise settings. Traces go to results/runs/r1c/ (not
      committed) and are reused while fresh.
-  2. results/ekf_results_r1c.csv holds one row per run and experiment, in the columns of results/ekf_results.csv.
-  3. results/model_compare_r1c.md puts 2RC, 2RC-I, 2RC-Id and 2RC-Ic side by side and gives every guard of 1.32,
+  2. results/s8/ekf_results_r1c.csv holds one row per run and experiment, in the columns of results/s2/ekf_results.csv.
+  3. results/s8/model_compare_r1c.md puts 2RC, 2RC-I, 2RC-Id and 2RC-Ic side by side and gives every guard of 1.32,
      2RC-Ic against 2RC-I, with the rounding rule of 1.35, and the verdict. results/plots/s8/model_compare_r1c.png
      draws the open-loop and experiment-1 columns.
 """
@@ -34,15 +34,15 @@ from s8_compare import (RECOMPUTE_WITHIN, comparison_lines, decided_guards, guar
 
 
 RUNS_DIR = REPO_DIR / "results" / "runs" / "r1c"
-RESULTS_RC_CSV = REPO_DIR / "results" / "ekf_results_r1c.csv"
-COMPARE_MD = REPO_DIR / "results" / "model_compare_r1c.md"
+RESULTS_RC_CSV = REPO_DIR / "results" / "s8" / "ekf_results_r1c.csv"
+COMPARE_MD = REPO_DIR / "results" / "s8" / "model_compare_r1c.md"
 COMPARE_PNG = REPO_DIR / "results" / "plots" / "s8" / "model_compare_r1c.png"
 MODELS = ("2RC", "2RC-I", "2RC-Id", "2RC-Ic")
 CANDIDATE, INCUMBENT = "2RC-Ic", "2RC-I"
 
 
 def load_params_rc():
-    """The 2RC-Ic tables: the 2RC-I tables with the charge-side R1 of results/r1_charge.csv (decisions 1.35)."""
+    """The 2RC-Ic tables: the 2RC-I tables with the charge-side R1 of results/s8/r1_charge.csv (decisions 1.35)."""
     return read_r1_charge(load_params_ri(), R1_CHARGE_CSV)
 
 
@@ -52,15 +52,15 @@ def scored_frame(scored):
 
 
 def compare_text(results, tables, open_loop, bands, ratios, guards):
-    """Text of results/model_compare_r1c.md."""
+    """Text of results/s8/model_compare_r1c.md."""
     adopted = all(passed for _, _, passed, _ in guards)
     lines = [
         "# Model comparison: 2RC, 2RC-I, 2RC-Id and 2RC-Ic (S8, step B)", "",
         "Written by `python/compare_r1c.py` (`make ekf-r1c`). Do not edit by hand.", "",
-        "2RC-Ic is the 2RC-I model with R1 from the charge-side table of `results/r1_charge.csv` when the held current "
+        "2RC-Ic is the 2RC-I model with R1 from the charge-side table of `results/s8/r1_charge.csv` when the held current "
         "is negative (docs/decisions.md 1.35). The four filters run experiments 1 to 4 on the 63 runs with the frozen "
-        "noise settings of `results/ekf_config.json`; the numbers come from `results/ekf_results.csv`, "
-        "`results/ekf_results_r1i.csv`, `results/ekf_results_r1d.csv` and `results/ekf_results_r1c.csv`. SoC "
+        "noise settings of `results/s2/ekf_config.json`; the numbers come from `results/s2/ekf_results.csv`, "
+        "`results/s7/ekf_results_r1i.csv`, `results/s8/ekf_results_r1d.csv` and `results/s8/ekf_results_r1c.csv`. SoC "
         "statistics are over the evaluation runs (tuning cycle excluded). These 62 runs have been inspected in every "
         "stage since S2, so this is a comparison on a repeatedly inspected set, not a confirmation (1.32).", "",
     ]

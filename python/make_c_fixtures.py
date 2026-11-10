@@ -7,7 +7,7 @@ tool (c/tools/ekf_run_csv.c) on each and compares, without the raw data.
 Columns: dt_s, i_a, v_v, t_degc (the filter inputs, dt from the loader in float64, so the tool never
 subtracts timestamps) and soc_expected. Every value is written with 10 significant digits, and
 soc_expected is python run_ekf (experiment 1: soc0 = the reference SoC at row 0, V1 = V2 = 0, no predict
-at row 0) on exactly the inputs as written, with the frozen noise settings of results/ekf_config.json.
+at row 0) on exactly the inputs as written, with the frozen noise settings of results/s2/ekf_config.json.
 The output is deterministic.
 
 Run from the repo root:  .venv/bin/python python/make_c_fixtures.py   (needs data/raw/)
@@ -95,7 +95,7 @@ def readme_text(entries, cfg):
         "the initial SoC is soc0 above (the reference SoC at the first row), V1 = V2 = 0, the initial covariance "
         f"has the standard deviations {as_text(cfg.p0_soc_std)} (SoC) and {as_text(cfg.p0_v_std)} V (V1, V2), "
         "and the first row gets an update and no predict. The noise settings are the frozen ones of "
-        f"`results/ekf_config.json`: q_soc = {as_text(cfg.q_soc)}, q_v = {as_text(cfg.q_v)}, r = {as_text(cfg.r)}. "
+        f"`results/s2/ekf_config.json`: q_soc = {as_text(cfg.q_soc)}, q_v = {as_text(cfg.q_v)}, r = {as_text(cfg.r)}. "
         "Run it from the repo root with `.venv/bin/python python/make_c_fixtures.py`; it needs `data/raw/`.",
     ]
     return "\n".join(lines) + "\n"

@@ -2,13 +2,13 @@
 
 Run from the repo root:  .venv/bin/python python/run_all.py   (or: make ekf)
 
-  1. results/params.csv (S1) and results/ekf_config.json (frozen by python/tune.py) are read. Nothing is tuned here.
+  1. results/s1/params.csv (S1) and results/s2/ekf_config.json (frozen by python/tune.py) are read. Nothing is tuned here.
   2. Each run of experiments.evaluation_runs() is processed in a process pool. Its experiments (experiment_runs) are
      saved to results/runs/<folder>__<file>.npz, and its trace plots to results/runs/plots/. A run whose files
      are all newer than the parameters, the noise settings and the code is not computed again.
-  3. Every number is scored from the saved traces (ekfsoc.metrics): results/ekf_results.csv has one row per run and
+  3. Every number is scored from the saved traces (ekfsoc.metrics): results/s2/ekf_results.csv has one row per run and
      experiment.
-  4. results/ekf_summary.md (ekf_summary.py) has the cycle x temperature tables and the 3 pp gate, read back from that CSV.
+  4. results/s2/ekf_summary.md (ekf_summary.py) has the cycle x temperature tables and the 3 pp gate, read back from that CSV.
   5. results/plots/s2/ gets the two summary plots, the 16 example traces (copied from results/runs/plots/) and the
      synthetic-data plot (docs/decisions.md 1.14).
 """
@@ -45,9 +45,9 @@ from ekf_summary import gate_text, summary_text
 from export_params import PARAMS_CSV, write_text
 
 
-CONFIG_JSON = REPO_DIR / "results" / "ekf_config.json"
-RESULTS_CSV = REPO_DIR / "results" / "ekf_results.csv"
-SUMMARY_MD = REPO_DIR / "results" / "ekf_summary.md"
+CONFIG_JSON = REPO_DIR / "results" / "s2" / "ekf_config.json"
+RESULTS_CSV = REPO_DIR / "results" / "s2" / "ekf_results.csv"
+SUMMARY_MD = REPO_DIR / "results" / "s2" / "ekf_summary.md"
 RUNS_DIR = REPO_DIR / "results" / "runs"
 PLOTS_DIR = REPO_DIR / "results" / "plots" / "s2"
 
@@ -117,7 +117,7 @@ def none_as_nan(value):
 
 
 def score_run(spec, t, v, reference, cases):
-    """Return one dict per scored experiment with the columns of results/ekf_results.csv (metrics.py, docs/model.md C14).
+    """Return one dict per scored experiment with the columns of results/s2/ekf_results.csv (metrics.py, docs/model.md C14).
 
     Times are seconds since the filter start. Errors are estimate - reference, in pp.
     """

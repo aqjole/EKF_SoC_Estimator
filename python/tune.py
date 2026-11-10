@@ -16,7 +16,7 @@ are run by experiments.experiment_runs, so their definitions live in one place. 
 process pool and the result does not depend on it: each point is one deterministic filter run, and ties
 go to the point that comes first in the tables.
 
-Writes results/tuning.md (all 315 objectives and the chosen values), results/ekf_config.json (the frozen
+Writes results/s2/tuning.md (all 315 objectives and the chosen values), results/s2/ekf_config.json (the frozen
 EkfConfig) and section 1.15 of docs/decisions.md (replaced if it is already there).
 """
 
@@ -35,8 +35,8 @@ from ekfsoc.model import Params
 from export_params import PARAMS_CSV, md_table, write_text
 
 
-CONFIG_JSON = REPO_DIR / "results" / "ekf_config.json"
-TUNING_MD = REPO_DIR / "results" / "tuning.md"
+CONFIG_JSON = REPO_DIR / "results" / "s2" / "ekf_config.json"
+TUNING_MD = REPO_DIR / "results" / "s2" / "tuning.md"
 DECISIONS_MD = REPO_DIR / "docs" / "decisions.md"
 DECISION_HEADING = "### 1.15 EKF noise settings (S2, frozen)"
 
@@ -147,7 +147,7 @@ def result_table(scored):
 
 
 def tuning_md(grid, refined):
-    """Text of results/tuning.md. `grid` and `refined` are the sorted results of the two searches."""
+    """Text of results/s2/tuning.md. `grid` and `refined` are the sorted results of the two searches."""
     _, run, _, window = tuning_problem()
     window_time = run.t[window]
     cfg = EkfConfig(*refined[0][0])
@@ -165,7 +165,7 @@ def tuning_md(grid, refined):
         "- Objective: the mean of the SoC RMSE in pp of experiments 2 and 4 over the evaluation window (docs/model.md C14), both run by `experiments.experiment_runs` (docs/decisions.md 1.16):",
         "  - experiment 2: the filter starts at the first row with the initial SoC 20 pp below the reference, V1 = V2 = 0, and is not told the init is wrong;",
         f"  - experiment 4: the initial SoC is the reference, and {OFFSET_A:.3f} A is added to the current the filter sees (docs/decisions.md 1.7).",
-        f"- Fixed: P0 = diag({cfg.p0_soc_std}^2, {cfg.p0_v_std}^2, {cfg.p0_v_std}^2); the 2RC tables of `results/params.csv`.",
+        f"- Fixed: P0 = diag({cfg.p0_soc_std}^2, {cfg.p0_v_std}^2, {cfg.p0_v_std}^2); the 2RC tables of `results/s1/params.csv`.",
         f"- Grid: one point per decade, q_soc {grid_span('q_soc')} 1/s, q_v {grid_span('q_v')} V^2/s, r {grid_span('r')} V^2: {grid_shape} = {len(grid)} points. The q_soc range is two decades longer than the spec's (docs/decisions.md 1.16).",
         f"- Refinement: the 3 x 3 x 3 = {len(refined)} points at factors 1/3, 1 and 3 of the best grid point, each value rounded to 3 significant digits. The refinement may leave the grid.",
         "- Ties go to the point that comes first in the order of evaluation (q_soc slowest, r fastest).",
@@ -179,7 +179,7 @@ def tuning_md(grid, refined):
         "",
         edge_notes(grid, refined),
         "",
-        "The frozen values are written to `results/ekf_config.json`; no later stage tunes again.",
+        "The frozen values are written to `results/s2/ekf_config.json`; no later stage tunes again.",
         "",
         f"## Refinement ({len(refined)} points, best first)",
         "",
@@ -194,7 +194,10 @@ def tuning_md(grid, refined):
 
 
 def decision_section(grid, refined):
-    """Text of section 1.15 of docs/decisions.md."""
+    """Text of section 1.15 of docs/decisions.md.
+
+    It keeps the flat result paths it was written with: entries before 1.59 stay as written.
+    """
     cfg = EkfConfig(*refined[0][0])
     return "\n".join([
         DECISION_HEADING,

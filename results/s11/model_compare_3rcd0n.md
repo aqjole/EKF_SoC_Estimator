@@ -33,7 +33,7 @@ Guard 2 uses the 23 standard runs; guards 3–7 use all 63; guard 8 uses the 40 
 
 **NOT ADOPTED.** The S2 settings remain the incumbent; the candidate JSON is experimental.
 
-See [the complete search](../results/tuning_3rcd0.md) and [per-run results](../results/ekf_results_3rcd0n.csv).
+See the complete search in `results/s11/tuning_3rcd0.md` and per-run results in `results/s11/ekf_results_3rcd0n.csv`.
 
 ## Standard regression
 

@@ -2,7 +2,7 @@
 the divergence test of the SoC limit (docs/decisions.md 1.16).
 
 The hand computations use small made-up tables, so no raw data is needed. The synthetic test draws
-its data from the model itself (results/params.csv at 25 degC) plus voltage noise, so it checks the
+its data from the model itself (results/s1/params.csv at 25 degC) plus voltage noise, so it checks the
 filter apart from model mismatch (the spec, S2). The expected values are worked out in the comments,
 not by calling the code under test.
 """
@@ -306,7 +306,7 @@ def test_the_rule_reads_the_restart_row_not_row_zero():
 @pytest.fixture(scope="module")
 def synthetic():
     """The 1500 s of model voltage plus 5 mV noise that ekfsoc.synthetic draws, at 25 degC."""
-    return synthetic_data(Params.from_csv(REPO_DIR / "results" / "params.csv"))
+    return synthetic_data(Params.from_csv(REPO_DIR / "results" / "s1" / "params.csv"))
 
 
 def test_filter_started_20_pp_wrong_converges_below_1_pp_and_stays(synthetic):

@@ -4,7 +4,7 @@ Written by `python/fit_3rc_rest.py` (`make fit-3rc-rest`). Do not edit by hand.
 
 ## Level fits
 
-Per HPPC level, R3, tau3 and one offset fitted on the rest rows of the pulse train from 20 s after each pulse, every 2RC table of `results/params.csv` fixed (docs/decisions.md 1.26). R3 in [0, 0.5] Ohm, tau3 in [10, 100] s. Left out: levels with a discharge pulse cut at 2.8 V. A tau3 within 0.1 % of an end of its bounds counts as on the bound. Offset = measured minus model voltage, constant over the train. Every level fit is in `results/fit_levels_3rc_rest.csv`.
+Per HPPC level, R3, tau3 and one offset fitted on the rest rows of the pulse train from 20 s after each pulse, every 2RC table of `results/s1/params.csv` fixed (docs/decisions.md 1.26). R3 in [0, 0.5] Ohm, tau3 in [10, 100] s. Left out: levels with a discharge pulse cut at 2.8 V. A tau3 within 0.1 % of an end of its bounds counts as on the bound. Offset = measured minus model voltage, constant over the train. Every level fit is in `results/s6/fit_levels_3rc_rest.csv`.
 
 | T (degC) | levels | left out (cut pulse) | failed fits | tau3 on the lower bound | tau3 on the upper bound | median R3 (mOhm) | median tau3 (s) | median offset (mV) | median rest RMSE (mV) |
 |---|---|---|---|---|---|---|---|---|---|
@@ -29,7 +29,7 @@ There the upper tau3 bound does not keep the middle branch apart from the slow o
 
 ## Open-loop voltage error on US06, 2RC and second 3RC fit
 
-As in `results/model_fit_3rc.md`: measured current and temperature, reference SoC, every branch voltage 0 at the first row, error = model minus measured voltage over the whole run.
+As in `results/s6/model_fit_3rc.md`: measured current and temperature, reference SoC, every branch voltage 0 at the first row, error = model minus measured voltage over the whole run.
 
 | T (degC) | 2RC RMSE (mV) | second 3RC RMSE (mV) | change (mV) |
 |---|---|---|---|
@@ -44,7 +44,7 @@ Gate: the second 3RC open-loop RMSE at 25 degC is 39.70 mV against the sanity li
 
 ## Open-loop error over every drive cycle
 
-Pooled over all rows of a temperature's runs, scored as in docs/decisions.md 1.25; the ceiling is the one of `results/model_fit_3rc.md`.
+Pooled over all rows of a temperature's runs, scored as in docs/decisions.md 1.25; the ceiling is the one of `results/s6/model_fit_3rc.md`.
 
 | T (degC) | runs | 2RC pooled RMSE (mV) | ceiling of 1.25 (mV) | second 3RC pooled RMSE (mV) | second 3RC change (%) |
 |---|---|---|---|---|---|

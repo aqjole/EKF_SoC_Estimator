@@ -29,8 +29,8 @@ from run_all import RUNS_DIR, load_traces
 
 
 INPUTS_DIR = RUNS_DIR / "c_inputs_3rcd0"
-REPORT_MD = REPO_DIR / "results" / "equivalence_3rcd0.md"
-REPORT_CSV = REPO_DIR / "results" / "equivalence_3rcd0.csv"
+REPORT_MD = REPO_DIR / "results" / "s11" / "equivalence_3rcd0.md"
+REPORT_CSV = REPO_DIR / "results" / "s11" / "equivalence_3rcd0.csv"
 EXPERIMENTS = ("exp1", "exp2", "exp3_low", "exp3_high", "exp3_ref", "exp4")
 IMPLEMENTATIONS = {"float": (partial(run_c, "float", model="3rcd0"), 0.1),
                    "double": (partial(run_c, "double", model="3rcd0"), 1e-3)}
@@ -83,7 +83,7 @@ def report_text(table, cfg, runs):
         "Written by `python/compare_c_3rcd0.py` (`make equiv-3rcd0`); decisions 1.46 and 1.54. The four-state C "
         "build (`-DEKF_USE_3RCD0=ON`, `c/tools/ekf_run_csv`) runs experiments 1, 2, 3 low, 3 high, 3 reference and 4 "
         f"on the {runs} runs with the frozen settings of "
-        f"`results/ekf_config.json` (q_soc = {cfg.q_soc:g}, q_v = {cfg.q_v:g}, r = {cfg.r:g}), each from its "
+        f"`results/s2/ekf_config.json` (q_soc = {cfg.q_soc:g}, q_v = {cfg.q_v:g}, r = {cfg.r:g}), each from its "
         "start row with dt = 0 there and the Python soc0, experiment 4 with its current offset. delta SoC = Python "
         "SoC - C SoC over every processed row, tails included, in pp; the Python SoC is the stored trace of "
         "`results/runs/3rcd0/`. The thresholds on max |delta SoC| are those of 1.46. The tool writes SoC with 10 "

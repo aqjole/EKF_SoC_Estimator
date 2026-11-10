@@ -73,7 +73,8 @@ def comparison_lines(frames, mix, standard, decided, grid_counts, replays):
              *guard_table(decided), "", f"**{'ADOPTED' if accepted else 'NOT ADOPTED'}.** "
              + ("The candidate settings become the Python 3RC-D0 incumbent."
                 if accepted else "The S2 settings remain the incumbent; the candidate JSON is experimental."), "",
-             "See [the complete search](../results/tuning_3rcd0.md) and [per-run results](../results/ekf_results_3rcd0n.csv).", ""]
+             "See the complete search in `results/s11/tuning_3rcd0.md` and per-run results in "
+             "`results/s11/ekf_results_3rcd0n.csv`.", ""]
     lines += split_lines(frames, mix, standard) + exp1_lines(frames)
     lines += ["## Grid winners and wrong-start peaks", "",
               "Best objective at each grid value of p0_v_std; diagnostics only, never used to choose "
