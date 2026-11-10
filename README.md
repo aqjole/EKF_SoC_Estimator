@@ -6,28 +6,31 @@ State-of-charge (SoC) estimation for a Li-ion cell with an equivalent-circuit mo
 
 ## Results at a glance
 
-The filter runs four experiments on every drive-cycle run: (1) the correct initial SoC, (2) an initial SoC 20 pp too low, (3) a restart mid-run at 50 % or 90 % SoC when the reference is 70 %, and (4) a +0.2 A current-sensor offset. Errors are SoC RMSE in percentage points (pp) of SoC.
+Every filter model run in all four experiments, scored the same way on all 63 runs (the 62 evaluation runs plus the tuning run, Mix 1 at 25 degC); diagnostic variants run on fewer cases stay in their stage reports. 3RC-D0 is the deployment model; the rows marked not adopted are negative results kept on purpose, as are the two S6 fits, which failed the open-loop gate and never reached the filter ([`results/summary.md`](results/summary.md)). [`results/README.md`](results/README.md) indexes every result file, [`docs/results.md`](docs/results.md) every table.
 
-3RC-D0 passed all six S10 guards. It lowered experiment-1 mean SoC RMSE from 2.00 to 0.98 pp across the 23 standard runs and lowered the worst run from 6.25 to 2.39 pp. The 40 Mix runs supplied the calibration data and share drive segments with the standard suite. [S10 results](docs/results.md#s10--drive-fitted-third-branch-with-v10-r1)
+The filter runs four experiments on every drive-cycle run: (1) the correct initial SoC, (2) an initial SoC 20 pp too low, (3) a restart mid-run at 50 % or 90 % SoC when the reference is 70 %, and (4) a +0.2 A current-sensor offset. Errors are SoC RMSE in percentage points (pp) of SoC. Experiments 2, 3 low and 3 high are the wrong starts; the last column counts those whose largest SoC error exceeds 25 pp.
 
-The historical S7 comparison shows experiment 1 per temperature for v1.0 2RC and 2RC-I (R1 depends on current).
+<!-- results:scoreboard:begin -->
 
-<!-- results:summary_exp1:begin -->
+**Filter models**
 
-**Experiment 1**
+Mean SoC RMSE in pp over the 63 runs of each model's experiments CSV. The Mix and 63-run columns are not validation: 3RC-D and 3RC-D0 are fitted on the Mix runs (decisions 1.41, 1.44), 3RC-D0-N is tuned (1.49) and 3RC-D0-P screened (1.57) on them, and every filter but 3RC-D0-N runs the noise settings of 1.15, tuned on Mix 1 at 25 degC (3RC-D0-P with a 10 mV branch prior at a start below 0.5 A). The standard runs are a repeatedly inspected regression set (1.32, 1.44). A status follows its stage's adoption rule, not these means; from S9 on that rule is judged on the standard runs, with guards on all runs and the Mix runs added in S11 and S12 (1.48).
 
-SoC RMSE with the correct initial SoC. The mean decides the verdict (docs/decisions.md 1.29); the median and the number of runs whose RMSE is lower with 2RC-I show how the change spreads over the runs.
+| Model | Stage | Status | Decision | Exp 1, 63 runs | Exp 1, 23 standard | Exp 1, 40 Mix | Exp 1, worst run | Exp 2 | Exp 4 | Wrong starts above 25 pp (of 189) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2RC | S2 | v1.0 baseline, the default C build | 1.15, 1.55 | 2.10 | 1.79 | 2.28 | 9.12 (Mix 8, -20 degC) | 2.84 | 2.31 | 19 |
+| 2RC-I | S7 | adopted, replaced in S10 | 1.31, 1.45 | 1.92 | 2.00 | 1.88 | 6.34 (Mix 6, -20 degC) | 2.49 | 2.17 | 17 |
+| 2RC-Id | S8 | not adopted | 1.34 | 1.77 | 1.60 | 1.88 | 6.98 (Mix 6, -20 degC) | 2.27 | 1.84 | 15 |
+| 2RC-Ic | S8 | not adopted | 1.36 | 1.86 | 1.85 | 1.87 | 6.61 (Mix 6, -20 degC) | 2.41 | 2.08 | 16 |
+| 2RC-Il | S8 | not adopted | 1.38 | 1.99 | 2.06 | 1.94 | 6.47 (Mix 6, -20 degC) | 2.61 | 2.06 | 17 |
+| 3RC-D | S9 | not adopted | 1.43 | 1.16 | 1.60 | 0.91 | 6.40 (US06, -10 degC) | 3.94 | 1.44 | 30 |
+| 3RC-D0 | S10 | deployment model | 1.45, 1.54, 1.55 | 1.17 | 0.98 | 1.27 | 6.77 (Mix 8, -10 degC) | 4.69 | 1.50 | 30 |
+| 3RC-D0-N | S11 | not adopted | 1.51 | 1.14 | 1.23 | 1.09 | 4.92 (Mix 8, -20 degC) | 1.22 | 1.38 | 45 |
+| 3RC-D0-P | S12 | not adopted | 1.58 | 1.10 | 1.03 | 1.14 | 6.77 (Mix 8, -10 degC) | 1.38 | 1.43 | 13 |
 
-| T (degC) | evaluation runs | mean 2RC (pp) | mean 2RC-I (pp) | mean change (pp) | median 2RC (pp) | median 2RC-I (pp) | runs lower with 2RC-I |
-|---|---|---|---|---|---|---|---|
-| 40 | 7 | 0.79 | 0.74 | -0.04 | 0.73 | 0.72 | 6 of 7 |
-| 25 | 10 | 0.87 | 0.86 | -0.01 | 0.87 | 0.87 | 7 of 10 |
-| 10 | 11 | 1.18 | 1.21 | +0.03 | 1.14 | 1.11 | 9 of 11 |
-| 0 | 11 | 2.04 | 1.74 | -0.29 | 1.87 | 1.66 | 10 of 11 |
-| -10 | 11 | 3.43 | 3.21 | -0.22 | 2.83 | 3.00 | 9 of 11 |
-| -20 | 12 | 3.70 | 3.24 | -0.46 | 3.00 | 2.99 | 8 of 12 |
+<!-- results:scoreboard:end -->
 
-<!-- results:summary_exp1:end -->
+3RC-D0 passed all six S10 guards against the incumbent 2RC-I: it lowered the experiment-1 mean SoC RMSE over the 23 standard runs from 2.00 to 0.98 pp and the worst standard run from 6.25 to 2.39 pp. The 40 Mix runs supplied the calibration data and share drive segments with the standard suite. [S10 results](docs/results.md#s10--drive-fitted-third-branch-with-v10-r1)
 
 The reference SoC is itself coulomb counting, so with a correct start and an exact current sensor plain coulomb counting is near-perfect here (0.03 to 0.06 pp). The EKF earns its place when that fails: in experiments 2 to 4, and under a 5 % capacity error, where from 40 to 10 degC the EKF stays at 0.6 to 1.4 pp while coulomb counting rises to 2.3 to 2.8 pp (`results/s5/sensitivity.md`).
 
@@ -61,7 +64,7 @@ The C port of the deployment model, 3RC-D0 with the S2 settings, against the Pyt
 
 *Per-run SoC RMSE of the v1.0 2RC filter in all four experiments (experiment 3 split into its low and high start).*
 
-On a Cortex-M4F in float32 the library takes 19,388 B of flash, 17,432 B of it the const parameter tables, no .data or .bss, and 60 B of state per filter, owned by the caller; it needs no double-precision helpers (`results/s3/c_footprint.md`). The 3RC-D0 build, the deployment model since S11, takes 21,888 B of flash, 19,860 B of it the tables, and 92 B of state per filter; its largest static stack frame is 376 B and it also needs no double-precision helpers (`results/s11/c_footprint_3rcd0.md`). All tables and plots of every stage are in [`docs/results.md`](docs/results.md).
+On a Cortex-M4F in float32 the library takes 19,388 B of flash, 17,432 B of it the const parameter tables, no .data or .bss, and 60 B of state per filter, owned by the caller; it needs no double-precision helpers (`results/s3/c_footprint.md`). The 3RC-D0 build, the deployment model since S11, takes 21,888 B of flash, 19,860 B of it the tables, and 92 B of state per filter; its largest static stack frame is 376 B and it also needs no double-precision helpers (`results/s11/c_footprint_3rcd0.md`).
 
 ## Claims
 

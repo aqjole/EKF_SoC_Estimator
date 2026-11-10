@@ -20,7 +20,7 @@ from ekfsoc.constants import REPO_DIR
 
 # (marker key, results file, heading path): a key with several entries gets their sections in this order.
 README_SOURCES = [
-    ("summary_exp1", "results/s7/model_compare_r1i.md", ("Experiment 1",)),
+    ("scoreboard", "results/summary.md", ("Filter models",)),
     ("summary_equivalence", "results/s3/equivalence.md", ("Result",)),
     ("summary_equivalence_3rcd0", "results/s11/equivalence_3rcd0.md", ("Result",)),
 ]
