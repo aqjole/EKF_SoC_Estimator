@@ -18,16 +18,16 @@ counter use the project sign, I = -Current (positive = discharge).
 """
 
 import math
-from pathlib import Path
 
 import numpy as np
 from scipy.interpolate import PchipInterpolator
 
 from ekfsoc import rawio
+from ekfsoc.constants import RAW_DIR, REPO_DIR
+from ekfsoc.hppc import HIGH_LIMIT_V, LOW_LIMIT_V, PULSE_MAX_S
+from ekfsoc.loader import GAP_S
 
 
-REPO_DIR = Path(__file__).resolve().parent.parent
-RAW_DIR = REPO_DIR / "data" / "raw"
 OUT_PATH = REPO_DIR / "results" / "s0" / "data_checks.md"
 
 # Folder name -> chamber temperature it stands for (degC); the temperature grid nodes.
@@ -51,13 +51,9 @@ FULL_CURRENT_A = 0.05        # ... and |I| below this
 LINK_GAP_S = 300.0           # a drive file that opens under load counts as linked to a full charge this close after it
 DT_BAND_S = (0.09, 0.11)     # a drive-cycle step in this band is a normal 0.1 s step
 LONG_STEP_S = 0.2            # count drive-cycle steps above this
-GAP_S = 1.0                  # the spec: steps longer than 1 s are recorded as gaps
 CC_CURRENT_A = 2.9           # a Charge file has a 1C CC phase if its current exceeds this
-CV_VOLTAGE_V = 4.195         # charge samples at or above this voltage are in the CV phase
+CV_PHASE_V = 4.195           # charge samples at or above this voltage are in the CV phase
 CV_START_V = 4.1995          # the C/20 charge enters CV at the first sample at or above this voltage
-LOW_LIMIT_V = 2.8005         # a sample at or below this voltage sits at the 2.8 V cutoff
-HIGH_LIMIT_V = 4.1995        # a charge pulse that reaches this voltage is limited by the 4.2 V CV limit
-PULSE_MAX_S = 12.0           # an HPPC current step this short or shorter is a pulse; longer ones are moves or charges
 FULL_PULSE_S = 9.9           # a pulse that lasts at least this long ran its full 10 s
 SHORT_PULSE_S = 9.5          # a discharge pulse shorter than this was cut by the 2.8 V limit
 FIRST_SAMPLE_FRACTION = 0.98 # R0 rule: the current must reach 98 % of the command ...
@@ -423,7 +419,7 @@ def scan_charge_file(record, data):
     last_positive = np.where(current > 0.0)[0][-1]
     valid = np.where(voltage > 0.0)[0]
     cc = current > CC_CURRENT_A
-    cv = (current > 0.0) & (voltage >= CV_VOLTAGE_V)
+    cv = (current > 0.0) & (voltage >= CV_PHASE_V)
     record["charge"] = {
         "peak_a": float(np.max(current)),
         "has_cc": bool(np.any(cc)),
@@ -1322,7 +1318,7 @@ def section_charges(records):
     lines = ["## 9. Charge files", ""]
     lines.append(f"Source: the {len(charges)} Charge files (`*_Charge*.mat` in every folder). A row is *charging* "
                  f"when Current > {fmt(1000 * FLOW_CURRENT_A, 0)} mA. *CC phase*: Current above {CC_CURRENT_A} A. "
-                 f"*CV voltage*: median Voltage over rows with Current > 0 and Voltage >= {CV_VOLTAGE_V} V. "
+                 f"*CV voltage*: median Voltage over rows with Current > 0 and Voltage >= {CV_PHASE_V} V. "
                  "*Last charge current*: Current on the last row with Current > 0. *Rest before*: first charging row "
                  "minus the first row; *rest after*: last row with V > 0 minus the last row with Current > 0 (Time, s).")
     lines.append("")

@@ -29,8 +29,8 @@ from export_params import PARAMS_CSV, write_text
 from fit_r1_charge import R1_CHARGE_CSV
 from fit_r1_current import R1_CURRENT_CSV
 from run_all import RESULTS_CSV
-from s8_compare import (RECOMPUTE_WITHIN, comparison_lines, decided_guards, guard_rows, guard_table,
-                        negative_share_lines, open_loop_numbers)
+from s8_compare import (comparison_lines, decided_guards, guard_rows, guard_section, negative_share_lines,
+                        open_loop_numbers)
 
 
 RUNS_DIR = REPO_DIR / "results" / "runs" / "r1c"
@@ -53,7 +53,6 @@ def scored_frame(scored):
 
 def compare_text(results, tables, open_loop, bands, ratios, guards):
     """Text of results/s8/model_compare_r1c.md."""
-    adopted = all(passed for _, _, passed, _ in guards)
     lines = [
         "# Model comparison: 2RC, 2RC-I, 2RC-Id and 2RC-Ic (S8, step B)", "",
         "Written by `python/compare_r1c.py` (`make ekf-r1c`). Do not edit by hand.", "",
@@ -66,16 +65,7 @@ def compare_text(results, tables, open_loop, bands, ratios, guards):
     ]
     lines += comparison_lines(results, tables, open_loop, bands, MODELS, CANDIDATE, INCUMBENT)
     lines += negative_share_lines(bands, ratios, CANDIDATE)
-    lines += ["", "## Guards and adoption verdict", "",
-              f"The guards of docs/decisions.md 1.32, {CANDIDATE} against the incumbent {INCUMBENT}, which is also the "
-              "model S8 starts from, so the stage-budget check is the same comparison. Values are those of the results "
-              f"CSVs (4 decimals); a guard whose value lies within {RECOMPUTE_WITHIN:g} of its limit is recomputed from "
-              "unrounded values, which decide (1.35).", ""]
-    lines += guard_table(guards)
-    recomputed = [f"{name} (unrounded margin {margin:.2e})" for name, value, _, margin in guards
-                  if "recomputed" in value]
-    lines += ["", f"Guards recomputed from unrounded values: {', '.join(recomputed) or 'none'}.", "",
-              f"**{'ADOPTED' if adopted else 'NOT ADOPTED'}.**"]
+    lines += guard_section(guards, CANDIDATE, INCUMBENT)
     return "\n".join(lines) + "\n"
 
 

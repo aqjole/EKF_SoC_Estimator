@@ -33,8 +33,8 @@ from fit_all import load_test
 from fit_r1_current import PULSES_CSV, R1_CURRENT_CSV
 from fit_r1_low import FIT_TEMPS_DEGC, R1_LOW_CSV
 from run_all import RESULTS_CSV
-from s8_compare import (RATIO_CURRENT_A, RATIO_SOC, RECOMPUTE_WITHIN, comparison_lines, decided_guards, guard_rows,
-                        guard_table, open_loop_numbers, r1_ratio)
+from s8_compare import (RATIO_CURRENT_A, RATIO_SOC, comparison_lines, decided_guards, guard_rows, guard_section,
+                        open_loop_numbers, r1_ratio)
 
 
 RUNS_DIR = REPO_DIR / "results" / "runs" / "r1l"
@@ -95,7 +95,6 @@ def low_share_lines(params, ratios):
 
 def compare_text(results, tables, open_loop, bands, share_lines, guards):
     """Text of results/s8/model_compare_r1l.md."""
-    adopted = all(passed for _, _, passed, _ in guards)
     lines = [
         "# Model comparison: 2RC, 2RC-I and 2RC-Il (S8, step C)", "",
         "Written by `python/compare_r1l.py` (`make ekf-r1l`). Do not edit by hand.", "",
@@ -113,18 +112,9 @@ def compare_text(results, tables, open_loop, bands, share_lines, guards):
     ]
     lines += comparison_lines(results, tables, open_loop, bands, MODELS, CANDIDATE, INCUMBENT)
     lines += share_lines
-    lines += ["", "## Guards and adoption verdict", "",
-              f"The guards of docs/decisions.md 1.32, {CANDIDATE} against the incumbent {INCUMBENT}, which is also the "
-              "model S8 starts from, so the stage-budget check is the same comparison. Values are those of the results "
-              f"CSVs (4 decimals); a guard whose value lies within {RECOMPUTE_WITHIN:g} of its limit is recomputed from "
-              "unrounded values, which decide (1.35).", ""]
-    lines += guard_table(guards)
-    recomputed = [f"{name} (unrounded margin {margin:.2e})" for name, value, _, margin in guards
-                  if "recomputed" in value]
-    lines += ["", f"Guards recomputed from unrounded values: {', '.join(recomputed) or 'none'}. Guard 2 is recomputed "
-              f"whenever a temperature's change is exactly 0, as at {UNSCALED_TEMP_DEGC} degC by construction; an "
-              "unchanged mean does not count as lower (1.37).", "",
-              f"**{'ADOPTED' if adopted else 'NOT ADOPTED'}.**"]
+    lines += guard_section(guards, CANDIDATE, INCUMBENT,
+                           f" Guard 2 is recomputed whenever a temperature's change is exactly 0, as at "
+                           f"{UNSCALED_TEMP_DEGC} degC by construction; an unchanged mean does not count as lower (1.37).")
     return "\n".join(lines) + "\n"
 
 

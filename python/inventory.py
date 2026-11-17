@@ -15,15 +15,13 @@ number is measured from the files; nothing is copied from the readme.
 
 import datetime
 import math
-from pathlib import Path
 
 import numpy as np
 
 from ekfsoc import rawio
+from ekfsoc.constants import RAW_DIR, REPO_DIR
 
 
-REPO_DIR = Path(__file__).resolve().parent.parent
-RAW_DIR = REPO_DIR / "data" / "raw"
 RESULTS_DIR = REPO_DIR / "results"
 
 # Folder name -> chamber temperature it stands for (degC).
@@ -47,7 +45,7 @@ EXPECTED_TESTS.update({drive_type: 1 for drive_type in DRIVE_TYPES})
 # Thresholds. Each one is stated in the legend of the file it affects.
 REST_CURRENT_A = 0.05        # |I| below this is a rest (50 mA, the charge cutoff current)
 FULL_VOLTAGE_V = 4.15        # a rest above this voltage counts as a full charge
-CV_VOLTAGE_V = 4.19          # the charge before that rest must have reached the 4.2 V CV phase
+CV_REACHED_V = 4.19          # the charge before that rest must have reached the 4.2 V CV phase
 LINK_GAP_S = 300.0           # a rest in an earlier file counts only if it ends this close to the start
 FLOW_CURRENT_A = 0.05        # |I| above this is a discharge (I < 0) or a charge/regen (I > 0)
 GAP_REPORT_S = 1.0           # the spec: the S1 loader records time gaps longer than 1 s
@@ -483,7 +481,7 @@ def full_charge_start(record, folder_records):
         gap_s = start_s - when
         v_rest = other["voltage"][k]
         i_rest = other["current"][k]
-        reached_cv = nan_max(other["voltage"][:k + 1]) >= CV_VOLTAGE_V
+        reached_cv = nan_max(other["voltage"][:k + 1]) >= CV_REACHED_V
         if gap_s <= LINK_GAP_S and abs(i_rest) < REST_CURRENT_A and v_rest > FULL_VOLTAGE_V and reached_cv:
             return f"yes: rest at {v_rest:.3f} V ends {gap_s:.0f} s before start ({short_file(other['file'])})"
         earlier_text = (f"last earlier sample: {v_rest:.3f} V at {fmt(i_rest, 3)} A, {gap_s:.0f} s before "
@@ -732,7 +730,7 @@ def write_inventory(folders, records_by_folder, failures, out_path):
                  f"|I| < {REST_CURRENT_A * 1000:.0f} mA, i.e. the cell sits at its full-charge rest voltage when the "
                  "file starts (`yes: first sample ...`). A file that opens with current already flowing also counts "
                  "as `yes` when the last sample logged before it in the same folder is such a rest, at most "
-                 f"{LINK_GAP_S:.0f} s earlier, in a file that reached {CV_VOLTAGE_V} V (CV phase) before it "
+                 f"{LINK_GAP_S:.0f} s earlier, in a file that reached {CV_REACHED_V} V (CV phase) before it "
                  "(`yes: rest at ...`); this covers e.g. the C/20, 0.5C and 2C tests and the Mixed4 and Mixed8 runs, "
                  f"which start straight after their Charge file. `no` means the file opens at rest at or below "
                  f"{FULL_VOLTAGE_V} V. `unclear` means the file opens under load and no such rest is logged before "

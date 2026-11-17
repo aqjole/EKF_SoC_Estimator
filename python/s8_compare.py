@@ -192,3 +192,19 @@ def guard_table(guards):
     """Lines of the guard table."""
     return md_table(["guard", "value", "result"], [[name, value, "pass" if passed else "FAIL"]
                                                    for name, value, passed, _ in guards])
+
+
+def guard_section(guards, candidate, incumbent, recompute_note=""):
+    """Lines of the guards and the verdict under the 1.35 rounding rule; recompute_note follows the recomputed list."""
+    adopted = all(passed for _, _, passed, _ in guards)
+    lines = ["", "## Guards and adoption verdict", "",
+             f"The guards of docs/decisions.md 1.32, {candidate} against the incumbent {incumbent}, which is also the "
+             "model S8 starts from, so the stage-budget check is the same comparison. Values are those of the results "
+             f"CSVs (4 decimals); a guard whose value lies within {RECOMPUTE_WITHIN:g} of its limit is recomputed from "
+             "unrounded values, which decide (1.35).", ""]
+    lines += guard_table(guards)
+    recomputed = [f"{name} (unrounded margin {margin:.2e})" for name, value, _, margin in guards
+                  if "recomputed" in value]
+    lines += ["", f"Guards recomputed from unrounded values: {', '.join(recomputed) or 'none'}.{recompute_note}", "",
+              f"**{'ADOPTED' if adopted else 'NOT ADOPTED'}.**"]
+    return lines

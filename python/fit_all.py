@@ -28,6 +28,7 @@ from ekfsoc.constants import FOLDER_TEMP, RAW_DIR, REPO_DIR, SOC_GRID, T_GRID_DE
 from ekfsoc.fit import FITTED_TABLES, fit_hppc_run
 from ekfsoc.hppc import rest_points, segment_hppc
 from ekfsoc.loader import find_runs, load_run, soc_ref
+from ekfsoc.metrics import rms
 from ekfsoc.model import Params, simulate_open_loop
 from ekfsoc.ocv import build_ocv, discharge_curve, rest_offsets
 from ekfsoc.plots import plot_docv, plot_model_fit, plot_ocv, plot_params
@@ -123,11 +124,6 @@ def write_ocv_correction_csv(c20_runs, rest_points_by_temp):
 
 
 # --- open-loop validation ------------------------------------------------------------------------
-
-
-def rms(values):
-    """Root mean square of an array."""
-    return float(np.sqrt(np.mean(values**2)))
 
 
 def validate_us06(params, temp):
