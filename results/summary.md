@@ -7,6 +7,25 @@ The 23 standard runs are a previously inspected regression suite. They informed 
 
 Every model's 63 runs are scored the same way, the tuning run (Mix 1 at 25 degC) included. The stage reports of S2 to S8 score 62 runs and flag the tuning run, so their means differ slightly from these. The standard runs are the UDDS, HWFET, LA92 and US06 runs, the Mix runs the others (`fit_3rcd.drive_split`). Experiment 1 starts at the correct SoC, experiment 2 at a SoC 20 pp too low, experiment 3 restarts at 50 % (low) or 90 % (high) when the reference is 70 %, and experiment 4 adds a current offset. A wrong start is a case of experiment 2, 3 low or 3 high; it counts when its largest SoC error exceeds 25 pp (guard 7 of decision 1.48). Each status is the one the listed entries of `docs/decisions.md` record.
 
+## Coulomb counting and the two main filters
+
+Mean SoC RMSE in pp over all 63 runs of each experiment. Coulomb counting integrates the current the filter sees, from the filter's start value. 2RC is the first model (the v1.0 baseline) and 3RC-D0 the final one (the deployment model); the 63 runs include the 40 mixed-cycle (Mix) runs 3RC-D0 is fitted on, so its means here are partly in-sample.
+
+| Estimator | Exp 1, correct start | Exp 2, start 20 pp low | Exp 3, restart at 50 % | Exp 3, restart at 90 % | Exp 4, current offset |
+|---|---|---|---|---|---|
+| Coulomb counting | 0.04 | 20.03 | 20.02 | 19.98 | 7.80 |
+| EKF, 2RC | 2.10 | 2.84 | 4.21 | 3.86 | 2.31 |
+| EKF, 3RC-D0 | 1.17 | 4.69 | 2.37 | 1.78 | 1.50 |
+
+## The two main filters by temperature
+
+Experiment-1 mean SoC RMSE in pp on the 23 standard runs (UDDS, HWFET, LA92 and US06). No table of either filter is fitted on these runs, but every stage has inspected them and the final model was selected by its results on them: they are a regression set, not unseen data.
+
+| Estimator | 40 degC | 25 degC | 10 degC | 0 degC | -10 degC | -20 degC | All 23 runs |
+|---|---|---|---|---|---|---|---|
+| EKF, 2RC | 0.84 | 0.87 | 1.20 | 1.66 | 3.04 | 2.88 | 1.79 |
+| EKF, 3RC-D0 | 0.46 | 0.61 | 0.86 | 1.23 | 1.42 | 1.22 | 0.98 |
+
 ## Filter models
 
 Mean SoC RMSE in pp over the 63 runs of each model's experiments CSV. The Mix and 63-run columns are not validation: 3RC-D and 3RC-D0 are fitted on the Mix runs (decisions 1.41, 1.44), 3RC-D0-N is tuned (1.49) and 3RC-D0-P screened (1.57) on them, and every filter but 3RC-D0-N runs the noise settings of 1.15, tuned on Mix 1 at 25 degC (3RC-D0-P with a 10 mV branch prior at a start below 0.5 A). The standard runs are a repeatedly inspected regression set (1.32, 1.44). A status follows its stage's adoption rule, not these means; from S9 on that rule is judged on the standard runs, with guards on all runs and the Mix runs added in S11 and S12 (1.48).

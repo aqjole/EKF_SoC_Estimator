@@ -20,12 +20,13 @@ from ekfsoc.constants import REPO_DIR
 
 # (marker key, results file, heading path): a key with several entries gets their sections in this order.
 README_SOURCES = [
-    ("scoreboard", "results/summary.md", ("Filter models",)),
-    ("summary_equivalence", "results/s3/equivalence.md", ("Result",)),
+    ("headline_experiments", "results/summary.md", ("Coulomb counting and the two main filters",)),
+    ("headline_temperature", "results/summary.md", ("The two main filters by temperature",)),
     ("summary_equivalence_3rcd0", "results/s11/equivalence_3rcd0.md", ("Result",)),
 ]
 
 RESULTS_SOURCES = [
+    ("scoreboard", "results/summary.md", ("Filter models",)),
     ("capacity", "results/s0/capacity.md", ("C/20 and 1C capacities per folder",)),
     ("model_fit", "results/s1/model_fit.md", ("Open-loop voltage error on US06",)),
     ("ocv_correction", "results/s1/params.md", ("OCV correction from the HPPC rest voltages",)),

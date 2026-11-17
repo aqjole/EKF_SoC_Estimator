@@ -3,12 +3,15 @@ result files (decision 1.59).
 
 Run from the repo root:  .venv/bin/python python/summarize.py   (or: make summary; the US06 check needs data/raw/)
 
-  1. Filter models: one row per model with an experiments CSV, every one of its 63 runs scored the same way (the
+  1. Coulomb counting and the two main filters: the mean SoC RMSE of coulomb counting, the v1.0 baseline and the
+     deployment model in every scored experiment, over all 63 runs.
+  2. The two main filters by temperature: their experiment-1 mean on the 23 standard runs at each temperature.
+  3. Filter models: one row per model with an experiments CSV, every one of its 63 runs scored the same way (the
      tuning run included): experiment-1 mean SoC RMSE over all runs, the 23 standard and the 40 Mix runs, the worst
      experiment-1 run, the experiment-2 and -4 means and the wrong-start cases above 25 pp.
-  2. Experiment 1 by temperature: the experiment-1 mean of each model at each temperature.
-  3. Open-loop voltage check: the US06 25 degC open-loop RMSE of each model's committed tables against the S1 gate.
-  4. C builds: flash and the equivalence maxima of the 2RC and 3RC-D0 builds, read from the tables of their reports.
+  4. Experiment 1 by temperature: the experiment-1 mean of each model at each temperature.
+  5. Open-loop voltage check: the US06 25 degC open-loop RMSE of each model's committed tables against the S1 gate.
+  6. C builds: flash and the equivalence maxima of the 2RC and 3RC-D0 builds, read from the tables of their reports.
 MODELS holds the hand-entered status of each model and the decision entries that record it; the fixed sentences of
 scoring_section, filter_section and open_loop_section state the scoring conventions and the role of each run set.
 """
@@ -38,7 +41,7 @@ from fit_3rc_rest import PARAMS_REST_CSV
 from fit_3rcd import load_params_3rcd
 from fit_3rcd0 import load_candidate
 from fit_all import GATE_RMSE_MV, GATE_TEMP_DEGC, validate_us06
-from run_all import RESULTS_CSV
+from run_all import RESULTS_CSV, SCORED
 from s10_protocol import DISCLOSURE, splits
 from s11_evaluate import WRONG
 from s12_prescreen import PEAK_LIMIT_PP, temperature_table, wrong_start_peaks
@@ -58,6 +61,14 @@ MODELS = (
     ("3RC-D0-N", RESULTS_3RCD0N_CSV, "not adopted", "1.51"),
     ("3RC-D0-P", RESULTS_3RCD0P_CSV, "not adopted", "1.58"),
 )
+
+# The two main filters, the rows of the two headline tables: the v1.0 baseline and the deployment model.
+HEADLINE = ("2RC", "3RC-D0")
+
+# The column title of each scored experiment in the first headline table.
+EXPERIMENT_TITLES = {"exp1": "Exp 1, correct start", "exp2": "Exp 2, start 20 pp low",
+                     "exp3_low": "Exp 3, restart at 50 %", "exp3_high": "Exp 3, restart at 90 %",
+                     "exp4": "Exp 4, current offset"}
 
 # (tables, the folder of their stage, loader) for the open-loop check; 3RC-D0-N and 3RC-D0-P run the 3RC-D0 tables.
 TABLES = (
@@ -97,6 +108,44 @@ def model_scores(frame, mix, standard):
             "worst_run": f"{worst['cycle']}, {worst['T_degC']} degC",
             "exp2": experiment(frame, "exp2")["rmse_pp"].mean(), "exp4": experiment(frame, "exp4")["rmse_pp"].mean(),
             "above": wrong_start_peaks(frame)[0]}
+
+
+def experiment_means(frame, column):
+    """The mean of column over the runs of each scored experiment, as the cells of a table row."""
+    means = frame.groupby("experiment")[column].mean()
+    return [f"{means[name]:.2f}" for name in SCORED]
+
+
+def standard_means(frame, standard):
+    """Experiment-1 mean SoC RMSE on the standard runs: per temperature (a Series) and over all of them."""
+    first = subset(experiment(frame, "exp1"), standard)
+    return first.groupby("T_degC")["rmse_pp"].mean(), first["rmse_pp"].mean()
+
+
+def headline_sections(frames, mix, standard):
+    """The two tables the README leads with: every experiment against coulomb counting, then experiment 1 per
+    temperature on the standard runs."""
+    baseline, deployment = HEADLINE
+    runs = len(mix) + len(standard)
+    rows = [["Coulomb counting", *experiment_means(frames[baseline], "cc_rmse_pp")],
+            *[[f"EKF, {name}", *experiment_means(frames[name], "rmse_pp")] for name in HEADLINE]]
+    by_temperature = []
+    for name in HEADLINE:
+        per_temp, overall = standard_means(frames[name], standard)
+        by_temperature.append([f"EKF, {name}", *[f"{per_temp[temp]:.2f}" for temp in T_GRID_DEGC], f"{overall:.2f}"])
+    return ["## Coulomb counting and the two main filters", "",
+            f"Mean SoC RMSE in pp over all {runs} runs of each experiment. Coulomb counting integrates the current "
+            f"the filter sees, from the filter's start value. {baseline} is the first model (the v1.0 baseline) and "
+            f"{deployment} the final one (the deployment model); the {runs} runs include the {len(mix)} mixed-cycle "
+            f"(Mix) runs {deployment} is fitted on, so its means here are partly in-sample.",
+            "",
+            *md_table(["Estimator", *[EXPERIMENT_TITLES[name] for name in SCORED]], rows), "",
+            "## The two main filters by temperature", "",
+            f"Experiment-1 mean SoC RMSE in pp on the {len(standard)} standard runs (UDDS, HWFET, LA92 and US06). No "
+            "table of either filter is fitted on these runs, but every stage has inspected them and the final model "
+            "was selected by its results on them: they are a regression set, not unseen data.", "",
+            *md_table(["Estimator", *[f"{temp} degC" for temp in T_GRID_DEGC], f"All {len(standard)} runs"],
+                      by_temperature)]
 
 
 def filter_section(frames, mix, standard):
@@ -191,6 +240,7 @@ def summary_text(frames, mix, standard):
              "What every result file holds and which script writes it: [`results/README.md`](README.md).",
              DISCLOSURE, "",
              *scoring_section(frames[MODELS[0][0]], mix, standard), "",
+             *headline_sections(frames, mix, standard), "",
              *filter_section(frames, mix, standard), "",
              *temperature_section(frames), "",
              *open_loop_section(), "",

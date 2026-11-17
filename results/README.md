@@ -159,7 +159,7 @@ There is no `s4/`: S4 wrote the README, not a result file.
 
 ## summary.md
 
-[`summary.md`](summary.md) is written by `python/summarize.py` (`make summary`) from the files above: one row per filter model with its status, the experiment means, the US06 open-loop check of every model's tables and the two C builds.
+[`summary.md`](summary.md) is written by `python/summarize.py` (`make summary`) from the files above: coulomb counting, the baseline and the deployment model in every experiment and per temperature (the two tables the README leads with), one row per filter model with its status, the experiment means, the US06 open-loop check of every model's tables and the two C builds.
 
 ## plots/
 

@@ -7,7 +7,7 @@ import pytest
 
 from ekfsoc.experiments import RunSpec
 from run_all import SCORED
-from summarize import MODELS, first_table, model_scores
+from summarize import MODELS, experiment_means, first_table, model_scores, standard_means
 
 
 def spec(name, folder, temp, cycle):
@@ -60,6 +60,14 @@ def test_experiment_2_and_4_means():
 
 def test_wrong_starts_count_only_peaks_above_25_pp_in_experiments_2_and_3():
     assert SCORES["above"] == 2
+
+
+def test_experiment_means_follow_the_scored_experiments_in_order():
+    assert experiment_means(scored(), "rmse_pp") == ["3.00", "3.00", "1.00", "1.00", "0.50"]
+
+
+def test_standard_mean_per_temperature_leaves_out_the_mix_runs():
+    assert standard_means(scored(), STANDARD)[0][-10] == pytest.approx(6.0)
 
 
 def test_a_missing_run_stops_the_scoring():
