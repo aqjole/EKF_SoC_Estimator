@@ -1,6 +1,6 @@
 # Sensitivity (S5)
 
-Written by `python/sensitivity.py` (`make sensitivity`) from `results/s5/sensitivity.csv`. Do not edit by hand. Experiment 1 on the 63 runs (the evaluation set and the tuning cycle) with the frozen noise settings of `results/s2/ekf_config.json` (q_soc = 1e-07 1/s, q_v = 1e-06 V^2/s, r = 0.01 V^2), with a wrong filter capacity (docs/decisions.md 1.18) and at 1 Hz (docs/decisions.md 1.19).
+Written by `python/evaluate/sensitivity.py` (`make sensitivity`) from `results/s5/sensitivity.csv`. Do not edit by hand. Experiment 1 on the 63 runs (the evaluation set and the tuning cycle) with the frozen noise settings of `results/s2/ekf_config.json` (q_soc = 1e-07 1/s, q_v = 1e-06 V^2/s, r = 0.01 V^2), with a wrong filter capacity (docs/decisions.md 1.18) and at 1 Hz (docs/decisions.md 1.19).
 
 ## Capacity error: the filter capacity at -5 % and +5 %
 

@@ -9,8 +9,8 @@ from ekfsoc.ekf import Ekf, EkfConfig
 from ekfsoc.fit import rc_voltage
 from ekfsoc.model import Params, R1Reader, interp2, interp_current, simulate_open_loop
 from ekfsoc.r1_current import read_r1_current, write_r1_current
-from export_params import PARAMS_CSV
-from fit_r1_current import I_GRID_A, window_r1
+from fit.export_params import PARAMS_CSV
+from fit.fit_r1_current import I_GRID_A, window_r1
 
 
 def with_current_axis(params, scales):

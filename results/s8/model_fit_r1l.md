@@ -1,6 +1,6 @@
 # Model fit, 2RC-Il (S8, step C)
 
-Written by `python/fit_r1_low.py` (`make fit-r1l`). Do not edit by hand.
+Written by `python/fit/fit_r1_low.py` (`make fit-r1l`). Do not edit by hand.
 
 The R1 table of the 2RC-Il model (docs/decisions.md 1.37): the 2RC-I table of `results/s7/r1_current.csv` scaled at low current by factors fitted on the PausCycl files, which are not in the evaluation set.
 

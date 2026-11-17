@@ -1,4 +1,5 @@
-"""Smoke test of python/run_all.py on the committed fixture (one short run, no raw data), with a temporary cache folder.
+"""Smoke test of python/evaluate/run_all.py on the committed fixture (one short run, no raw data), with a temporary
+cache folder.
 
 The fixture is a 397-row 1C discharge at 25 degC (python/tests/fixtures/README.md). It is scored as a US06 run:
 the cycle name only labels the rows. process_run is called in this process, as a pool worker would call it.
@@ -10,9 +11,9 @@ import shutil
 import numpy as np
 import pytest
 
-import run_all
 from ekfsoc.constants import REPO_DIR
 from ekfsoc.experiments import RunSpec
+from evaluate import run_all
 
 FIXTURE = REPO_DIR / "python" / "tests" / "fixtures" / "lghg2_excerpt.mat"
 TRACES_NAME = "25degC__lghg2_excerpt.npz"

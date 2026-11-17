@@ -1,6 +1,6 @@
 # Model fit, 2RC-Ic (S8, step B)
 
-Written by `python/fit_r1_charge.py` (`make fit-r1c`). Do not edit by hand.
+Written by `python/fit/fit_r1_charge.py` (`make fit-r1c`). Do not edit by hand.
 
 The charge-side R1 of the 2RC-Ic model (docs/decisions.md 1.35), read under a negative held current; the discharge side is the 2RC-I table of `results/s7/r1_current.csv`.
 

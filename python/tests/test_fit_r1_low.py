@@ -11,9 +11,9 @@ import pytest
 from ekfsoc.constants import REPO_DIR
 from ekfsoc.loader import soc_ref
 from ekfsoc.model import Params, simulate_open_loop
-from export_params import PARAMS_CSV
-from fit_r1_current import level_nodes
-from fit_r1_low import FIT_TEMPS_DEGC, fit_factors, low_params, scaled_level_nodes
+from fit.export_params import PARAMS_CSV
+from fit.fit_r1_current import level_nodes
+from fit.fit_r1_low import FIT_TEMPS_DEGC, fit_factors, low_params, scaled_level_nodes
 
 
 def pulse_rows():

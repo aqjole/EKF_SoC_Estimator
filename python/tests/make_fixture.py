@@ -6,7 +6,7 @@ with scipy.io.savemat as the same struct "meas" with the same eight fields, in t
 file stores them (Wh as uint8, TimeStamp as a cell array of text), so the loader sees what it sees in
 the real files. Tests that use it run in CI without the 206 raw files.
 
-Run from the repo root:  .venv/bin/python python/tests/make_fixture.py
+Run from the repo root:  PYTHONPATH=python .venv/bin/python python/tests/make_fixture.py
 Needs data/raw/. The source file and licence are in python/tests/fixtures/README.md.
 """
 
@@ -19,9 +19,9 @@ import scipy.io
 # The package lives in python/, one level above this script.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ekfsoc import rawio  # noqa: E402
-from ekfsoc.constants import RAW_DIR  # noqa: E402
-from ekfsoc.loader import find_runs  # noqa: E402
+from ekfsoc import rawio # noqa: E402
+from ekfsoc.constants import RAW_DIR # noqa: E402
+from ekfsoc.loader import find_runs # noqa: E402
 
 
 SOURCE_MARKER = "551_Cap_1C"

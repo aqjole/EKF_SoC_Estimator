@@ -1,6 +1,6 @@
 # Model fit, second 3RC fit (S6)
 
-Written by `python/fit_3rc_rest.py` (`make fit-3rc-rest`). Do not edit by hand.
+Written by `python/fit/fit_3rc_rest.py` (`make fit-3rc-rest`). Do not edit by hand.
 
 ## Level fits
 

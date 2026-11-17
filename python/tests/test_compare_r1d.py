@@ -1,11 +1,12 @@
-"""Tests for python/compare_r1d.py (S8 step A, docs/decisions.md 1.32 and 1.33): the current bands and the test for
+"""Tests for python/evaluate/compare_r1d.py (S8 step A, docs/decisions.md 1.32 and 1.33): the current bands and the
+test for
 step B. All inputs are synthetic; no raw data is needed."""
 
 import numpy as np
 import pandas as pd
 
-import compare_r1d
-import s8_compare
+from evaluate import compare_r1d
+from evaluate import s8_compare
 
 
 def test_every_current_falls_in_exactly_one_band():

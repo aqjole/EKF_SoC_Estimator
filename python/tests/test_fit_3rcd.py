@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from ekfsoc.model import Params
-from fit_3rcd import basis_tables, fit_nodes, make_params, regressors, voltage
+from fit.fit_3rcd import basis_tables, fit_nodes, make_params, regressors, voltage
 
 
 @pytest.fixture

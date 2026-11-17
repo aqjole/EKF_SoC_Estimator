@@ -1,6 +1,6 @@
 # EKF tuning
 
-Written by `python/tune.py` (`make tune`). Do not edit by hand.
+Written by `python/evaluate/tune.py` (`make tune`). Do not edit by hand.
 
 The noise settings q_soc, q_v and r of the filter (docs/model.md Eq. 7 and Eq. 9) are tuned once, on the tuning cycle only (docs/decisions.md 1.3, 1.16), and then frozen (docs/decisions.md 1.15).
 

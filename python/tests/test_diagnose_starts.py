@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from start_cases import RESTED, UNKNOWN, best_threshold, case_measures, history_class, span_end
+from diagnose.start_cases import RESTED, UNKNOWN, best_threshold, case_measures, history_class, span_end
 
 
 def test_a_long_rest_and_a_short_gap_make_a_rested_start():

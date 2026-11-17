@@ -1,6 +1,6 @@
 # Model comparison: 2RC, 2RC-I and 2RC-Id (S8, step A)
 
-Written by `python/compare_r1d.py` (`make ekf-r1d`). Do not edit by hand.
+Written by `python/evaluate/compare_r1d.py` (`make ekf-r1d`). Do not edit by hand.
 
 2RC-Id is the 2RC-I model with R1 from the v1.0 table of `results/s1/params.csv` when the held current is negative (docs/decisions.md 1.33). The three filters run experiments 1 to 4 on the 63 runs with the frozen noise settings of `results/s2/ekf_config.json`; the numbers come from `results/s2/ekf_results.csv`, `results/s7/ekf_results_r1i.csv` and `results/s8/ekf_results_r1d.csv`. SoC statistics are over the evaluation runs (tuning cycle excluded). These 62 runs have been inspected in every stage since S2, so this is a comparison on a repeatedly inspected set, not a confirmation (1.32).
 

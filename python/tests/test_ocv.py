@@ -11,16 +11,8 @@ import pytest
 from ekfsoc.constants import FOLDER_TEMP, Q_REF_AH, RAW_DIR, SOC_GRID, T_GRID_DEGC
 from ekfsoc.hppc import rest_points, segment_hppc
 from ekfsoc.loader import Run, find_runs, load_run
-from ekfsoc.ocv import (
-    DISCHARGE_MIN_A,
-    OcvTable,
-    average_equal_x,
-    build_ocv,
-    central_differences,
-    discharge_curve,
-    find_discharge_half,
-    rest_offsets,
-)
+from ekfsoc.ocv import (DISCHARGE_MIN_A, OcvTable, average_equal_x, build_ocv, central_differences, discharge_curve,
+                        find_discharge_half, rest_offsets)
 
 # Discharge current of the made-up runs (A, loader sign), close to the real C/20 current.
 C20_CURRENT_A = 0.15

@@ -1,6 +1,6 @@
 # 3RC-D fit on the Mix runs (S9)
 
-Written by `python/fit_3rcd.py` (`make fit-3rcd`).
+Written by `python/fit/fit_3rcd.py` (`make fit-3rcd`).
 
 The standard cycles were held out of the final parameter fit. Prior diagnostics and the low-SoC boundary choice used these runs, and they share segments with the Mix runs (docs/decisions.md 1.40 and 1.41).
 

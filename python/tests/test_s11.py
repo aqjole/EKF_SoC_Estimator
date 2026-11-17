@@ -7,19 +7,19 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from ekfsoc.constants import REPO_DIR
 from ekfsoc.ekf import EkfConfig, run_ekf
 from ekfsoc.experiments import RunSpec
-from ekfsoc.constants import REPO_DIR
-from fit_3rcd0 import load_candidate
-from s11_native import NativeModel
-from s11_report import OLD, NEW, guards
-from s11_search import balanced_halves
-from tune import refine_points
-from tune_3rcd0 import AXES
+from evaluate.s11_native import NativeModel
+from evaluate.s11_report import OLD, NEW, guards
+from evaluate.s11_search import balanced_halves
+from evaluate.tune import refine_points
+from evaluate.tune_3rcd0 import AXES
+from fit.fit_3rcd0 import load_candidate
 
 
 def test_evaluation_refuses_settings_different_from_search(tmp_path, monkeypatch):
-    import compare_3rcd0n as comparison
+    from evaluate import compare_3rcd0n as comparison
     import json
     report = tmp_path / "search.md"
     config = tmp_path / "config.json"

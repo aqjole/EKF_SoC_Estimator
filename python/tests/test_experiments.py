@@ -14,14 +14,7 @@ import pytest
 from ekfsoc import rawio
 from ekfsoc.constants import RAW_DIR, REPO_DIR
 from ekfsoc.ekf import EkfConfig
-from ekfsoc.experiments import (
-    CYCLE_NAMES,
-    EXCLUDED,
-    OFFSET_A,
-    TUNING_RUN,
-    evaluation_runs,
-    experiment_runs,
-)
+from ekfsoc.experiments import CYCLE_NAMES, EXCLUDED, OFFSET_A, TUNING_RUN, evaluation_runs, experiment_runs
 from ekfsoc.loader import build_run, find_runs
 from ekfsoc.model import Params
 

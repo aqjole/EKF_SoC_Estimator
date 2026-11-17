@@ -1,12 +1,12 @@
-"""Tests of python/fit_3rc_rest.py that need no raw data."""
+"""Tests of python/fit/fit_3rc_rest.py that need no raw data."""
 
 from dataclasses import replace
 
 import numpy as np
 
 from ekfsoc.model import Params, simulate_open_loop
-from export_params import PARAMS_CSV
-from fit_3rc_rest import REST_SKIP_S, fit_middle_branch
+from fit.export_params import PARAMS_CSV
+from fit.fit_3rc_rest import REST_SKIP_S, fit_middle_branch
 
 
 def test_fit_middle_branch_recovers_a_known_branch():

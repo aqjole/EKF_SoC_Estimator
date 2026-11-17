@@ -21,7 +21,7 @@ import numpy as np
 
 from ekfsoc.loader import soc_ref
 
-FLOW_A = 0.05           # |I| above this is a pulse or a move, at or below it is rest (as in python/data_checks.py)
+FLOW_A = 0.05           # |I| above this is a pulse or a move, at or below it is rest (as in python/dataset/common.py)
 PULSE_MAX_S = 12.0      # an active stretch this short or shorter is a pulse; a longer one is a move or the recharge
 MIN_PULSE_S = 9.0       # a pulse shorter than this was cut off by a voltage limit
 LOW_LIMIT_V = 2.8005    # a discharge pulse with a row at or below this sits at the 2.8 V cutoff

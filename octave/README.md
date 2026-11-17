@@ -28,4 +28,4 @@ The arguments are those of `c/tools/ekf_run_csv`. `in.csv` names the columns `dt
 
 ## Checks
 
-`python/compare_octave.py` (`make octave`) runs the port on every evaluation run and compares its SoC with the Python trace, writing `results/s5/equivalence_octave.md`. `python/compare_octave.py --fixtures` runs it on the three fixtures of `c/tests/fixtures/` against their `soc_expected`; CI runs that mode with Ubuntu's Octave.
+`python/port/compare_octave.py` (`make octave`) runs the port on every evaluation run and compares its SoC with the Python trace, writing `results/s5/equivalence_octave.md`. `python/port/compare_octave.py --fixtures` runs it on the three fixtures of `c/tests/fixtures/` against their `soc_expected`; CI runs that mode with Ubuntu's Octave.

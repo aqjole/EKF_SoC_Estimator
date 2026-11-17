@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from diagnose_regen import limit_intervals
+from diagnose.diagnose_regen import limit_intervals
 
 
 T = np.arange(10) * 0.5

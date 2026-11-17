@@ -4,10 +4,10 @@ from types import SimpleNamespace
 
 import numpy as np
 
-import export_3rcd0
-from compare_c_3rcd0 import write_inputs
 from ekfsoc.model import Params
-from export_params import source_text
+from fit.export_params import source_text
+from port import export_3rcd0
+from port.compare_c_3rcd0 import write_inputs
 
 
 RUN = SimpleNamespace(dt=np.array([0.0, 0.1, 0.1, 0.2]), i=np.array([1.0, 2.0, -1.0, 3.0]),

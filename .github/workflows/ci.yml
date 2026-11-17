@@ -8,6 +8,10 @@ on:
   push:
   pull_request:
 
+# The scripts import each other through their folders under python/ (decisions 1.60).
+env:
+  PYTHONPATH: python
+
 jobs:
   python:
     runs-on: ubuntu-latest
@@ -22,10 +26,10 @@ jobs:
         run: python -m pytest python/tests -q
       - name: Generated C tables match results/s1/params.csv
         run: |
-          python python/export_params.py
+          python python/fit/export_params.py
           git diff --exit-code c/src/ekf_params.c c/include/ekf_params.h
       - name: README and docs/results.md in sync
-        run: python python/update_readme.py --check
+        run: python python/report/update_readme.py --check
 
   c-host:
     runs-on: ubuntu-latest
@@ -74,14 +78,14 @@ jobs:
           echo "$RUNNER_TEMP/arm-gnu-toolchain/bin" >> "$GITHUB_PATH"
       - run: arm-none-eabi-gcc --version
       - name: Cross-compile, footprint and double-precision helper check
-        run: python3 python/arm_footprint.py
+        run: python3 python/port/arm_footprint.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: c_footprint
           path: results/s3/c_footprint.md
       - name: 3RC-D0 footprint, stack frames and double-precision helper check
-        run: python3 python/arm_footprint.py --model 3rcd0
+        run: python3 python/port/arm_footprint.py --model 3rcd0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -105,4 +109,4 @@ jobs:
           sudo apt-get install -y --no-install-recommends octave
       - run: octave-cli --version
       - name: Octave filter against the committed fixtures
-        run: python python/compare_octave.py --fixtures
+        run: python python/port/compare_octave.py --fixtures

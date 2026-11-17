@@ -3,9 +3,9 @@ from functools import partial
 import numpy as np
 import pytest
 
+from diagnose.s12_variants import JacobianEkf
 from ekfsoc.ekf import Ekf, EkfConfig, run_ekf
 from ekfsoc.model import interp2
-from s12_variants import JacobianEkf
 from test_s10_jacobian import params_3rc, synthetic_run
 
 

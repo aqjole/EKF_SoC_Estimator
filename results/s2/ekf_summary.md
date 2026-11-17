@@ -1,6 +1,6 @@
 # EKF results (S2)
 
-Written by `python/run_all.py` (`make ekf`) from `results/s2/ekf_results.csv`. Do not edit by hand.
+Written by `python/evaluate/run_all.py` (`make ekf`) from `results/s2/ekf_results.csv`. Do not edit by hand.
 
 Sanity gate: experiment 1 at 25 degC has a mean SoC RMSE of 0.87 pp over the 10 evaluation runs (tuning cycle excluded) and a maximum of 1.14 pp (Mix 3) over all 11 runs, against the limit of 3 pp. **PASS.** The limit is a bug check, not a published target.
 

@@ -1,6 +1,6 @@
 # Model fit
 
-Written by `python/fit_all.py` (`make fit`). Do not edit by hand.
+Written by `python/fit/fit_all.py` (`make fit`). Do not edit by hand.
 
 ## Open-loop voltage error on US06
 

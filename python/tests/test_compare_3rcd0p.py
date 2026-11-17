@@ -3,10 +3,10 @@
 import pandas as pd
 import pytest
 
-import compare_3rcd0p
+from diagnose.s12_report import peak_lines
 from ekfsoc.constants import REPO_DIR, T_GRID_DEGC
 from ekfsoc.experiments import RunSpec
-from s12_report import peak_lines
+from evaluate import compare_3rcd0p
 
 
 MEANS = {"exp1": 1.0, "exp2": 2.0, "exp4": 3.0}

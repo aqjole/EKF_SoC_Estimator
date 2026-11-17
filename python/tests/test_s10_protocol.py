@@ -3,14 +3,14 @@ from dataclasses import replace
 import numpy as np
 import pandas as pd
 
-import fit_3rcd0
-from compare_3rcd0 import SCORED_MODELS, temperature_lines
-from compare_r1i import per_temperature
 from ekfsoc.constants import T_GRID_DEGC
 from ekfsoc.model import Params
-from fit_3rcd import PARAMS_3RCD_CSV
-from fit_3rcd0 import CANDIDATE, INCUMBENT, MODELS, SUBSTITUTION
-from s10_protocol import verify_baseline
+from evaluate.compare_3rcd0 import SCORED_MODELS, temperature_lines
+from evaluate.compare_r1i import per_temperature
+from evaluate.s10_protocol import verify_baseline
+from fit import fit_3rcd0
+from fit.fit_3rcd import PARAMS_3RCD_CSV
+from fit.fit_3rcd0 import CANDIDATE, INCUMBENT, MODELS, SUBSTITUTION
 
 
 def test_frozen_baseline_still_matches():

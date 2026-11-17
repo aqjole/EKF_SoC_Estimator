@@ -1,4 +1,4 @@
-"""The fixture check of python/compare_octave.py with stand-in runners; Octave is needed only where marked."""
+"""The fixture check of python/port/compare_octave.py with stand-in runners; Octave is needed only where marked."""
 
 import shutil
 
@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import compare_octave
-from compare_c import frozen_config
+from port import compare_octave
+from port.compare_c import frozen_config
 
 
 def expected_soc(path, cfg, soc0):

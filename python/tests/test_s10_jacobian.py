@@ -4,10 +4,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from diagnose.s10_jacobian import covariance_change, process_partials, r1_slopes, replay_case, soc_slopes
 from ekfsoc.ekf import EkfConfig, run_ekf
 from ekfsoc.model import Params, interp2, interp_current, rc_step
-from fit_3rcd import grid_cell
-from s10_jacobian import covariance_change, process_partials, r1_slopes, replay_case, soc_slopes
+from fit.fit_3rcd import grid_cell
 
 
 TEMPS = np.array([20.0, 0.0])

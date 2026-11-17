@@ -1,10 +1,10 @@
-"""The verdict of python/compare_c.py on small hand-made tables; the C builds and the raw data are not needed."""
+"""The verdict of python/port/compare_c.py on small hand-made tables; the C builds and the raw data are not needed."""
 
 import numpy as np
 import pandas as pd
 import pytest
 
-import compare_c
+from port import compare_c
 
 
 def table(float_max, double_max):

@@ -6,7 +6,7 @@ with its own sources list, so neither the real README nor results/ is touched.
 
 import pytest
 
-import update_readme
+from report import update_readme
 
 RESULTS = """# Title
 

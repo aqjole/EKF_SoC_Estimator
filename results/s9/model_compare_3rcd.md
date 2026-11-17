@@ -1,6 +1,6 @@
 # 3RC-D comparison (S9)
 
-Written by `python/compare_3rcd.py` (`make ekf-3rcd`).
+Written by `python/evaluate/compare_3rcd.py` (`make ekf-3rcd`).
 
 The standard cycles were held out of the final parameter fit. Prior diagnostics and the low-SoC boundary choice used these runs, and they share segments with the Mix runs (docs/decisions.md 1.40 and 1.41).
 

@@ -2,7 +2,7 @@
 
 import pytest
 
-import fit_all
+from fit import fit_all
 
 
 def levels(*pairs):

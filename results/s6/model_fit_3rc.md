@@ -1,6 +1,6 @@
 # Model fit, 3RC (S6)
 
-Written by `python/fit_3rc.py` (`make fit-3rc`). Do not edit by hand.
+Written by `python/fit/fit_3rc.py` (`make fit-3rc`). Do not edit by hand.
 
 ## Open-loop voltage error on US06, 2RC and 3RC
 

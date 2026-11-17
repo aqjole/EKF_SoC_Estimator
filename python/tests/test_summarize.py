@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 
 from ekfsoc.experiments import RunSpec
-from run_all import SCORED
-from summarize import MODELS, experiment_means, first_table, model_scores, standard_means
+from evaluate.run_all import SCORED
+from report.summarize import MODELS, experiment_means, first_table, model_scores, standard_means
 
 
 def spec(name, folder, temp, cycle):

@@ -1,4 +1,5 @@
-"""Tests for python/sensitivity.py (S5, docs/decisions.md 1.18 and 1.19): the decimation rule, the capacity scaling of
+"""Tests for python/evaluate/sensitivity.py (S5, docs/decisions.md 1.18 and 1.19): the decimation rule, the capacity
+scaling of
 the coulomb counter and of the filter, and the text of the two tables. All inputs are synthetic; no raw data is needed.
 """
 
@@ -6,12 +7,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import sensitivity
 from ekfsoc.constants import Q_REF_AH
 from ekfsoc.ekf import EkfConfig, run_ekf
 from ekfsoc.loader import Run
 from ekfsoc.metrics import coulomb_count
 from ekfsoc.model import Params
+from evaluate import sensitivity
 
 
 # --- decimate_run ---------------------------------------------------------------------------------

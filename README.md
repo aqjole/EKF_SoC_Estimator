@@ -137,8 +137,13 @@ On a Cortex-M4 in float32 the 3RC-D0 build takes 21,888 B of flash, 19,860 B of 
 
 | Path | What is there |
 |---|---|
-| `python/ekfsoc/` | the library: loader, OCV and pulse-test fits, model, EKF, metrics, plots |
-| `python/*.py` | the scripts behind the `make` targets and their helpers: `fit_*` fit a model, `run_all` and `compare_*` run the experiments, `diagnose_*` and `sensitivity` are diagnostics, `export_*` write the C tables and test vectors; files named `s8_*` to `s12_*` are helpers named after the stage that added them |
+| `python/ekfsoc/` | the library: loader, OCV and pulse-test fits, model, EKF, metrics, plots and report helpers |
+| `python/dataset/` | reads the raw files and writes the dataset inventory and checks |
+| `python/fit/` | fits the model tables (`fit_*`) and exports them to CSV, markdown and C (`export_params`) |
+| `python/evaluate/` | runs the four experiments (`run_all`), tunes the noise settings (`tune*`), the sensitivity runs, and compares each model with its predecessor (`compare_*`) |
+| `python/diagnose/` | diagnostics: where the error comes from, the starts, the Jacobian terms, the regen rows |
+| `python/port/` | the C and Octave ports: test vectors, fixtures, equivalence checks and the Cortex-M4 footprint |
+| `python/report/` | the scoreboard and the copy of the result tables into the docs |
 | `python/tests/` | the pytest suite; tests that need the raw data skip without it |
 | `c/` | the C99 library (`include/ekf.h`, `src/ekf.c`), Unity tests, fixtures and the Cortex-M4 toolchain file |
 | `octave/` | the Octave port |
@@ -163,7 +168,7 @@ make readme-check  # fail if README.md or docs/results.md is out of sync with re
 .venv/bin/python -m pytest python/tests -q   # unit tests; those needing the raw data skip without it
 ```
 
-Every target, what it writes and the tools it needs are listed in [`docs/results.md`](docs/results.md#how-to-run-every-target).
+The scripts import each other through their folders, so a script run by hand needs `python/` on the path, for example `PYTHONPATH=python .venv/bin/python python/fit/fit_all.py`; the Makefile sets it. Every target, what it writes and the tools it needs are listed in [`docs/results.md`](docs/results.md#how-to-run-every-target).
 
 ## Limitations
 
@@ -181,7 +186,7 @@ LG 18650HG2 Li-ion Battery Data (P. Kollmeyer, M. Naguib and M. Skells, McMaster
 
 ## Reproducibility
 
-Every table copied into this README and into `docs/results.md` sits between `<!-- results:<key>:begin -->` and `<!-- results:<key>:end -->` markers and is copied from a file in `results/` by `python/update_readme.py`. Each of those files is written by a script in this repository. `make all` reproduces them from the raw data and the committed noise settings (the two tuning searches are separate targets), and `make readme-check` and CI fail when a copied table and its file disagree. The model table under "From the first model to the final one" and the numbers in the text are written by hand from the same files.
+Every table copied into this README and into `docs/results.md` sits between `<!-- results:<key>:begin -->` and `<!-- results:<key>:end -->` markers and is copied from a file in `results/` by `python/report/update_readme.py`. Each of those files is written by a script in this repository. `make all` reproduces them from the raw data and the committed noise settings (the two tuning searches are separate targets), and `make readme-check` and CI fail when a copied table and its file disagree. The model table under "From the first model to the final one" and the numbers in the text are written by hand from the same files.
 
 ## Citation and licence
 

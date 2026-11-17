@@ -1,6 +1,6 @@
 # Model fit, 2RC-I (S7)
 
-Written by `python/fit_r1_current.py` (`make fit-r1i`). Do not edit by hand.
+Written by `python/fit/fit_r1_current.py` (`make fit-r1i`). Do not edit by hand.
 
 ## R1 per pulse
 

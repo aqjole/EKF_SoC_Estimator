@@ -5,9 +5,9 @@ import math
 import pandas as pd
 import pytest
 
+from diagnose.s12_prescreen import prescreen, prior_metric, temperature_table, variant_metric
 from ekfsoc.constants import T_GRID_DEGC
-from run_all import SCORED
-from s12_prescreen import prescreen, prior_metric, temperature_table, variant_metric
+from evaluate.run_all import SCORED
 
 
 def scored(changes=None):
