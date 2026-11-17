@@ -13,8 +13,8 @@ Errors are the RMSE of the SoC estimate in percentage points of SoC (pp).
 - **Accuracy.** Started at the correct SoC, the final model has a mean error of 0.98 pp over the 23 standard drive-cycle runs (UDDS, HWFET, LA92 and US06), down from 1.79 pp for the first model. It is 0.46 and 0.61 pp at 40 and 25 °C, and 1.42 and 1.22 pp at -10 and -20 °C.
 - **Robustness.** With a start value 20 pp wrong, or a 0.2 A offset on the current sensor, plain current integration (coulomb counting) is off by 20 pp and 7.8 pp on average. The EKF's mean error over the 63 runs is between 1.5 and 4.7 pp.
 - **Embedded port.** The float32 C library matches the Python reference within 0.02 pp of SoC in 378 replayed cases. On a Cortex-M4 it takes 21,888 B of flash and 92 B of state per cell, with no heap, no mutable globals and no double-precision library calls.
-- **Known weak point.** In the cold a wrong start can get worse before the filter recovers: in 30 of 189 wrong-start cases the error first grows past 25 pp, all of them at 0 °C and below. From a start 20 pp too low the final model's mean error (4.69 pp) is also higher than the first model's (2.84 pp). The attempts to fix this failed their acceptance rules and are reported as negative results.
-- **Reproducible.** Every result table is copied by a script from a file in [`results/`](results/README.md), and CI fails when a copied table and its file disagree. The numbers in the text are taken from the same files.
+- **Known weak point.** In the cold a wrong start can get worse before the filter recovers: in 30 of 189 wrong-start cases the error first grows past 25 pp, all of them at 0 °C and below. From a start 20 pp too low the final model's mean error (4.69 pp) is also higher than the first model's (2.84 pp). The two attempts to fix this failed their acceptance rules and are reported as negative results.
+- **Reproducible.** Every result table is copied by a script from a file in [`results/`](results/README.md), and CI fails when a copied table and its file disagree. The numbers in the text are written by hand from the same files and are not checked automatically.
 
 ### The EKF against coulomb counting
 
@@ -69,7 +69,7 @@ The final model is fitted partly on the 40 mixed-cycle runs, so the 23 standard 
 - **Evaluation.** Four experiments on 63 runs against coulomb counting, plus sensitivity to a capacity error and to a 1 Hz sample rate.
 - **A C99 library.** Float32, no dynamic allocation, unit tests, sanitizer builds, a Cortex-M4 cross-build with a size report, and an equivalence check against Python on every run.
 - **An Octave port** of the first filter, checked against Python on experiment 1 of every run (within 1e-11 pp).
-- **A decision log.** Each experiment's acceptance rule was written down before the experiment ran ([`docs/decisions.md`](docs/decisions.md)), and the ideas that failed are kept with their numbers.
+- **A decision log.** The rule for adopting each model or filter change was written in [`docs/decisions.md`](docs/decisions.md) before the change was evaluated (in one stage the entries were committed only after its runs, as the log records), and the ideas that failed are kept with their numbers.
 
 ## How it works
 
@@ -82,7 +82,7 @@ The final model is fitted partly on the 40 mixed-cycle runs, so the 23 standard 
 
 The first model (2RC, in the figure) has two branches, a fast and a slow one. The final model (3RC-D0) adds a third branch between them, with a 45 s time constant, fitted on drive-cycle data.
 
-**Filter.** The state is the SoC and the branch voltages, so three states for 2RC and four for 3RC-D0. The input is the measured current, the measurement is the terminal voltage, and the measured cell temperature selects the table values. Each sample runs a predict step and an update step. The noise settings were tuned once, on one drive cycle at 25 °C, and then frozen. When an update pushes the SoC outside [0, 1], the whole state is projected onto the bound along the covariance instead of being truncated.
+**Filter.** The state is the SoC and the branch voltages, so three states for 2RC and four for 3RC-D0. The input is the measured current, the measurement is the terminal voltage, and the measured cell temperature selects the table values. Each sample runs a predict step and an update step. The noise settings were tuned once, for the first model on one drive cycle at 25 °C, and then frozen; the final model runs the same settings. When an update pushes the SoC outside [0, 1], the whole state is projected onto the bound along the covariance instead of being truncated.
 
 **Reference.** The reference SoC is the test bench's own Ah counter, counted from the full charge at the start of each test. The coulomb-counting baseline integrates the logged current instead, as a BMS would.
 
@@ -104,7 +104,7 @@ Not adopted, each for failing an acceptance rule fixed before the run:
 - Three more variants of the current-dependent R1: each repaired part of the US06 regression and made other runs worse by more than the rule allowed.
 - The third branch combined with the current-dependent R1: a lower mean, but the worst run got worse.
 - Retuned noise settings from a 945-point search: better on the tuning objective, worse at -20 °C and on mid-run restarts.
-- A smaller initial covariance for a start at rest: the -20 °C wrong-start error fell from 12.45 to 2.61 pp, but two rules failed on the cold standard runs.
+- A smaller initial covariance on the branch voltages when the first current sample is below 0.5 A: at -20 °C the mean error from a start 20 pp too low fell from 12.45 to 2.61 pp, but two rules failed on the cold standard runs.
 
 The stage-by-stage account is in [`docs/results.md`](docs/results.md#stage-overview), and every model side by side in the [scoreboard](docs/results.md#scoreboard).
 
@@ -138,7 +138,7 @@ On a Cortex-M4 in float32 the 3RC-D0 build takes 21,888 B of flash, 19,860 B of 
 | Path | What is there |
 |---|---|
 | `python/ekfsoc/` | the library: loader, OCV and pulse-test fits, model, EKF, metrics, plots |
-| `python/*.py` | the scripts behind the `make` targets and their helpers: `fit_*` fit a model, `run_all` and `compare_*` run the experiments, `diagnose_*` and `sensitivity` are diagnostics, `export_*` write the C tables and test vectors; files named `s8_*` to `s12_*` are helpers of one stage |
+| `python/*.py` | the scripts behind the `make` targets and their helpers: `fit_*` fit a model, `run_all` and `compare_*` run the experiments, `diagnose_*` and `sensitivity` are diagnostics, `export_*` write the C tables and test vectors; files named `s8_*` to `s12_*` are helpers named after the stage that added them |
 | `python/tests/` | the pytest suite; tests that need the raw data skip without it |
 | `c/` | the C99 library (`include/ekf.h`, `src/ekf.c`), Unity tests, fixtures and the Cortex-M4 toolchain file |
 | `octave/` | the Octave port |
@@ -158,7 +158,7 @@ Requirements: Python 3.12, CMake and a C99 compiler. `make all` also runs `make 
 python3.12 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 make data        # download the raw .mat files into data/raw/ and verify their sha256
-make all         # every stage, in order, then refresh the copied tables
+make all         # every stage except the two tuning searches, in order, then refresh the copied tables
 make readme-check  # fail if README.md or docs/results.md is out of sync with results/
 .venv/bin/python -m pytest python/tests -q   # unit tests; those needing the raw data skip without it
 ```
@@ -177,11 +177,11 @@ The full list is in [`docs/results.md`](docs/results.md#limitations-in-full).
 
 ## Dataset
 
-LG 18650HG2 Li-ion Battery Data (P. Kollmeyer, M. Naguib and M. Skells, McMaster University, Mendeley Data, DOI [10.17632/b5mj79w5w9.2](https://doi.org/10.17632/b5mj79w5w9.2)): one new 18650 cell tested at six temperatures. The C/20 discharge gives the OCV, the HPPC pulse test gives the resistances and time constants, and the drive cycles (UDDS, HWFET, LA92, US06 and eight mixes of them) are the 62 evaluation runs plus one tuning run. The final model also fits its third branch on the 40 mixed-cycle runs. Run selection and the measured capacities are in [`docs/results.md`](docs/results.md#dataset).
+LG 18650HG2 Li-ion Battery Data (P. Kollmeyer, M. Naguib and M. Skells, McMaster University, Mendeley Data, DOI [10.17632/b5mj79w5w9.2](https://doi.org/10.17632/b5mj79w5w9.2)): one new 18650 cell tested at six temperatures. The C/20 discharge gives the OCV, the HPPC pulse test gives the resistances and time constants, and 63 of its 70 drive-cycle files (UDDS, HWFET, LA92, US06 and eight mixes of them) are used: 62 evaluation runs plus one tuning run. The final model also fits its third branch on the 40 mixed-cycle runs. Run selection and the measured capacities are in [`docs/results.md`](docs/results.md#dataset).
 
 ## Reproducibility
 
-Every result table in this README and in `docs/results.md` sits between `<!-- results:<key>:begin -->` and `<!-- results:<key>:end -->` markers and is copied from a file in `results/` by `python/update_readme.py`. Each of those files is written by a script in this repository. `make all` reproduces them from the raw data, and `make readme-check` and CI fail when the documents and `results/` disagree.
+Every table copied into this README and into `docs/results.md` sits between `<!-- results:<key>:begin -->` and `<!-- results:<key>:end -->` markers and is copied from a file in `results/` by `python/update_readme.py`. Each of those files is written by a script in this repository. `make all` reproduces them from the raw data and the committed noise settings (the two tuning searches are separate targets), and `make readme-check` and CI fail when a copied table and its file disagree. The model table under "From the first model to the final one" and the numbers in the text are written by hand from the same files.
 
 ## Citation and licence
 

@@ -1,6 +1,6 @@
 # Results in full
 
-The detail behind the [README](../README.md): the dataset, every `make` target, the results of every stage with all their tables and plots, and the C port. Every table between `<!-- results:<key>:begin -->` and `<!-- results:<key>:end -->` markers is copied from a file in `results/` by `python/update_readme.py`; `make readme-check` and CI fail when this file and `results/` disagree. The rules behind each result are in [`decisions.md`](decisions.md), the equations in [`model.md`](model.md). What every file in `results/` holds, and which script and target write it, is in [`results/README.md`](../results/README.md).
+The detail behind the [README](../README.md): the dataset, every `make` target, the results of every stage with all their tables and plots, and the C port. Every table between `<!-- results:<key>:begin -->` and `<!-- results:<key>:end -->` markers is copied from a file in `results/` by `python/update_readme.py`; `make readme-check` and CI fail when a copied table and its file disagree. Tables outside the markers and numbers in the text are written by hand. The rules behind each result are in [`decisions.md`](decisions.md), the equations in [`model.md`](model.md). What every file in `results/` holds, and which script and target write it, is in [`results/README.md`](../results/README.md).
 
 ## Dataset
 
@@ -47,7 +47,7 @@ Requirements: Python 3.12, CMake and a C99 compiler. `make arm` also needs `arm-
 python3.12 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 make data        # download the raw .mat files into data/raw/ and verify their sha256
-make all         # every stage below, in order
+make all         # every stage below except make tune and make tune-3rcd0, in order
 ```
 
 | target | stage | what it does | writes |
@@ -127,7 +127,7 @@ Mean SoC RMSE in pp over the 63 runs of each model's experiments CSV. The Mix an
 
 ### Claims
 
-1. **The EKF recovers from a wrong initial SoC and keeps a current-sensor offset bounded, where plain coulomb counting does not.** This holds in nearly every run at 40, 25, 10 and 0 degC. At -10 and -20 degC it holds only in part: in many cold runs the error does not settle inside the +-2 pp band before the end of the run ("not reached"), and some cold runs end several pp off.
+1. **The EKF recovers from a wrong initial SoC and keeps a current-sensor offset bounded, where plain coulomb counting does not.** For the v1.0 2RC filter of S2, this holds in nearly every run at 40, 25, 10 and 0 degC. At -10 and -20 degC it holds only in part: in many cold runs the error does not settle inside the +-2 pp band before the end of the run ("not reached"), and some cold runs end several pp off.
    Evidence: the convergence tables of experiments 2 and 3 (their `reached` rows count the runs per temperature) and the end-of-window errors of experiment 4, where coulomb counting drifts with the offset and the EKF does not ([S2 results](#s2-ekf-experiments)).
 2. **The float32 C port reproduces the Python reference to within 0.1 pp of SoC.**
    Evidence: `results/s3/equivalence.md` (v1.0 2RC, experiment 1) and `results/s11/equivalence_3rcd0.md` (3RC-D0, all six experiment cases) run the C filter and the Python filter on every evaluation run and the tuning cycle and compare the SoC row by row; the worst case is in the [C port equivalence](#s3-c-port-equivalence) table.
